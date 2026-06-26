@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+ * Herbal Deck — Design tokens
+ * ---------------------------------------------------------------------------
+ * Dark mode is class-based: toggling the `dark` class on <html> flips the
+ * palette. Light mode is the default. Components use the *semantic* tokens
+ * below (bg-background, text-foreground, bg-primary, ...) so they restyle
+ * automatically in dark mode with almost no `dark:` overrides.
+ * ------------------------------------------------------------------------- */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Surfaces */
+  --background: #ffffff;        /* clean white page background        */
+  --foreground: #1a1a1a;        /* dark charcoal text                 */
+  --card: #ffffff;             /* card surface                       */
+  --muted: #f0faf4;            /* light mint subtle background        */
+  --muted-foreground: #5b6b62;  /* secondary / helper text            */
+  --border: #e4efe9;           /* hairline borders                   */
+  --sidebar: #fbfdfc;          /* sidebar surface                    */
+  --sidebar-foreground: #1a1a1a;
+
+  /* Brand */
+  --primary: #1a5c38;          /* deep forest green                  */
+  --primary-foreground: #ffffff;
+  --accent: #f0faf4;           /* hover / active tint                */
+  --ring: #1a5c38;
+}
+
+.dark {
+  /* Surfaces */
+  --background: #0d2b1a;        /* deep dark green                    */
+  --foreground: #ffffff;        /* white text                         */
+  --card: #0f3420;             /* slightly raised surface            */
+  --muted: #123b24;            /* subtle dark panel background        */
+  --muted-foreground: #9bb3a5;
+  --border: #1c4730;
+  --sidebar: #0a2114;
+  --sidebar-foreground: #ffffff;
+
+  /* Brand — same green accents */
+  --primary: #1a5c38;
+  --primary-foreground: #ffffff;
+  --accent: #153d27;
+  --ring: #2f8f5b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
