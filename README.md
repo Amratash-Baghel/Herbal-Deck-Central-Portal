@@ -1,72 +1,88 @@
-<div align="center">
+# Herbal Deck Portal
 
-# 🌿 Herbal Deck Portal
+Herbal Deck needed one place for employees to access internal tools. There was no central hub — billing was handled in one place, communication in another, and there was no consistent way to control who had access to what. Every new tool meant another login, another permission system, another thing to manage.
 
-**A modular, full-stack internal employee portal** that consolidates Herbal
-Deck's internal tools behind one secure, role-aware interface.
-
-Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · Supabase · Vercel
-
-</div>
+This portal was built to fix that.
 
 ---
 
-## What this is
+## The idea
 
-An invite-only internal portal built on a **shell + modules** architecture: a
-shared foundation (authentication, roles, navigation, theming, layout) into
-which self-contained feature modules are added over time. This release ships the
-foundation plus placeholder modules; per-module business logic follows.
+The goal was simple: one login, one place, everything the team needs. But the way it's built matters — adding a new tool to the portal should be straightforward, not a project of its own. So instead of building a fixed app, the architecture is designed as a **shell with modules**: a solid foundation that new features plug into cleanly, one at a time.
 
-- **Invite-only auth** — email + password via Supabase Auth; no public sign-up.
-  Admins provision accounts from inside the portal.
-- **Two roles** — `admin` and `employee`, enforced both in the app and in the
-  database.
-- **Defense in depth** — application-level guards *and* PostgreSQL **Row Level
-  Security** protect data.
-- **Premium, themeable UI** — light/dark modes in the Herbal Deck brand palette.
+The first release ships that foundation. Billing and Chat are already outlined as the next modules — they just need the business logic layered in.
 
-## Quick start
+---
+
+## What it does today
+
+- Employees sign in with their email and password — **no self-registration**. The only way in is if an admin adds you.
+- Two types of accounts: **admins** (can manage the team, see everything) and **employees** (see their own tools and data).
+- A clean dashboard with a sidebar that adjusts based on your role — employees see their tools, admins see everything plus a User Management section.
+- Admins can add new employees directly from inside the portal without touching Supabase or any backend system.
+- Light and dark mode, built around Herbal Deck's brand colors.
+
+---
+
+## Why these tools
+
+**Next.js** — This is the framework the app is built on. The reason for choosing it is that it handles both the frontend (what users see) and the backend (login, database queries, security) in one codebase. No separate API server to manage. It also means security checks happen on the server before anything gets shown to the user — not after the fact in the browser.
+
+**Supabase** — Handles authentication, the database, and data security rules all in one place. The alternative would be stitching together separate services for each of those things. Supabase keeps it cohesive. It's also built on PostgreSQL, which is a battle-tested database with proper SQL — not a proprietary system that locks you in.
+
+**Row Level Security** — This is the part most people skip, and it's what makes the access control actually trustworthy. Instead of just hiding things in the UI, the *database itself* enforces who can read or write what. Even if there were a bug in the app, the data would still be protected. An employee's data is inaccessible to other employees — not just hidden, but refused at the query level.
+
+**Vercel** — Deploying the app is a git push. That's it. Vercel handles scaling, HTTPS, and infrastructure. It's the obvious choice for a Next.js app and removes the need to manage servers.
+
+**Invite-only accounts** — This was a deliberate product decision. It's an internal tool for a vetted team. Open sign-up doesn't belong here. Admins control access, which means there's always a clear record of who has access and why.
+
+---
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router) + React 19 |
+| Language | TypeScript |
+| Styling | Tailwind CSS v4 |
+| Auth & Database | Supabase (PostgreSQL) |
+| Hosting | Vercel |
+
+---
+
+## Running locally
 
 ```bash
 npm install
-cp .env.local.example .env.local     # add your Supabase keys
-# run supabase/schema.sql in the Supabase SQL Editor (one time)
-npm run dev                          # http://localhost:3000
+cp .env.local.example .env.local   # fill in your Supabase keys
+npm run dev                         # http://localhost:3000
 ```
 
-Full setup, environment variables, and database bootstrap instructions are in
-**[`docs/README.md`](./docs/README.md)**.
+You'll also need to run `supabase/schema.sql` once in the Supabase SQL Editor to set up the database tables and security rules. Full instructions are in [`docs/README.md`](./docs/README.md).
 
-## Documentation
-
-| Document | Contents |
-| -------- | -------- |
-| [docs/README.md](./docs/README.md) | Project overview, stack, setup, deployment |
-| [docs/architecture.md](./docs/architecture.md) | Folder structure, module isolation, adding a module |
-| [docs/decisions.md](./docs/decisions.md) | Why Next.js, Supabase, Vercel, invite-only auth, RLS |
-| [docs/CHANGELOG.md](./docs/CHANGELOG.md) | Release history |
+---
 
 ## Project layout
 
 ```
-app/          Routes — login, authenticated (dashboard) group, auth handlers
-components/   Reusable UI — sidebar, cards, theme toggle, icons
-lib/          Supabase clients, auth helpers, types, navigation config
-supabase/     schema.sql — tables, trigger, and Row Level Security policies
-docs/         Engineering documentation
+app/          Every page — login, dashboard, billing, chat, user management
+components/   Sidebar, cards, theme toggle, icons
+lib/          Database connections, auth logic, navigation config
+supabase/     The database schema and security rules
+docs/         Full engineering documentation
 ```
-
-## Scripts
-
-| Command | Description |
-| ------- | ----------- |
-| `npm run dev` | Start the local dev server |
-| `npm run build` | Production build |
-| `npm run start` | Serve the production build |
-| `npm run lint` | Lint the codebase |
 
 ---
 
-<sub>Built using AI-assisted development workflows, with full ownership of the
-product, architecture, and technical decisions.</sub>
+## Documentation
+
+| | |
+|---|---|
+| [docs/README.md](./docs/README.md) | Full setup and deployment guide |
+| [docs/architecture.md](./docs/architecture.md) | How the codebase is structured and how to add a new module |
+| [docs/decisions.md](./docs/decisions.md) | Detailed reasoning behind every technical decision |
+| [docs/CHANGELOG.md](./docs/CHANGELOG.md) | What's been built and when |
+
+---
+
+*Built with AI-assisted workflows. All product direction, architecture, and technical decisions were owned and driven by the project owner.*
