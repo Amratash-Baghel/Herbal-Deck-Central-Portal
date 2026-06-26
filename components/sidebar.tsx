@@ -19,12 +19,18 @@ function initials(profile: Profile) {
     .join("");
 }
 
-export function Sidebar({ profile }: { profile: Profile }) {
+export function Sidebar({
+  profile,
+  canManageUsers,
+}: {
+  profile: Profile;
+  canManageUsers: boolean;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   const visibleItems = navItems.filter(
-    (item) => !item.adminOnly || profile.role === "admin",
+    (item) => !item.managerOnly || canManageUsers,
   );
 
   return (

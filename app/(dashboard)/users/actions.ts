@@ -1,37 +1,43 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { requireUserManager } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Role } from "@/lib/types";
 
-export interface InviteState {
+export interface MutationState {
   error: string | null;
   success: string | null;
 }
 
+/** Backwards-compatible alias used by the invite form. */
+export type InviteState = MutationState;
+
 /**
- * Server Action: create a new employee account (admin only).
+ * Server Action: create a new employee account (admins or HR & Management).
  *
- * Security: requireAdmin() re-verifies the caller's role on the server before
- * any privileged work — the UI hiding this page is not relied upon. The
- * service-role admin client is only constructed here, on the server.
+ * Security: requireUserManager() re-verifies the caller's authority on the
+ * server before any privileged work — the UI hiding this page is not relied
+ * upon. The service-role admin client is only constructed here, on the server.
  *
  * The new auth user is created with `full_name` and `role` in user_metadata;
- * the `on_auth_user_created` database trigger then creates the matching
- * profile row. A temporary password is set, which the admin shares with the
- * employee to sign in (and which they can change later).
+ * the database trigger then creates the matching profile row. Any selected
+ * departments are recorded in profile_departments.
  */
 export async function inviteUser(
-  _prevState: InviteState,
+  _prevState: MutationState,
   formData: FormData,
-): Promise<InviteState> {
-  await requireAdmin();
+): Promise<MutationState> {
+  await requireUserManager();
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const fullName = String(formData.get("full_name") ?? "").trim();
   const role = String(formData.get("role") ?? "employee") as Role;
   const password = String(formData.get("password") ?? "");
+  const departmentIds = formData
+    .getAll("department_ids")
+    .map(String)
+    .filter(Boolean);
 
   if (!email || !fullName || !password) {
     return { error: "Name, email, and a temporary password are required.", success: null };
@@ -45,7 +51,7 @@ export async function inviteUser(
 
   const admin = createAdminClient();
 
-  const { error } = await admin.auth.admin.createUser({
+  const { data: created, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true, // internal tool: skip the confirmation email
@@ -59,6 +65,70 @@ export async function inviteUser(
     return { error: message, success: null };
   }
 
+  const newUserId = created.user?.id;
+  if (newUserId && departmentIds.length > 0) {
+    const rows = departmentIds.map((department_id) => ({
+      profile_id: newUserId,
+      department_id,
+    }));
+    const { error: deptError } = await admin
+      .from("profile_departments")
+      .insert(rows);
+    if (deptError) {
+      return {
+        error: `Account created, but assigning departments failed: ${deptError.message}`,
+        success: null,
+      };
+    }
+  }
+
   revalidatePath("/users");
   return { error: null, success: `${fullName} was added as ${role}.` };
+}
+
+/**
+ * Server Action: replace a user's department memberships (admins or HR &
+ * Management). Deletes existing memberships and inserts the new selection.
+ */
+export async function setUserDepartments(
+  _prevState: MutationState,
+  formData: FormData,
+): Promise<MutationState> {
+  await requireUserManager();
+
+  const userId = String(formData.get("user_id") ?? "");
+  const departmentIds = formData
+    .getAll("department_ids")
+    .map(String)
+    .filter(Boolean);
+
+  if (!userId) {
+    return { error: "Missing user.", success: null };
+  }
+
+  const admin = createAdminClient();
+
+  const { error: delError } = await admin
+    .from("profile_departments")
+    .delete()
+    .eq("profile_id", userId);
+  if (delError) {
+    return { error: delError.message, success: null };
+  }
+
+  if (departmentIds.length > 0) {
+    const rows = departmentIds.map((department_id) => ({
+      profile_id: userId,
+      department_id,
+    }));
+    const { error: insError } = await admin
+      .from("profile_departments")
+      .insert(rows);
+    if (insError) {
+      return { error: insError.message, success: null };
+    }
+  }
+
+  revalidatePath("/users");
+  return { error: null, success: "Departments updated." };
 }

@@ -3,6 +3,8 @@
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { inviteUser, type InviteState } from "@/app/(dashboard)/users/actions";
+import { DepartmentCheckboxes } from "@/components/department-checkboxes";
+import type { Department } from "@/lib/types";
 
 const initialState: InviteState = { error: null, success: null };
 
@@ -22,7 +24,7 @@ function SubmitButton() {
 const inputClass =
   "rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring";
 
-export function InviteUserForm() {
+export function InviteUserForm({ departments }: { departments: Department[] }) {
   const [state, formAction] = useActionState(inviteUser, initialState);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -58,11 +60,11 @@ export function InviteUserForm() {
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="role" className="text-sm font-medium">
-            Role
+            Account role
           </label>
           <select id="role" name="role" defaultValue="employee" className={inputClass}>
             <option value="employee">Employee</option>
-            <option value="admin">Admin</option>
+            <option value="admin">Admin (owner-level)</option>
           </select>
         </div>
 
@@ -80,6 +82,15 @@ export function InviteUserForm() {
             className={inputClass}
           />
         </div>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-2">
+        <span className="text-sm font-medium">Departments</span>
+        <p className="text-xs text-muted-foreground">
+          Select one or more. Members of HR &amp; Management gain billing and
+          staff-management authority.
+        </p>
+        <DepartmentCheckboxes departments={departments} />
       </div>
 
       {state.error && (

@@ -13,8 +13,11 @@ export interface NavItem {
   href: string;
   /** Icon component rendered next to the label. */
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  /** When true, the item is only shown to admins. */
-  adminOnly?: boolean;
+  /**
+   * When true, the item is only shown to users with staff-management authority
+   * (admins or HR & Management).
+   */
+  managerOnly?: boolean;
 }
 
 /**
@@ -26,5 +29,5 @@ export const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: DashboardIcon },
   { label: "Billing", href: "/billing", icon: BillingIcon },
   { label: "Chat", href: "/chat", icon: ChatIcon },
-  { label: "User Management", href: "/users", icon: UsersIcon, adminOnly: true },
+  { label: "User Management", href: "/users", icon: UsersIcon, managerOnly: true },
 ];

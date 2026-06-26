@@ -6,7 +6,7 @@
  * server and client components.
  */
 
-/** The two roles supported by the portal. Stored in `public.profiles.role`. */
+/** The two account-level roles. Owner-level access (founder, CTO) is "admin". */
 export type Role = "admin" | "employee";
 
 /**
@@ -19,4 +19,16 @@ export interface Profile {
   full_name: string | null;
   role: Role;
   created_at: string;
+}
+
+/** A department from `public.departments`. */
+export interface Department {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+/** A profile together with the department(s) it belongs to. */
+export interface ProfileWithDepartments extends Profile {
+  departments: Department[];
 }

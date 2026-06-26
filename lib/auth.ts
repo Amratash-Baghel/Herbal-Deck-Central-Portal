@@ -35,11 +35,89 @@ export async function requireProfile(): Promise<Profile> {
 }
 
 /**
- * Ensures the caller is an admin. Redirects employees to the dashboard and
- * signed-out users to login. Use to gate admin-only pages and actions.
+ * Ensures the caller is an admin (owner-level: founder / CTO). Redirects
+ * employees to the dashboard and signed-out users to login.
  */
 export async function requireAdmin(): Promise<Profile> {
   const profile = await requireProfile();
   if (profile.role !== "admin") redirect("/dashboard");
   return profile;
+}
+
+/**
+ * The signed-in user's resolved access: their profile, which department(s)
+ * they belong to, and the derived capabilities used to gate features.
+ *
+ * Authority over staff and billing belongs to admins OR members of the
+ * HR & Management department — mirroring the database's can_manage_* helpers.
+ */
+export interface UserAccess {
+  profile: Profile;
+  departmentSlugs: string[];
+  isAdmin: boolean;
+  isHrManagement: boolean;
+  canManageUsers: boolean;
+  canManageBilling: boolean;
+}
+
+export async function getUserAccess(): Promise<UserAccess | null> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return null;
+
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  if (!profileRow) return null;
+  const profile = profileRow as Profile;
+
+  const { data: memberships } = await supabase
+    .from("profile_departments")
+    .select("departments(slug)")
+    .eq("profile_id", user.id);
+
+  // A foreign-key embed returns a single related row at runtime, though the
+  // generated types model it as an array — handle both shapes defensively.
+  type SlugRow = { slug: string };
+  const membershipRows = (memberships ?? []) as Array<{
+    departments: SlugRow | SlugRow[] | null;
+  }>;
+  const departmentSlugs = membershipRows
+    .map((m) => {
+      const d = m.departments;
+      if (!d) return undefined;
+      return Array.isArray(d) ? d[0]?.slug : d.slug;
+    })
+    .filter((s): s is string => Boolean(s));
+
+  const isAdmin = profile.role === "admin";
+  const isHrManagement = departmentSlugs.includes("hr-management");
+  const canManage = isAdmin || isHrManagement;
+
+  return {
+    profile,
+    departmentSlugs,
+    isAdmin,
+    isHrManagement,
+    canManageUsers: canManage,
+    canManageBilling: canManage,
+  };
+}
+
+/**
+ * Gates pages/actions that require staff- or billing-management authority
+ * (admins or HR & Management). Employees are sent to the dashboard.
+ */
+export async function requireUserManager(): Promise<UserAccess> {
+  const access = await getUserAccess();
+  if (!access) redirect("/login");
+  if (!access.canManageUsers) redirect("/dashboard");
+  return access;
 }
