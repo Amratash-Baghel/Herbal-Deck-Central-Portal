@@ -174,10 +174,12 @@ automatically.
   Vercel, invite-only auth, and Row Level Security.
 - [`CHANGELOG.md`](./CHANGELOG.md) — release history.
 
-## Development approach
+## About this project
 
-This project was built using **AI-assisted development workflows**. All product
-direction, architecture, and technical decisions were owned and directed by the
-project owner; AI was used as an implementation accelerator within those
-decisions. The documentation set reflects the intended engineering standard for
-the platform as it grows.
+Every problem this portal solves was identified firsthand from how Herbal Deck
+actually operates, and every product and architectural decision — the
+department-based permission model, the invoice workflow, the move to multiple
+invoice templates — was made independently by the project owner. The aim
+throughout is to **streamline, organise, and standardise** the company's
+internal operations, and to keep them secure. This documentation reflects the
+engineering standard intended for the platform as it grows.

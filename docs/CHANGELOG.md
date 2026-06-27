@@ -150,5 +150,5 @@ built in subsequent releases.
 
 - No billing logic is included in this release by design; 0.1.0 is the platform
   shell only.
-- Built using AI-assisted development workflows, with architecture and technical
-  decisions owned by the project owner.
+- Problem identification, architecture, and technical decisions owned and
+  directed by the project owner.

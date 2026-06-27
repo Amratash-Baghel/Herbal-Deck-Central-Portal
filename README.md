@@ -103,4 +103,4 @@ docs/         Full engineering documentation
 
 ---
 
-*Built with AI-assisted workflows. All product direction, architecture, and technical decisions were owned and driven by the project owner.*
+*Conceived and directed by the owner. Every problem it solves was identified firsthand from how Herbal Deck actually operates, and every product and architecture decision was made independently — with one throughline: streamline, organise, and standardise the company's internal operations, securely.*
