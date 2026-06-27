@@ -32,3 +32,40 @@ export interface Department {
 export interface ProfileWithDepartments extends Profile {
   departments: Department[];
 }
+
+/** Lifecycle of a posted (payable) invoice. */
+export type InvoiceStatus = "pending" | "cleared" | "rejected";
+
+/** An expense-tracking category from `public.invoice_categories`. */
+export interface InvoiceCategory {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+/**
+ * A posted invoice row from `public.invoices`. Raised by an employee on behalf
+ * of a service provider, signed by the owner (offline), then cleared by
+ * management. `document` holds the full generator payload so the branded PDF
+ * can be re-downloaded from the record at any time.
+ */
+export interface Invoice {
+  id: string;
+  invoice_number: string;
+  created_by: string;
+  department_id: string;
+  category_id: string | null;
+  vendor_name: string | null;
+  description: string | null;
+  amount: number;
+  currency: string;
+  issue_date: string | null;
+  due_date: string | null;
+  file_path: string | null;
+  status: InvoiceStatus;
+  cleared_by: string | null;
+  cleared_at: string | null;
+  reason: string | null;
+  document: import("@/lib/invoice-pdf").InvoiceData | null;
+  created_at: string;
+}

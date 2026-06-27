@@ -34,19 +34,25 @@ export default function BillingPage() {
           </span>
         </Link>
 
-        {/* Coming soon: expense tracking */}
-        <div className="flex flex-col rounded-2xl border border-dashed bg-muted/40 p-6">
-          <h2 className="text-base font-semibold tracking-tight">
-            Expense tracking
+        {/* Live: expense tracking */}
+        <Link
+          href="/billing/invoices"
+          className="group flex flex-col rounded-2xl border bg-card p-6 shadow-sm transition hover:border-primary/40 hover:shadow"
+        >
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-primary">
+            <BillingIcon className="h-5 w-5" />
+          </span>
+          <h2 className="mt-4 text-base font-semibold tracking-tight">
+            Posted invoices
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Upload vendor invoices, sort them by category and department, and
-            mark them cleared — with a record of who cleared each one.
+            Track posted invoices by department and category, upload the signed
+            copy, and clear or reject — with a record of who cleared each one.
           </p>
-          <span className="mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Coming soon
+          <span className="mt-4 text-sm font-medium text-primary group-hover:underline">
+            Open tracking →
           </span>
-        </div>
+        </Link>
 
         {/* Coming soon: analytics */}
         <div className="flex flex-col rounded-2xl border border-dashed bg-muted/40 p-6">

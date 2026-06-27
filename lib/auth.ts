@@ -121,3 +121,15 @@ export async function requireUserManager(): Promise<UserAccess> {
   if (!access.canManageUsers) redirect("/dashboard");
   return access;
 }
+
+/**
+ * Gates pages/actions that require billing authority (admins or HR &
+ * Management) — clearing/rejecting invoices and uploading signed copies.
+ * Everyone else is sent to the dashboard.
+ */
+export async function requireBillingManager(): Promise<UserAccess> {
+  const access = await getUserAccess();
+  if (!access) redirect("/login");
+  if (!access.canManageBilling) redirect("/dashboard");
+  return access;
+}
