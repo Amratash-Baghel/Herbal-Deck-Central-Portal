@@ -5,6 +5,100 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-06-27
+
+The **billing module** — the portal's first real feature beyond the shell. Built
+as three separate tools that mirror how an invoice actually moves through the
+company: **generate → (sign offline) → post → clear**.
+
+### Added
+
+- **Invoice generator** (`/billing/generate`) — a standalone tool. Fill in a
+  service provider's details and line items, and download a branded PDF that is
+  rendered **entirely in the browser** (jsPDF). No server round-trip, nothing
+  stored — it only creates PDFs.
+  - **Eight distinct templates** (`lib/invoice-templates.ts`) — different
+    layouts, colours, fonts, and table structures.
+  - **Bill-to fixed to Herbal Deck** (`lib/company.ts`); invoice number and date
+    are auto-filled.
+  - **Payment-details block** (Account Holder, Account Number, Bank Name, IFSC,
+    Swift, PAN) so the provider can be paid.
+  - **Live preview is the actual PDF**, shown in an iframe, so every template
+    renders exactly as it will download.
+- **Post invoices** (`/billing/post`) — any employee records an invoice into
+  tracking: provider, amount, department (validated against their memberships),
+  category, reason, and an optional PDF upload. Shows each employee their own
+  posted invoices with live status.
+- **Clear invoices** (`/billing/clearing`) — **admins and HR & Management only**.
+  Clickable **department panels**, **status views** (pending / cleared /
+  rejected) with counts, **search**, and **sort**. Managers upload the signed
+  copy and **clear** or **reject** — recording who acted and when.
+- Billing sub-navigation tabs and a billing route-group layout.
+- Migration `0003_invoice_posting.sql` (adds `reason` to `invoices`).
+
+### Changed
+
+- The generator first shipped (earlier the same day) with an integrated "post"
+  panel. It was **split** into a standalone generator plus separate **Post** and
+  **Clear** sections — cleaner, less cluttered, and with clearer permission
+  boundaries (only admins/HR see clearing).
+
+### Context — the problems behind these decisions
+
+- **Identical invoices look mass-produced.** Generating every service-provider
+  invoice from one template made them look auto-generated, which is a problem for
+  authenticity and potential tax scrutiny. → We ship **eight different
+  templates** so a batch of invoices doesn't look like it came off a press.
+- **We're B2C/D2C — we don't bill clients.** Employees raise invoices *on behalf
+  of service providers* who bill Herbal Deck. → The generator was reframed so the
+  provider is the issuer and **Herbal Deck is the fixed bill-to**.
+- **The rupee symbol won't print.** jsPDF's built-in fonts can't render `₹`
+  (or reliably `€`/`£`). → Money shows the proper symbol on screen but an
+  **ASCII prefix in the PDF** (`Rs.`), so amounts never turn into empty boxes.
+- **Spend has to be tracked and signed off.** → Posting and clearing are built on
+  the existing `invoices` table, which records **who created** and **who
+  cleared** each invoice and when; clearing is restricted to admins + HR.
+
+## [0.2.0] — 2026-06-27
+
+The real **organisational model** — departments, multi-department membership, and
+a department-based authority tier — plus the database design for billing.
+
+### Added
+
+- **Departments** — the seven Herbal Deck departments, seeded, with a
+  many-to-many `profile_departments` table so a person can belong to more than
+  one (`supabase/migrations/0002_departments_and_billing.sql`).
+- **Department-based authority.** **HR & Management** gains the authority to
+  manage staff and billing — not via a job title, but via department membership.
+  `SECURITY DEFINER` helpers: `is_hr_management()`, `can_manage_billing()`,
+  `can_manage_users()`.
+- **User Management v2** — assign employees to department(s) via multi-select,
+  edit memberships inline, and show department badges. Access widened from
+  admin-only to **admins + HR & Management**.
+- `getUserAccess()` / `requireUserManager()` — resolve a user's capabilities
+  (admin, HR & Management, can-manage-users/billing) in one place.
+- Billing data model — `invoices`, `invoice_categories`, `misc_payments`, with
+  RLS — and private storage buckets, ready for the 0.3.0 module.
+
+### Changed
+
+- **`middleware.ts` → `proxy.ts`.** Next.js 16 deprecates the middleware
+  convention; the route-protection entry point was renamed accordingly.
+- **Theme toggle rewritten** to read the theme via `useSyncExternalStore`,
+  removing a set-state-in-effect pattern and a potential hydration mismatch.
+
+### Context — the problems behind these decisions
+
+- **Authority doesn't map to a single job title.** Several people share staff
+  and billing authority, and some belong to multiple departments. Modelling
+  authority as a *department* (HR & Management) rather than a role, with a
+  proper many-to-many membership table, captured that cleanly.
+- **Deployments were blocked with "fix git".** Vercel only auto-publishes
+  commits whose author it recognises; early commits used a placeholder identity,
+  so Vercel **blocked** them. Fixed by setting the git author to the owner's
+  verified GitHub email — a security feature, not a bug.
+
 ## [0.1.0] — 2026-06-26
 
 Initial platform shell. Establishes the foundation — authentication, roles,

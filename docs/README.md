@@ -5,10 +5,10 @@ that consolidates the company's internal tools behind a single, secure,
 role-aware interface.
 
 The portal is built as a **shell + modules** architecture: a shared foundation
-(authentication, roles, navigation, theming, layout) into which self-contained
-feature modules (Billing, Chat, and more to come) are added over time. This
-first release delivers that foundation and the placeholder modules; business
-logic for each module is layered in subsequently.
+(authentication, departments, navigation, theming, layout) into which
+self-contained feature modules are added over time. The foundation and User
+Management are live, the **Billing** module has shipped (generate / post / clear),
+and Chat is next.
 
 ---
 
@@ -34,14 +34,18 @@ tooling. Access is **invite-only** — there is no public sign-up. Administrator
 provision accounts from inside the portal, and every user is assigned one of two
 roles (`admin` or `employee`) that determines what they can see and do.
 
+Authority runs through **departments**, not titles: the **HR & Management**
+department can manage staff and billing alongside the owner-level admins, and
+employees can belong to more than one department.
+
 Current modules:
 
 | Module             | Status        | Notes                                            |
 | ------------------ | ------------- | ------------------------------------------------ |
 | Dashboard          | ✅ Live        | Tool launcher; data-driven card grid             |
-| Billing & Invoices | 🧱 Placeholder | Route + UI shell; business logic to follow        |
+| Billing & Invoices | ✅ Live        | Generate (8 templates) · Post · Clear (admin/HR) |
+| User Management    | ✅ Live        | Add employees, assign departments (admin / HR)   |
 | Chat               | 🧱 Placeholder | UI layout only; real-time messaging to follow     |
-| User Management    | ✅ Live (admin) | Add employees, view team, role-based visibility  |
 
 ## Technology stack
 
@@ -68,10 +72,13 @@ expose data:
    enforce access on the data itself. Even if the UI were bypassed, an employee
    cannot read another user's data, because the database refuses the query.
 
-Account creation is **admin-only**. Admins add employees via the User Management
-module; the server uses a privileged service-role key (never exposed to the
-browser) to create the account, and a database trigger provisions the matching
-profile and role.
+Account creation is restricted to **admins and the HR & Management department**.
+They add employees via the User Management module; the server uses a privileged
+service-role key (never exposed to the browser) to create the account, and a
+database trigger provisions the matching profile and role. Page/action guards
+(`requireProfile`, `requireUserManager`, `requireBillingManager`) mirror the
+database's `can_manage_users()` / `can_manage_billing()` helpers so the UI and
+RLS agree on who can do what.
 
 ## Project structure
 
@@ -81,14 +88,19 @@ A high-level view (full detail in [`architecture.md`](./architecture.md)):
 app/
   (dashboard)/        # Authenticated shell: sidebar layout + protected pages
     dashboard/        # Tool launcher
-    billing/          # Billing module (placeholder)
+    billing/          # Billing module — tabs layout + actions
+      generate/       #   invoice generator (8 templates, download only)
+      post/           #   post an invoice into tracking
+      clearing/       #   clear/reject posted invoices (admin / HR only)
     chat/             # Chat module (placeholder)
-    users/            # User Management (admin only)
+    users/            # User Management (admin / HR & Management)
   login/              # Public login page + sign-in server action
   auth/signout/       # Sign-out route handler
-components/           # Reusable UI (sidebar, cards, theme toggle, icons)
-lib/                  # Supabase clients, auth helpers, types, navigation config
-supabase/             # schema.sql — tables, trigger, and RLS policies
+components/           # Reusable UI (sidebar, invoice generator/forms, etc.)
+lib/                  # Supabase clients, auth, invoice PDF + templates, money
+supabase/
+  schema.sql          # base tables, trigger, RLS
+  migrations/         # 0002 departments + billing, 0003 invoice posting
 docs/                 # This documentation set
 ```
 
@@ -127,10 +139,19 @@ code.
 
 ## Database setup
 
-Run [`supabase/schema.sql`](../supabase/schema.sql) once in the Supabase SQL
-Editor. It creates the `profiles` table, the role enum, the auto-provisioning
-trigger, an `is_admin()` helper, and the RLS policies. The file's footer
-explains how to bootstrap your first admin account.
+In the Supabase SQL Editor, run these **once, in order**:
+
+1. [`supabase/schema.sql`](../supabase/schema.sql) — the `profiles` table, role
+   enum, auto-provisioning trigger, `is_admin()` helper, and base RLS policies.
+   Its footer explains how to bootstrap your first admin account.
+2. [`supabase/migrations/0002_departments_and_billing.sql`](../supabase/migrations/0002_departments_and_billing.sql)
+   — departments, multi-department membership, the `can_manage_*` helpers, the
+   billing tables, and the private storage buckets.
+3. [`supabase/migrations/0003_invoice_posting.sql`](../supabase/migrations/0003_invoice_posting.sql)
+   — adds the `reason` column used when posting an invoice.
+
+After setup, assign yourself (and your CTO) to the **HR & Management** department
+— or keep `role = 'admin'` — so billing and user management unlock.
 
 ## Deployment pipeline
 

@@ -17,10 +17,28 @@ The first release ships that foundation. Billing and Chat are already outlined a
 ## What it does today
 
 - Employees sign in with their email and password — **no self-registration**. The only way in is if an admin adds you.
-- Two types of accounts: **admins** (can manage the team, see everything) and **employees** (see their own tools and data).
-- A clean dashboard with a sidebar that adjusts based on your role — employees see their tools, admins see everything plus a User Management section.
-- Admins can add new employees directly from inside the portal without touching Supabase or any backend system.
+- **Departments and shared authority.** Herbal Deck is ~40 people across seven departments, and people can belong to more than one. Authority runs through departments, not titles: the **HR & Management** department can manage staff and billing, alongside the owner-level admins.
+- Admins (and HR & Management) can add employees and assign them to departments directly from inside the portal — no touching Supabase.
+- A **billing module** for invoices (see below).
+- A clean dashboard with a sidebar that adjusts to your role and access.
 - Light and dark mode, built around Herbal Deck's brand colors.
+
+---
+
+## The billing module
+
+Herbal Deck is a product company — it doesn't bill clients. Instead, employees raise invoices **on behalf of the service providers** the company pays (influencers, freelancers, vendors), the owner signs them, and the management team clears them. The module is built as three separate tools that follow that path:
+
+1. **Generate** — an employee fills in the provider's details and line items and downloads a branded PDF. The PDF is built right in the browser, and "Bill To" is always Herbal Deck.
+2. **Post** — the (signed) invoice is recorded into tracking under the employee's name and department, with a reason. It starts as *pending*.
+3. **Clear** — admins and HR & Management review everything, by department and status, and mark each invoice *cleared* or *rejected* — with a record of who did it.
+
+Two decisions worth calling out, because they came from real problems:
+
+- **Eight invoice templates, not one.** If every invoice came from a single template, a stack of them would obviously look machine-generated — which is a problem for authenticity and for taxes, where invoices are meant to come from independent providers. So the generator offers eight genuinely different designs.
+- **Expense tracking is built into the invoices themselves.** Rather than a separate audit log, every invoice carries who created it, who cleared it, and when. That record *is* the tracking system — the clearing dashboard's department panels, status filters, and search all read from it.
+
+There's a deeper write-up of these and other choices in [`docs/decisions.md`](./docs/decisions.md).
 
 ---
 
@@ -58,7 +76,7 @@ cp .env.local.example .env.local   # fill in your Supabase keys
 npm run dev                         # http://localhost:3000
 ```
 
-You'll also need to run `supabase/schema.sql` once in the Supabase SQL Editor to set up the database tables and security rules. Full instructions are in [`docs/README.md`](./docs/README.md).
+You'll also need to set up the database. In the Supabase SQL Editor, run these **once, in order**: `supabase/schema.sql`, then `supabase/migrations/0002_departments_and_billing.sql`, then `supabase/migrations/0003_invoice_posting.sql`. Full instructions are in [`docs/README.md`](./docs/README.md).
 
 ---
 

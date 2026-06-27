@@ -113,6 +113,104 @@ recursion of a profiles policy querying profiles, role checks go through a
 `SECURITY DEFINER` `is_admin()` function. Full policy definitions are in
 `supabase/schema.sql`.
 
+## 6. Authority through departments, not job titles
+
+**Decision:** Model operational authority as membership of the **HR &
+Management** department, and let people belong to **multiple** departments
+(a many-to-many `profile_departments` table), rather than a single role/title.
+
+**Why:**
+
+- **It matches reality.** Authority over staff and billing is shared by several
+  people, and some employees sit in more than one department. A single
+  `role` column or one-department-per-person foreign key couldn't express that.
+- **Two clean tiers above "member."** `admin` stays owner-level (founder, CTO);
+  everything else flows from department membership. `can_manage_users()` and
+  `can_manage_billing()` both resolve to *admin OR HR & Management*, so widening
+  who has authority is a membership change, not a code change.
+- **One capability resolver.** `getUserAccess()` computes a user's
+  capabilities once; pages and actions consume the result instead of
+  re-deriving permissions ad hoc.
+
+**Implementation:** `SECURITY DEFINER` helpers (`is_hr_management()`,
+`can_manage_billing()`, `can_manage_users()`) back the RLS policies, mirrored in
+the app by `getUserAccess()` / `requireUserManager()` / `requireBillingManager()`.
+See `supabase/migrations/0002_departments_and_billing.sql`.
+
+## 7. Invoices generated client-side as PDFs
+
+**Decision:** Render invoice PDFs **in the browser** with jsPDF + jsPDF-AutoTable
+(dynamically imported), rather than on the server or via a third-party service.
+
+**Why:**
+
+- **Instant and dependency-light.** "Download" needs no network round-trip, no
+  server CPU, and no external API key or quota. The libraries are
+  framework-agnostic, so they sidestep React-version peer-dependency friction.
+- **The preview is the real thing.** The live preview is the actual rendered PDF
+  shown in an iframe — so all eight templates display exactly as they download,
+  with no separate HTML preview to keep in sync.
+
+**The catch we hit:** jsPDF's built-in fonts can't render the rupee glyph `₹`
+(and are unreliable for `€`/`£`). **Resolution:** a single money formatter with
+two modes — Unicode symbols on screen, **ASCII prefixes** (e.g. `Rs.`) in the
+PDF — so amounts never become empty boxes (`lib/money.ts`).
+
+## 8. Eight invoice templates (so invoices don't look mass-produced)
+
+**Decision:** Ship **eight visually and structurally distinct** invoice
+templates rather than one house style.
+
+**Why:**
+
+- **Identical invoices look auto-generated.** These invoices are raised on behalf
+  of many different service providers. If every one came out of a single
+  template, a stack of them would obviously look machine-made — a problem for
+  authenticity and a realistic concern under **tax scrutiny**, where invoices are
+  expected to originate from independent providers.
+- **Variety is the feature.** The templates differ in layout, colour,
+  typography, and table structure (e.g. with/without quantity columns), so a
+  batch reads as genuinely separate documents.
+
+**Implementation:** Each template is a `draw(ctx)` function over a shared,
+jsPDF-free context (`lib/invoice-types.ts` → `lib/invoice-templates.ts`); the
+builder dispatches to the selected one (`lib/invoice-pdf.ts`).
+
+## 9. Three separate billing tools (generate · post · clear)
+
+**Decision:** Split billing into a **standalone generator**, a **Post** section,
+and a **Clear** section — instead of one combined screen. The generator only
+creates PDFs; it has no posting link.
+
+**Why:**
+
+- **They're different jobs for different people.** Generating a document, filing
+  it for tracking, and approving it for payment are separate steps in the real
+  workflow (generate → owner signs offline → post the signed copy → management
+  clears). Separate tools keep each screen focused and uncluttered.
+- **Clear permission boundaries.** Clearing is the sensitive step, so it lives in
+  its own section restricted to **admins + HR & Management** — enforced in the
+  page guard *and* by RLS. Anyone can generate or post; only managers can clear.
+
+> An earlier build merged generation and posting into one screen. It was split
+> once the real workflow above became clear — simpler, and easier to lock down.
+
+## 10. Expense tracking built on a single invoices table
+
+**Decision:** Track posted invoices and their approval on the existing
+`invoices` table, recording **who created** and **who cleared** each one, rather
+than a separate audit log.
+
+**Why:**
+
+- **A built-in paper trail.** `created_by`, `cleared_by`, `cleared_at`, and a
+  three-state `status` (pending / cleared / rejected) make the table itself the
+  record of what happened, queryable for the clearing dashboard's department
+  panels, status views, search, and sort.
+- **Files stay out of the database.** Uploaded copies live in a private storage
+  bucket; the row holds only a path. The clearing UI serves them through
+  short-lived signed URLs generated server-side.
+
 ---
 
 ## Summary
@@ -124,3 +222,8 @@ recursion of a profiles policy querying profiles, role checks go through a
 | Hosting         | Vercel           | First-party Next.js CI/CD, preview deploys   |
 | Registration    | Invite-only      | Internal tool; controlled, secure onboarding |
 | Authorization   | Row Level Security | Defense in depth at the data layer          |
+| Authority model | Department-based (multi-dept) | Matches shared, cross-department authority |
+| Invoice PDFs    | Client-side (jsPDF) | Instant, dependency-light, exact preview   |
+| Invoice designs | Eight templates  | Avoid mass-produced look / tax scrutiny      |
+| Billing UX      | Three separate tools | Focused screens; clearing locked to admins/HR |
+| Expense tracking| One invoices table | Built-in who-created / who-cleared trail    |

@@ -30,11 +30,17 @@ app/
   (dashboard)/            # Route GROUP — the authenticated shell
     layout.tsx            # Renders <Sidebar>; calls requireProfile() (gate)
     dashboard/page.tsx    # Tool launcher (data-driven card grid)
-    billing/page.tsx      # Billing module (placeholder)
+    billing/              # Billing module
+      layout.tsx          #   sub-nav tabs (Generate / Post / Clear)
+      page.tsx            #   overview
+      generate/page.tsx   #   invoice generator (8 templates, download only)
+      post/page.tsx       #   post an invoice into tracking
+      clearing/page.tsx   #   clear/reject posted invoices (admins + HR only)
+      actions.ts          #   post / delete / clear / reject / upload actions
     chat/page.tsx         # Chat module (placeholder)
     users/
-      page.tsx            # User Management (admin only)
-      actions.ts          # "inviteUser" Server Action (admin-guarded)
+      page.tsx            # User Management (admins + HR & Management)
+      actions.ts          # inviteUser / setUserDepartments Server Actions
 
 components/               # Reusable, presentational UI
   sidebar.tsx             # Role-filtered nav, branding, user info, logout
@@ -51,12 +57,20 @@ lib/                      # Non-visual logic and configuration
     server.ts             # Server Supabase client (anon key, cookie session)
     admin.ts              # Service-role client (server-only, bypasses RLS)
     middleware.ts         # updateSession(): session refresh + route guard
-  auth.ts                 # getProfile / requireProfile / requireAdmin
+  auth.ts                 # getProfile / requireProfile / requireAdmin /
+                          #   getUserAccess / requireUserManager / requireBillingManager
+  invoice-pdf.ts          # builds the invoice PDF (jsPDF); dispatches to a template
+  invoice-templates.ts    # the eight invoice templates
+  invoice-types.ts        # invoice model + draw context (jsPDF-free, shared)
+  money.ts                # currency formatting (screen symbols vs PDF-safe ASCII)
+  company.ts              # fixed Herbal Deck details (invoice bill-to)
   navigation.tsx          # navItems[]: single source of truth for the sidebar
-  types.ts                # Role, Profile
+  types.ts                # Role, Profile, Department, Invoice, ...
 
 proxy.ts                  # Next.js 16 proxy (middleware) entry point
-supabase/schema.sql       # Tables, trigger, is_admin(), RLS policies
+supabase/
+  schema.sql              # Base tables, trigger, is_admin(), RLS policies
+  migrations/             # 0002 departments + billing, 0003 invoice posting
 docs/                     # Documentation set
 ```
 
@@ -68,8 +82,10 @@ docs/                     # Documentation set
 2. The matched **route group layout** (`app/(dashboard)/layout.tsx`) calls
    `requireProfile()`, loading the user's profile (and role) server-side. If
    there is no session, it redirects to `/login`.
-3. The **page** renders. Admin-only pages additionally call `requireAdmin()`,
-   which redirects employees to the dashboard.
+3. The **page** renders. Restricted pages additionally call a guard —
+   `requireAdmin()` (owner-only), or `requireUserManager()` /
+   `requireBillingManager()` (admins + HR & Management) — which redirects anyone
+   without that authority back to the dashboard.
 4. Any **data access** goes through a Supabase client and is filtered by **Row
    Level Security** in the database — the final, authoritative access check.
 
@@ -83,7 +99,8 @@ docs/                     # Documentation set
 - **Data isolation** — each module's tables get their own RLS policies in the
   database. Access rules live with the data, not scattered through UI code.
 - **Navigation as data** — the sidebar renders from `lib/navigation.tsx`. A
-  module appears in the nav by adding one entry, optionally `adminOnly`.
+  module appears in the nav by adding one entry, optionally `managerOnly` (shown
+  only to admins + HR & Management).
 - **Presentation reuse** — `PageHeader`, `ToolCard`, and the design tokens give
   every module a consistent look without copy-pasted styling.
 
@@ -111,7 +128,8 @@ Example: adding a "Reports" module.
      return <PageHeader title="Reports" description="Operational reporting." />;
    }
    ```
-   (Use `requireAdmin()` instead if the module is admin-only.)
+   (Use `requireAdmin()`, `requireUserManager()`, or `requireBillingManager()`
+   instead if the module should be restricted.)
 
 2. **Add an icon** in `components/icons.tsx` (follow the existing pattern).
 

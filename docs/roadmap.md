@@ -72,21 +72,29 @@ rewrite. Chat images are compressed before upload to conserve space.
 
 ## Delivery phases
 
-### Phase 1 — Foundation *(in progress)*
+### Phase 1 — Foundation ✅ *Done*
 Departments, multi-department membership, the three permission tiers, and the
-billing/user-management database design. **Status: schema written
-(`0002_departments_and_billing.sql`).**
+billing/user-management database design (`0002_departments_and_billing.sql`).
 
-### Phase 2 — User Management v2
+### Phase 2 — User Management v2 ✅ *Done*
 Assign employees to department(s) via multi-select; HR & Management (not just
-admins) can manage staff; show department badges.
+admins) can manage staff; department badges. *(Released as 0.2.0.)*
 
-### Phase 3 — Billing module
-- **Invoices** — generate (form → PDF) or upload; categorise; department-scoped
-  visibility; HR & Management clears/rejects with proof and clearer tracking.
-- **Miscellaneous payments** — HR & Management-only ledger.
-- **Analytics** — total and pending spend, broken down by category, department,
-  and month, across both invoices and miscellaneous payments.
+### Phase 3 — Billing module 🟡 *In progress*
+Built as three separate tools (see "The billing module" in the project README):
+
+- **Generate** ✅ — invoice generator: form → branded PDF, **eight templates**,
+  fixed Herbal Deck bill-to, auto number/date, payment-details block. Rendered
+  client-side; download only.
+- **Post** ✅ — record an invoice into tracking (provider, amount, department,
+  reason, optional PDF upload).
+- **Clear** ✅ — admins + HR & Management: department panels, status views
+  (pending / cleared / rejected), search, sort; clear / reject / upload signed
+  copy, with clearer tracking. *(Generate/Post/Clear released as 0.3.0.)*
+- **Miscellaneous payments** ⬜ — HR & Management-only ledger *(table exists; UI
+  pending)*.
+- **Analytics** ⬜ — total and pending spend by category, department, and month
+  *(next up)*.
 
 ### Phase 4 — Chat
 Department-based group chat with file and image attachments, built on Supabase
