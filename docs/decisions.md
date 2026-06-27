@@ -231,6 +231,25 @@ department, category, and month in memory) rather than a SQL view/RPC, and rende
 **Semantics:** "Spend" counts **cleared** invoices; pending is shown separately
 for forecasting. Totals sum in the base currency (INR).
 
+## 12. Removing an employee = deactivation, not deletion
+
+**Decision:** "Removing" an employee soft-deactivates them (`deactivated_at` +
+an auth ban), rather than hard-deleting the account.
+
+**Why:**
+
+- **The audit trail must survive.** `invoices.created_by` and
+  `misc_payments.created_by` are `ON DELETE RESTRICT`, so the database refuses to
+  delete anyone whose name is on a posted invoice — correctly, since a cleared
+  invoice has to keep who raised it. A hard delete would either fail or destroy
+  financial history.
+- **Reversible and safe.** Deactivation revokes access immediately (the app
+  treats `deactivated_at` as no-access; the auth ban cuts live sessions) but
+  keeps the record, so an accidental removal is a one-click restore.
+
+**Guards:** you can't deactivate yourself, and only an admin can deactivate
+another admin — checked in the Server Action, not just the UI.
+
 ---
 
 ## Summary
@@ -248,3 +267,4 @@ for forecasting. Totals sum in the base currency (INR).
 | Billing UX      | Three separate tools | Focused screens; clearing locked to admins/HR |
 | Expense tracking| One invoices table | Built-in who-created / who-cleared trail    |
 | Analytics       | In-process + CSS bars | Right-sized, migration-free, no chart dep |
+| Employee removal| Soft deactivation | Preserve audit trail (FK restrict); reversible |

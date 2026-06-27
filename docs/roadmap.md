@@ -76,9 +76,11 @@ rewrite. Chat images are compressed before upload to conserve space.
 Departments, multi-department membership, the three permission tiers, and the
 billing/user-management database design (`0002_departments_and_billing.sql`).
 
-### Phase 2 — User Management v2 ✅ *Done*
+### Phase 2 — Employee Management ✅ *Done*
 Assign employees to department(s) via multi-select; HR & Management (not just
-admins) can manage staff; department badges. *(Released as 0.2.0.)*
+admins) can manage staff; department badges. Later renamed from "User
+Management" and given a searchable roster plus **soft removal** (deactivate /
+restore, preserving history). *(0.2.0, enhanced in 0.4.0.)*
 
 ### Phase 3 — Billing module 🟡 *In progress*
 Built as three separate tools (see "The billing module" in the project README):

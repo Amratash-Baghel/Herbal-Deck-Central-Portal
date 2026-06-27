@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
-import { inviteUser, type InviteState } from "@/app/(dashboard)/users/actions";
+import { inviteUser, type InviteState } from "@/app/(dashboard)/employees/actions";
 import { DepartmentCheckboxes } from "@/components/department-checkboxes";
 import type { Department } from "@/lib/types";
 

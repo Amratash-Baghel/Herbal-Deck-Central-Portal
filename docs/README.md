@@ -43,8 +43,8 @@ Current modules:
 | Module             | Status        | Notes                                            |
 | ------------------ | ------------- | ------------------------------------------------ |
 | Dashboard          | ✅ Live        | Tool launcher; data-driven card grid             |
-| Billing & Invoices | ✅ Live        | Generate (8 templates) · Post · Clear (admin/HR) |
-| User Management    | ✅ Live        | Add employees, assign departments (admin / HR)   |
+| Billing & Invoices  | ✅ Live        | Generate (8 templates) · Post · Clear · Analytics |
+| Employee Management | ✅ Live        | Add, assign departments, remove (soft) — admin / HR |
 | Chat               | 🧱 Placeholder | UI layout only; real-time messaging to follow     |
 
 ## Technology stack
@@ -149,6 +149,8 @@ In the Supabase SQL Editor, run these **once, in order**:
    billing tables, and the private storage buckets.
 3. [`supabase/migrations/0003_invoice_posting.sql`](../supabase/migrations/0003_invoice_posting.sql)
    — adds the `reason` column used when posting an invoice.
+4. [`supabase/migrations/0004_employee_deactivation.sql`](../supabase/migrations/0004_employee_deactivation.sql)
+   — adds `deactivated_at` for soft-removing employees.
 
 After setup, assign yourself (and your CTO) to the **HR & Management** department
 — or keep `role = 'admin'` — so billing and user management unlock.

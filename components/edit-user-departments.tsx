@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 import {
   setUserDepartments,
   type MutationState,
-} from "@/app/(dashboard)/users/actions";
+} from "@/app/(dashboard)/employees/actions";
 import { DepartmentCheckboxes } from "@/components/department-checkboxes";
 import type { Department } from "@/lib/types";
 

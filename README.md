@@ -76,7 +76,7 @@ cp .env.local.example .env.local   # fill in your Supabase keys
 npm run dev                         # http://localhost:3000
 ```
 
-You'll also need to set up the database. In the Supabase SQL Editor, run these **once, in order**: `supabase/schema.sql`, then `supabase/migrations/0002_departments_and_billing.sql`, then `supabase/migrations/0003_invoice_posting.sql`. Full instructions are in [`docs/README.md`](./docs/README.md).
+You'll also need to set up the database. In the Supabase SQL Editor, run these **once, in order**: `supabase/schema.sql`, then the migrations under `supabase/migrations/` in numeric order (`0002` → `0003` → `0004`). Full instructions are in [`docs/README.md`](./docs/README.md).
 
 ---
 

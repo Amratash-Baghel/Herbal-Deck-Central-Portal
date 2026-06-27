@@ -19,6 +19,8 @@ export interface Profile {
   full_name: string | null;
   role: Role;
   created_at: string;
+  /** Set when the employee has been deactivated (soft-removed); null if active. */
+  deactivated_at: string | null;
 }
 
 /** A department from `public.departments`. */

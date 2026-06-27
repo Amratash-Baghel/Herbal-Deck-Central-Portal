@@ -21,7 +21,10 @@ export async function getProfile(): Promise<Profile | null> {
     .eq("id", user.id)
     .single();
 
-  return (profile as Profile) ?? null;
+  const row = (profile as Profile) ?? null;
+  // A deactivated (soft-removed) employee has no access.
+  if (!row || row.deactivated_at) return null;
+  return row;
 }
 
 /**
@@ -77,6 +80,7 @@ export async function getUserAccess(): Promise<UserAccess | null> {
 
   if (!profileRow) return null;
   const profile = profileRow as Profile;
+  if (profile.deactivated_at) return null;
 
   const { data: memberships } = await supabase
     .from("profile_departments")

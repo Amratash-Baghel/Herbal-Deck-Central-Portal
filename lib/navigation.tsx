@@ -29,5 +29,5 @@ export const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: DashboardIcon },
   { label: "Billing", href: "/billing", icon: BillingIcon },
   { label: "Chat", href: "/chat", icon: ChatIcon },
-  { label: "User Management", href: "/users", icon: UsersIcon, managerOnly: true },
+  { label: "Employee Management", href: "/employees", icon: UsersIcon, managerOnly: true },
 ];

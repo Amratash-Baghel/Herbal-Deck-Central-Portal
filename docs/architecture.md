@@ -38,9 +38,9 @@ app/
       clearing/page.tsx   #   clear/reject posted invoices (admins + HR only)
       actions.ts          #   post / delete / clear / reject / upload actions
     chat/page.tsx         # Chat module (placeholder)
-    users/
-      page.tsx            # User Management (admins + HR & Management)
-      actions.ts          # inviteUser / setUserDepartments Server Actions
+    employees/
+      page.tsx            # Employee Management (admins + HR & Management)
+      actions.ts          # invite / setDepartments / deactivate / reactivate
 
 components/               # Reusable, presentational UI
   sidebar.tsx             # Role-filtered nav, branding, user info, logout
@@ -70,7 +70,7 @@ lib/                      # Non-visual logic and configuration
 proxy.ts                  # Next.js 16 proxy (middleware) entry point
 supabase/
   schema.sql              # Base tables, trigger, is_admin(), RLS policies
-  migrations/             # 0002 departments + billing, 0003 invoice posting
+  migrations/             # 0002 departments+billing, 0003 posting, 0004 deactivation
 docs/                     # Documentation set
 ```
 

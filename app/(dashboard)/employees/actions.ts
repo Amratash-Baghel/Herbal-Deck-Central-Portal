@@ -82,7 +82,7 @@ export async function inviteUser(
     }
   }
 
-  revalidatePath("/users");
+  revalidatePath("/employees");
   return { error: null, success: `${fullName} was added as ${role}.` };
 }
 
@@ -129,6 +129,62 @@ export async function setUserDepartments(
     }
   }
 
-  revalidatePath("/users");
+  revalidatePath("/employees");
   return { error: null, success: "Departments updated." };
+}
+
+/**
+ * Server Action: deactivate ("remove") an employee. This is a soft remove —
+ * the profile and all their history (e.g. invoices they raised) are kept, but
+ * their access is revoked: the profile is flagged `deactivated_at` and their
+ * auth login is banned so any live session is cut off.
+ *
+ * Guards: you cannot deactivate yourself, and only an admin can deactivate
+ * another admin. Re-checked server-side regardless of the UI.
+ */
+export async function deactivateEmployee(formData: FormData): Promise<void> {
+  const access = await requireUserManager();
+  const userId = String(formData.get("user_id") ?? "");
+  if (!userId || userId === access.profile.id) return;
+
+  const admin = createAdminClient();
+
+  const { data: target } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!target) return;
+  if ((target as { role: Role }).role === "admin" && !access.isAdmin) return;
+
+  await admin
+    .from("profiles")
+    .update({ deactivated_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  // Cut off any live session. Best-effort — the app guard already blocks access.
+  try {
+    await admin.auth.admin.updateUserById(userId, { ban_duration: "876000h" });
+  } catch {
+    // ignore: deactivation already took effect at the app layer
+  }
+
+  revalidatePath("/employees");
+}
+
+/** Server Action: restore a previously deactivated employee. */
+export async function reactivateEmployee(formData: FormData): Promise<void> {
+  await requireUserManager();
+  const userId = String(formData.get("user_id") ?? "");
+  if (!userId) return;
+
+  const admin = createAdminClient();
+  await admin.from("profiles").update({ deactivated_at: null }).eq("id", userId);
+  try {
+    await admin.auth.admin.updateUserById(userId, { ban_duration: "none" });
+  } catch {
+    // ignore: reactivation already took effect at the app layer
+  }
+
+  revalidatePath("/employees");
 }

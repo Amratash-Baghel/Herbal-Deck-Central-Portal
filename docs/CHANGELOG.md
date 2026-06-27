@@ -5,6 +5,31 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-06-27
+
+### Changed
+
+- **User Management → Employee Management.** Route renamed `/users` →
+  `/employees`. Reworked roster: avatars, role + department badges, a "You"
+  marker, and a live client-side search (name / email / department).
+
+### Added
+
+- **Remove an employee (soft).** A guarded Server Action **deactivates** rather
+  than deletes — it sets `profiles.deactivated_at` and bans the auth login,
+  keeping the person's history (the invoices they raised) intact, and is
+  restorable from a separate "Removed" section. `lib/auth.ts` treats a non-null
+  `deactivated_at` as no-access; the auth ban cuts off any live session.
+  Migration `0004_employee_deactivation.sql`.
+  - Guards: you can't remove yourself, and only an admin can remove another
+    admin — enforced server-side.
+
+### Notes
+
+- Hard delete isn't an option: `invoices.created_by` / `misc_payments.created_by`
+  are `ON DELETE RESTRICT`, and a cleared invoice must retain who raised it.
+  Deactivation revokes access without breaking that audit trail.
+
 ## [0.3.1] — 2026-06-27
 
 ### Added
