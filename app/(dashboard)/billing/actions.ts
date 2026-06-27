@@ -1,13 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import {
-  getUserAccess,
-  requireBillingManager,
-} from "@/lib/auth";
+import { getUserAccess, requireBillingManager } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { computeTotals, type InvoiceData } from "@/lib/invoice-pdf";
 
 export interface PostInvoiceState {
   error: string | null;
@@ -15,47 +11,40 @@ export interface PostInvoiceState {
 }
 
 /**
- * Server Action: "post" a generated invoice into expense tracking.
- *
- * The employee is taken from the session (created_by = the signed-in user) and
- * the department is validated against their memberships — neither is trusted
- * from the client. The full generator payload is stored in `document` so the
- * exact PDF can be re-downloaded from the record later. Row Level Security
+ * Server Action: post an invoice into tracking. The employee is taken from the
+ * session and the department is validated against their memberships — neither
+ * is trusted from the client. An optional file (the generated / signed PDF) is
+ * stored in the private `invoices` bucket via the service-role client. RLS
  * independently enforces that created_by must equal the caller.
  */
-export async function postInvoice(
+export async function createPostedInvoice(
   _prev: PostInvoiceState,
   formData: FormData,
 ): Promise<PostInvoiceState> {
   const access = await getUserAccess();
   if (!access) return { error: "You are not signed in.", success: null };
 
+  const vendorName = String(formData.get("vendor_name") ?? "").trim();
+  const invoiceNumber = String(formData.get("invoice_number") ?? "").trim();
   const departmentId = String(formData.get("department_id") ?? "");
   const categoryId = String(formData.get("category_id") ?? "") || null;
   const reason = String(formData.get("reason") ?? "").trim();
-  const documentRaw = String(formData.get("document") ?? "");
+  const issueDate = String(formData.get("issue_date") ?? "") || null;
+  const currency = String(formData.get("currency") ?? "INR");
+  const amount = Number(formData.get("amount") ?? 0);
+  const file = formData.get("file");
 
-  if (!departmentId) {
-    return { error: "Choose the department this invoice belongs to.", success: null };
-  }
-  if (!reason) {
-    return { error: "Add a short reason for posting this invoice.", success: null };
-  }
-
-  let doc: InvoiceData;
-  try {
-    doc = JSON.parse(documentRaw) as InvoiceData;
-  } catch {
-    return { error: "The invoice data was malformed. Try again.", success: null };
-  }
-  if (!doc.items?.length) {
-    return { error: "Add at least one line item before posting.", success: null };
+  if (!vendorName) return { error: "Enter the service provider's name.", success: null };
+  if (!invoiceNumber) return { error: "Enter the invoice number.", success: null };
+  if (!departmentId) return { error: "Choose a department.", success: null };
+  if (!reason) return { error: "Add a short reason for posting.", success: null };
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Enter a valid amount.", success: null };
   }
 
   const supabase = await createClient();
 
-  // Validate the chosen department: a non-admin can only post to a department
-  // they actually belong to.
+  // A non-admin may only post to a department they belong to.
   if (!access.isAdmin) {
     const { data: membership } = await supabase
       .from("profile_departments")
@@ -68,30 +57,47 @@ export async function postInvoice(
     }
   }
 
-  const totals = computeTotals(doc.items, doc.taxRate);
+  const { data: inserted, error } = await supabase
+    .from("invoices")
+    .insert({
+      invoice_number: invoiceNumber,
+      created_by: access.profile.id,
+      department_id: departmentId,
+      category_id: categoryId,
+      vendor_name: vendorName,
+      amount,
+      currency,
+      issue_date: issueDate,
+      reason,
+      status: "pending",
+    })
+    .select("id")
+    .single();
 
-  const { error } = await supabase.from("invoices").insert({
-    invoice_number: doc.invoiceNumber || `HD-${new Date().getFullYear()}`,
-    created_by: access.profile.id,
-    department_id: departmentId,
-    category_id: categoryId,
-    vendor_name: doc.fromName || null,
-    description: doc.notes || null,
-    amount: totals.total,
-    currency: doc.currency,
-    issue_date: doc.issueDate || null,
-    due_date: doc.dueDate || null,
-    reason,
-    document: doc,
-    status: "pending",
-  });
-
-  if (error) {
-    return { error: error.message, success: null };
+  if (error || !inserted) {
+    return { error: error?.message ?? "Could not post the invoice.", success: null };
   }
 
-  revalidatePath("/billing/invoices");
-  return { error: null, success: "Posted. It's now awaiting signature and clearing." };
+  // Attach the uploaded file, if any.
+  if (file instanceof File && file.size > 0) {
+    const admin = createAdminClient();
+    const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+    const path = `${inserted.id}/source-${Date.now()}.${ext}`;
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const { error: upErr } = await admin.storage
+      .from("invoices")
+      .upload(path, bytes, {
+        contentType: file.type || "application/pdf",
+        upsert: true,
+      });
+    if (!upErr) {
+      await admin.from("invoices").update({ file_path: path }).eq("id", inserted.id);
+    }
+  }
+
+  revalidatePath("/billing/post");
+  revalidatePath("/billing/clearing");
+  return { error: null, success: "Posted. It's now pending clearing." };
 }
 
 /**
@@ -101,10 +107,10 @@ export async function postInvoice(
 export async function deleteInvoice(formData: FormData): Promise<void> {
   const id = String(formData.get("invoice_id") ?? "");
   if (!id) return;
-
   const supabase = await createClient();
   await supabase.from("invoices").delete().eq("id", id);
-  revalidatePath("/billing/invoices");
+  revalidatePath("/billing/post");
+  revalidatePath("/billing/clearing");
 }
 
 /** Mark an invoice cleared (billing managers only), recording who cleared it. */
@@ -112,7 +118,6 @@ export async function clearInvoice(formData: FormData): Promise<void> {
   const access = await requireBillingManager();
   const id = String(formData.get("invoice_id") ?? "");
   if (!id) return;
-
   const supabase = await createClient();
   await supabase
     .from("invoices")
@@ -122,7 +127,7 @@ export async function clearInvoice(formData: FormData): Promise<void> {
       cleared_at: new Date().toISOString(),
     })
     .eq("id", id);
-  revalidatePath("/billing/invoices");
+  revalidatePath("/billing/clearing");
 }
 
 /** Mark an invoice rejected (billing managers only), recording who rejected it. */
@@ -130,7 +135,6 @@ export async function rejectInvoice(formData: FormData): Promise<void> {
   const access = await requireBillingManager();
   const id = String(formData.get("invoice_id") ?? "");
   if (!id) return;
-
   const supabase = await createClient();
   await supabase
     .from("invoices")
@@ -140,17 +144,15 @@ export async function rejectInvoice(formData: FormData): Promise<void> {
       cleared_at: new Date().toISOString(),
     })
     .eq("id", id);
-  revalidatePath("/billing/invoices");
+  revalidatePath("/billing/clearing");
 }
 
 /**
- * Upload the owner-signed PDF for an invoice (billing managers only). The file
- * goes to the private `invoices` storage bucket via the service-role client
- * (so no storage policies are needed), and its path is recorded on the row.
+ * Upload (or replace) the invoice PDF for a record (billing managers only).
+ * Stored in the private `invoices` bucket via the service-role client.
  */
 export async function uploadSignedInvoice(formData: FormData): Promise<void> {
   await requireBillingManager();
-
   const id = String(formData.get("invoice_id") ?? "");
   const file = formData.get("file");
   if (!id || !(file instanceof File) || file.size === 0) return;
@@ -159,15 +161,12 @@ export async function uploadSignedInvoice(formData: FormData): Promise<void> {
   const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
   const path = `${id}/signed-${Date.now()}.${ext}`;
   const bytes = Buffer.from(await file.arrayBuffer());
-
-  const { error: uploadError } = await admin.storage
-    .from("invoices")
-    .upload(path, bytes, {
-      contentType: file.type || "application/pdf",
-      upsert: true,
-    });
-  if (uploadError) return;
+  const { error } = await admin.storage.from("invoices").upload(path, bytes, {
+    contentType: file.type || "application/pdf",
+    upsert: true,
+  });
+  if (error) return;
 
   await admin.from("invoices").update({ file_path: path }).eq("id", id);
-  revalidatePath("/billing/invoices");
+  revalidatePath("/billing/clearing");
 }
