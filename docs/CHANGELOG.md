@@ -5,6 +5,21 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-06-27
+
+### Added
+
+- **Spend analytics** (`/billing/analytics`, admins + HR & Management) — KPIs
+  (cleared / pending / cleared-this-month / rejected), a 12-month cleared-spend
+  trend, and breakdowns by department and category. Aggregated in the server
+  component over the `invoices` table; charts are dependency-free CSS bars.
+
+### Notes
+
+- "Spend" = cleared invoices; pending is surfaced alongside for forecasting.
+  Totals sum in the base currency (INR). In-process aggregation suits the
+  current volume and lifts into a SQL `SECURITY DEFINER` function if it grows.
+
 ## [0.3.0] — 2026-06-27
 
 The **billing module** — the portal's first real feature beyond the shell. Built

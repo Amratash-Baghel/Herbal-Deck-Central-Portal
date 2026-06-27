@@ -33,6 +33,13 @@ export default async function BillingPage() {
       cta: "Open clearing →",
       show: canClear,
     },
+    {
+      href: "/billing/analytics",
+      title: "Spend analytics",
+      body: "Cleared spend across departments, categories, and months — with pending shown for forecasting.",
+      cta: "Open analytics →",
+      show: canClear,
+    },
   ].filter((c) => c.show);
 
   return (

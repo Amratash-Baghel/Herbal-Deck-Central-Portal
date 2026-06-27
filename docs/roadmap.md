@@ -91,10 +91,11 @@ Built as three separate tools (see "The billing module" in the project README):
 - **Clear** ✅ — admins + HR & Management: department panels, status views
   (pending / cleared / rejected), search, sort; clear / reject / upload signed
   copy, with clearer tracking. *(Generate/Post/Clear released as 0.3.0.)*
+- **Analytics** ✅ — managers-only dashboard: cleared spend by department,
+  category, and month (last 12), with pending shown for forecasting. Aggregated
+  in-process; dependency-free CSS bar charts.
 - **Miscellaneous payments** ⬜ — HR & Management-only ledger *(table exists; UI
   pending)*.
-- **Analytics** ⬜ — total and pending spend by category, department, and month
-  *(next up)*.
 
 ### Phase 4 — Chat
 Department-based group chat with file and image attachments, built on Supabase

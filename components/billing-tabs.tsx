@@ -14,7 +14,12 @@ export function BillingTabs({ canClear }: { canClear: boolean }) {
     { href: "/billing", label: "Overview", exact: true },
     { href: "/billing/generate", label: "Generate" },
     { href: "/billing/post", label: "Post" },
-    ...(canClear ? [{ href: "/billing/clearing", label: "Clear" }] : []),
+    ...(canClear
+      ? [
+          { href: "/billing/clearing", label: "Clear" },
+          { href: "/billing/analytics", label: "Analytics" },
+        ]
+      : []),
   ];
 
   return (

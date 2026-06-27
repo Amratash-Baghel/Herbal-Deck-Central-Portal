@@ -211,6 +211,26 @@ than a separate audit log.
   bucket; the row holds only a path. The clearing UI serves them through
   short-lived signed URLs generated server-side.
 
+## 11. Analytics aggregated in-process, charts without a library
+
+**Decision:** Compute the spend breakdowns in the **server component** (group by
+department, category, and month in memory) rather than a SQL view/RPC, and render
+**CSS bar charts** rather than adding a charting library.
+
+**Why:**
+
+- **Right-sized.** At this volume, fetching the `invoices` rows the manager can
+  already see and reducing them server-side is simpler than a database function
+  and needs no extra migration. The aggregation is isolated, so it lifts into a
+  `SECURITY DEFINER` SQL function later if the table grows.
+- **No dependency for a few bars.** Width-/height-proportional `div`s render
+  server-side, carry no client JS, and avoid a charting library's bundle weight
+  and React-version peer constraints — consistent with the client-side PDF
+  reasoning (decision 7).
+
+**Semantics:** "Spend" counts **cleared** invoices; pending is shown separately
+for forecasting. Totals sum in the base currency (INR).
+
 ---
 
 ## Summary
@@ -227,3 +247,4 @@ than a separate audit log.
 | Invoice designs | Eight templates  | Avoid mass-produced look / tax scrutiny      |
 | Billing UX      | Three separate tools | Focused screens; clearing locked to admins/HR |
 | Expense tracking| One invoices table | Built-in who-created / who-cleared trail    |
+| Analytics       | In-process + CSS bars | Right-sized, migration-free, no chart dep |
