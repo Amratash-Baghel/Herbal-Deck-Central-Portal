@@ -87,6 +87,16 @@ export function TaskBoard({
     return res;
   }
 
+  async function handleAssign(taskId: string, assigneeId: string | null) {
+    const before = tasks;
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, assigned_to: assigneeId } : t)),
+    );
+    const res = await updateTask(taskId, { assignedTo: assigneeId });
+    if (!res.ok) setTasks(before);
+    else if (res.task) replaceTask(res.task);
+  }
+
   async function handleArchive(taskId: string) {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setOpenId(null);
@@ -173,8 +183,10 @@ export function TaskBoard({
                       deptName={dept?.name ?? "—"}
                       deptSlug={dept?.slug ?? null}
                       editable
+                      assignable={assignable}
                       onOpen={() => setOpenId(task.id)}
                       onMove={(s) => void handleMove(task.id, s)}
+                      onAssign={(id) => void handleAssign(task.id, id)}
                     />
                   );
                 })}

@@ -4,6 +4,7 @@ import { deptNoteColor, adjacentStatus } from "@/lib/tasks";
 import { daysUntil } from "@/lib/time";
 import { ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from "@/components/icons";
 import type { Task, TaskStatus } from "@/lib/types";
+import type { Person } from "@/components/tasks/types";
 
 function initials(name: string): string {
   return name
@@ -56,8 +57,10 @@ export function TaskCard({
   deptName,
   deptSlug,
   editable,
+  assignable,
   onOpen,
   onMove,
+  onAssign,
 }: {
   task: Task;
   creatorName: string;
@@ -65,8 +68,10 @@ export function TaskCard({
   deptName: string;
   deptSlug: string | null;
   editable: boolean;
+  assignable?: Person[];
   onOpen: () => void;
   onMove?: (status: TaskStatus) => void;
+  onAssign?: (assigneeId: string | null) => void;
 }) {
   const prev = adjacentStatus(task.status, "prev");
   const next = adjacentStatus(task.status, "next");
@@ -98,7 +103,27 @@ export function TaskCard({
       </button>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-foreground/80">
-        {assigneeName ? (
+        {editable && onAssign && assignable ? (
+          <label className="inline-flex items-center gap-1 text-[11px] font-medium">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground/10 text-[8px] font-bold">
+              {assigneeName ? initials(assigneeName) : "+"}
+            </span>
+            <select
+              value={task.assigned_to ?? ""}
+              onChange={(e) => onAssign(e.target.value || null)}
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Assign to"
+              className="max-w-[8.5rem] cursor-pointer rounded-md border border-foreground/15 bg-foreground/5 px-1 py-0.5 text-[11px] outline-none transition hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">Unassigned</option>
+              {assignable.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : assigneeName ? (
           <span className="inline-flex items-center gap-1 text-[11px] font-medium">
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground/10 text-[8px] font-bold">
               {initials(assigneeName)}

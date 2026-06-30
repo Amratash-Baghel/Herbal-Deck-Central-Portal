@@ -53,7 +53,14 @@ export default async function TasksPage() {
   }
 
   const people = ((profs ?? []) as ProfileRow[]).map(toPerson);
-  const assignable = people.filter((p) => assignableIds.has(p.id));
+  // Admins + HR & Management can assign to anyone; everyone else to people in
+  // their department(s).
+  const canManage =
+    profile.role === "admin" ||
+    myDepartments.some((d) => d.slug === "hr-management");
+  const assignable = canManage
+    ? people
+    : people.filter((p) => assignableIds.has(p.id));
 
   return (
     <>
