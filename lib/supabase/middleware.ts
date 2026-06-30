@@ -40,7 +40,14 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublicRoute = pathname === "/login" || pathname.startsWith("/auth");
+  // Public routes: the login screen, the "forgot password" request page, and
+  // everything under /auth (the recovery-link confirm handler + sign-out).
+  // Note: /reset-password is intentionally NOT public — you reach it only with
+  // the temporary session the recovery link establishes.
+  const isPublicRoute =
+    pathname === "/login" ||
+    pathname === "/forgot-password" ||
+    pathname.startsWith("/auth");
 
   // Not signed in and trying to reach a protected route → go to login.
   if (!user && !isPublicRoute) {

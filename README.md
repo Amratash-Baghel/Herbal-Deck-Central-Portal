@@ -17,6 +17,7 @@ The first release ships that foundation. Billing and Chat are already outlined a
 ## What it does today
 
 - Employees sign in with their email and password — **no self-registration**. The only way in is if an admin adds you.
+- **Password reset by email.** A "Forgot password?" link on sign-in (and a "Change password" link inside the app) emails a secure link to set a new password — so people can manage their own credentials without an admin.
 - **Departments and shared authority.** Herbal Deck is ~40 people across seven departments, and people can belong to more than one. Authority runs through departments, not titles: the **HR & Management** department can manage staff and billing, alongside the owner-level admins.
 - Admins (and HR & Management) can add employees and assign them to departments directly from inside the portal — no touching Supabase.
 - A **billing module** for invoices (see below).

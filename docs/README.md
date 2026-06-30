@@ -81,6 +81,13 @@ database trigger provisions the matching profile and role. Page/action guards
 database's `can_manage_users()` / `can_manage_billing()` helpers so the UI and
 RLS agree on who can do what.
 
+Employees manage their own password through Supabase Auth's **recovery flow**:
+`/forgot-password` emails a reset link → `/auth/confirm` verifies it and
+establishes a session → `/reset-password` sets the new password. No email-template
+editing is required — the app passes a `redirectTo` of `/auth/confirm`, which the
+default email respects; that URL just needs to be in **Auth → URL Configuration →
+Redirect URLs** (see the changelog's 0.5.1 setup note).
+
 ## Project structure
 
 A high-level view (full detail in [`architecture.md`](./architecture.md)):

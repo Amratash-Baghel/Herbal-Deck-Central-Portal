@@ -7,7 +7,7 @@ import { navItems } from "@/lib/navigation";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/notifications/notification-bell";
-import { LogoutIcon } from "@/components/icons";
+import { LogoutIcon, KeyIcon } from "@/components/icons";
 import type { Profile } from "@/lib/types";
 
 function initials(profile: Profile) {
@@ -114,6 +114,15 @@ export function Sidebar({
                 <ThemeToggle />
               </div>
             </div>
+
+            <Link
+              href="/forgot-password"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            >
+              <KeyIcon className="h-[18px] w-[18px]" />
+              Change password
+            </Link>
 
             <form action="/auth/signout" method="post">
               <button

@@ -5,6 +5,40 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-06-30
+
+### Added
+
+- **Password reset / change via email.** Employees can now set their own password
+  — there was previously no way to (accounts are admin-provisioned). Built on
+  Supabase Auth's recovery flow:
+  - **Request** (`/forgot-password`, public) — enter your email and a reset link
+    is sent. The response is deliberately the same whether or not the address has
+    an account (no email enumeration).
+  - **Confirm** (`/auth/confirm`) — a route handler that verifies the recovery
+    link and establishes a session. It accepts both link shapes Supabase may
+    send (`token_hash` + `type` via `verifyOtp`, or `code` via
+    `exchangeCodeForSession`), then forwards to the new-password page.
+  - **Set new password** (`/reset-password`) — reachable only with the session
+    the link establishes; sets the new password (`updateUser`) and signs you in.
+  - Entry points: a **"Forgot password?"** link on the sign-in screen and a
+    **"Change password"** link in the sidebar (which pre-fills your email).
+- `/forgot-password` added to the middleware's public routes; `/reset-password`
+  stays protected (only the recovery session can reach it).
+
+### Setup note
+
+- **No email-template editing needed.** The reset action passes a `redirectTo`
+  of `<origin>/auth/confirm?next=/reset-password`, which the default recovery
+  email respects. The only required config is to allow that URL: in **Supabase →
+  Authentication → URL Configuration → Redirect URLs**, add `http://localhost:3000/**`
+  and `https://<your-domain>/**`, and set **Site URL** to the deployed domain.
+- `/auth/confirm` also accepts the `token_hash` shape, so editing the template to
+  `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password`
+  remains a valid (cross-device-safe) alternative if preferred.
+- For real volume, configure custom SMTP — Supabase's built-in sender is
+  rate-limited.
+
 ## [0.5.0] — 2026-06-30
 
 The **Chat module** (Phase 4) and a portal-wide **notification system**.
