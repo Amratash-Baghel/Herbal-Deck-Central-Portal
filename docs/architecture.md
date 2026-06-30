@@ -40,6 +40,13 @@ app/
     chat/                 # Chat module
       page.tsx            #   loads directory + conversations (server), then client
       actions.ts          #   send / startDM / createGroup / rename / add / remove / leave
+    tasks/                # Tasks & Reporting module
+      layout.tsx          #   sub-nav tabs (My Board / Team / Reports / Manage)
+      page.tsx            #   My Board (personal kanban)
+      team/page.tsx       #   department view (read-only, filterable)
+      manage/page.tsx     #   all-departments dashboard (admins + HR only)
+      reports/page.tsx    #   EOD reports (auto-generated from activity)
+      actions.ts          #   create / move / update / archive / delete / saveEodNote
     employees/
       page.tsx            # Employee Management (admins + HR & Management)
       actions.ts          # invite / setDepartments / deactivate / reactivate
@@ -63,6 +70,14 @@ components/               # Reusable, presentational UI
     notification-bell.tsx        # unread badge + dropdown
     notification-toaster.tsx     # auto-dismissing pop-ups
     notification-icon.tsx        # glyph per notification type
+  tasks/                  # Tasks & Reporting UI
+    task-board.tsx        #   My Board (DnD, quick-add, optimistic)
+    task-card.tsx         #   the sticky note (dept colour, deadline)
+    task-detail-dialog.tsx#   view / edit a card
+    task-list.tsx         #   filterable read-only list (Team + Manage)
+    eod-note-form.tsx     #   finalise today's EOD report
+    types.ts              #   Person, DeptRef
+  tasks-tabs.tsx          # Tasks sub-navigation
 
 lib/                      # Non-visual logic and configuration
   supabase/
@@ -78,16 +93,18 @@ lib/                      # Non-visual logic and configuration
   invoice-types.ts        # invoice model + draw context (jsPDF-free, shared)
   money.ts                # currency formatting (screen symbols vs PDF-safe ASCII)
   company.ts              # fixed Herbal Deck details (invoice bill-to)
-  time.ts                 # small relative-time / clock / day-label helpers
+  tasks.ts                # kanban columns, status helpers, per-department colours
+  time.ts                 # relative-time / clock / day-label + IST day helpers
   navigation.tsx          # navItems[]: single source of truth for the sidebar
-  types.ts                # Role, Profile, Department, Invoice, Conversation, Notification, ...
+  types.ts                # Role, Profile, Department, Invoice, Conversation, Task, ...
 
 proxy.ts                  # Next.js 16 proxy (middleware) entry point
 supabase/
   schema.sql              # Base tables, trigger, is_admin(), RLS policies
-  migrations/             # 0002 departments+billing, 0003 posting,
-                          #   0004 deactivation, 0005 chat + notifications
+  migrations/             # 0002 departments+billing, 0003 posting, 0004 deactivation,
+                          #   0005 chat + notifications, 0006 tasks + reporting
 docs/                     # Documentation set
+  modules/                # Per-module deep dives (e.g. tasks-and-reporting.md)
 ```
 
 ## How requests flow

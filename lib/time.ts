@@ -18,11 +18,40 @@ export function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+/** ISO timestamp for N days before now (UTC). Kept here so Server Components
+ * don't call `Date.now()` directly in render. */
+export function isoDaysAgo(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString();
+}
+
 /** Clock time, e.g. "3:42 PM". */
 export function formatClock(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * Today's date as an ISO `YYYY-MM-DD` string in a given timezone (default IST,
+ * Herbal Deck's working day). Used to bucket task activity / EOD by the local
+ * day rather than UTC.
+ */
+export function localDateISO(tz = "Asia/Kolkata", date: Date = new Date()): string {
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(date);
+}
+
+/**
+ * Days until a deadline (negative if overdue), comparing calendar dates in IST.
+ * Returns null for no deadline.
+ */
+export function daysUntil(deadlineISO: string | null, tz = "Asia/Kolkata"): number | null {
+  if (!deadlineISO) return null;
+  const today = localDateISO(tz);
+  const a = Date.parse(`${today}T00:00:00Z`);
+  const b = Date.parse(`${deadlineISO}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.round((b - a) / 86_400_000);
 }
 
 /** Day label for grouping a chat thread, e.g. "Today", "Yesterday", or a date. */

@@ -114,8 +114,17 @@ system.
   Google Drive) into a message. Direct uploads will plug into the existing
   storage layer later.
 
-### Phase 5 — Operations *(later)*
-Team Lead role, task assignment, and end-of-day (EOD) reporting.
+### Phase 5 — Tasks & Reporting 🟡 *In progress*
+Task management and end-of-day (EOD) reporting, built as one system (see
+[`modules/tasks-and-reporting.md`](./modules/tasks-and-reporting.md)).
+
+- **Personal kanban** ✅ — sticky-note cards across To Do / In Progress / Done;
+  quick-add, drag-and-drop, assignment (with notifications), deadlines.
+- **Team & management views** ✅ — a read-only department board and an
+  admin/HR all-departments dashboard with completion stats and idle-person flags.
+- **Auto EOD reports** ✅ — generated from the task-activity log (created /
+  started / completed / pending), with an optional note to finalise.
+- **Team Lead role** ⬜ — a middle tier between member and manager, planned next.
 
 ---
 

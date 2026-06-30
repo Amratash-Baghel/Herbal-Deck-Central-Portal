@@ -21,6 +21,7 @@ The first release ships that foundation. Billing and Chat are already outlined a
 - **Departments and shared authority.** Herbal Deck is ~40 people across seven departments, and people can belong to more than one. Authority runs through departments, not titles: the **HR & Management** department can manage staff and billing, alongside the owner-level admins.
 - Admins (and HR & Management) can add employees and assign them to departments directly from inside the portal — no touching Supabase.
 - A **billing module** for invoices (see below).
+- **Tasks & Reporting** — a personal kanban of sticky notes that doubles as automatic end-of-day reporting (see below).
 - **Team chat** — real-time direct messages and group conversations, with @mentions (see below).
 - **Notifications** — a bell with unread counts and pop-up alerts, so you hear about a new direct message, a mention, or an invoice that needs clearing the moment it happens.
 - A clean dashboard with a sidebar that adjusts to your role and access.
@@ -42,6 +43,18 @@ Two decisions worth calling out, because they came from real problems:
 - **Expense tracking is built into the invoices themselves.** Rather than a separate audit log, every invoice carries who created it, who cleared it, and when. That record *is* the tracking system — the clearing dashboard's department panels, status filters, and search all read from it.
 
 There's a deeper write-up of these and other choices in [`docs/decisions.md`](./docs/decisions.md).
+
+---
+
+## Tasks & reporting
+
+The team needed a lightweight way to track work *and* a way for everyone to report what they did each day — without those being two separate chores. So they're the same thing:
+
+- **A personal board.** Everyone gets a kanban (To Do → In Progress → Done) of colourful sticky notes. Add one in a tap, drag it across, assign it to a teammate (they get notified), set a deadline.
+- **Team and management views.** See your whole department's tasks, and — for admins and HR & Management — every department, with completion stats and a flag for anyone who hasn't touched a task today.
+- **End-of-day reports that write themselves.** Because every task move is logged, each person's EOD report (what they created, started, completed, and still have pending) is generated automatically. You can add a note to wrap up, but you never fill in a form.
+
+The full write-up is in [`docs/modules/tasks-and-reporting.md`](./docs/modules/tasks-and-reporting.md).
 
 ---
 

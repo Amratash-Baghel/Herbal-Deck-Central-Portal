@@ -1,5 +1,5 @@
 import type { SVGProps } from "react";
-import { AtIcon, BillingIcon, ChatIcon, GroupIcon } from "@/components/icons";
+import { AtIcon, BillingIcon, ChatIcon, GroupIcon, TasksIcon } from "@/components/icons";
 import type { NotificationType } from "@/lib/types";
 
 /**
@@ -17,6 +17,8 @@ export function NotificationTypeIcon({
       return <BillingIcon {...props} />;
     case "group_added":
       return <GroupIcon {...props} />;
+    case "task_assigned":
+      return <TasksIcon {...props} />;
     default:
       return <ChatIcon {...props} />;
   }

@@ -5,6 +5,48 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-06-30
+
+The **Tasks & Reporting** module (Phase 5) — a personal kanban that doubles as
+the company's end-of-day reporting system.
+
+### Added
+
+- **My Board** (`/tasks`) — a personal kanban (To Do / In Progress / Done) of
+  sticky-note cards. Quick-add (type a title, press Enter), drag-and-drop or ◀ ▶
+  to move, assign to yourself or a department colleague, set a deadline
+  (countdown / *overdue* in red), and edit / archive / delete. Cards are
+  colour-coded by department, gently tilted, and lift on hover. Assigning a task
+  to someone else notifies them through the existing notification system.
+- **Team** (`/tasks/team`) — a read-only view of every task across the user's
+  department(s), filterable by member, with a *to do / in progress / completed
+  today* summary. You see everyone's tasks but edit only your own.
+- **Manage** (`/tasks/manage`, admins + HR & Management) — an all-departments
+  dashboard: completion stats (today / this week), a "no activity today" flag, a
+  7-day leaderboard, and a task view filterable by department, person, status,
+  and date range.
+- **EOD Reports** (`/tasks/reports`) — auto-generated from each person's task
+  activity: created / started / completed / pending counts, an optional note to
+  finalise, a team-wide "today" table with idle people flagged, and recent
+  submitted reports. Visibility = own / department / all (managers).
+- Migration `0006_tasks_and_reporting.sql` — `tasks`, an append-only
+  `task_activity` log, and `eod_reports`; triggers that maintain
+  `updated_at`/`completed_at` and write the activity log automatically; and
+  `SECURITY DEFINER` helpers (`can_view_task`, `eod_summary`, `eod_overview`)
+  with RLS throughout. Day boundaries use **Asia/Kolkata (IST)**.
+- Sidebar entry and dashboard tool card for the module; `task_assigned`
+  notification type.
+
+### Notes
+
+- **Reporting reads the activity log, not a nightly job** — any day's report is
+  correct on demand; "submitting" stores the note plus a snapshot. This keeps the
+  feature migration-light and avoids a scheduler.
+- The Team and Manage views are read-only **list** views by design; the
+  interactive kanban is the personal board.
+- Other people's tasks are read-only because the `tasks` UPDATE policy only
+  admits the creator, the assignee, or a manager — the same rule the UI shows.
+
 ## [0.5.1] — 2026-06-30
 
 ### Added

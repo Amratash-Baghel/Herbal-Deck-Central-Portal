@@ -47,6 +47,7 @@ Current modules:
 | Employee Management | ✅ Live        | Add, assign departments, remove (soft) — admin / HR |
 | Chat               | ✅ Live        | Real-time DMs & groups, @mentions (links for files) |
 | Notifications      | ✅ Live        | Realtime bell + pop-ups; invoice-posted alerts    |
+| Tasks & Reporting  | ✅ Live        | Personal kanban + team/admin views + auto EOD reports |
 
 ## Technology stack
 
@@ -163,6 +164,9 @@ In the Supabase SQL Editor, run these **once, in order**:
    — the chat tables (`conversations`, `conversation_participants`, `messages`),
    the `notifications` inbox, their RLS and helper functions, the realtime
    publication, and a broadened `profiles` read policy (the chat directory).
+6. [`supabase/migrations/0006_tasks_and_reporting.sql`](../supabase/migrations/0006_tasks_and_reporting.sql)
+   — the `tasks` board, the append-only `task_activity` log, and `eod_reports`,
+   with their triggers, `SECURITY DEFINER` reporting helpers, and RLS.
 
 After setup, assign yourself (and your CTO) to the **HR & Management** department
 — or keep `role = 'admin'` — so billing and user management unlock. Chat and

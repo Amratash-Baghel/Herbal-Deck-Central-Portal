@@ -117,7 +117,8 @@ export type NotificationType =
   | "message"
   | "mention"
   | "invoice_posted"
-  | "group_added";
+  | "group_added"
+  | "task_assigned";
 
 /** A notification row from `public.notifications` (one user's inbox item). */
 export interface Notification {
@@ -130,4 +131,55 @@ export interface Notification {
   data: Record<string, unknown> | null;
   read_at: string | null;
   created_at: string;
+}
+
+// --- Tasks & Reporting ----------------------------------------------------
+
+/** Kanban column / lifecycle of a task. */
+export type TaskStatus = "todo" | "in_progress" | "done";
+
+/** A task row from `public.tasks` (a sticky-note card). */
+export interface Task {
+  id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  created_by: string;
+  assigned_to: string | null;
+  department_id: string;
+  deadline: string | null;
+  archived: boolean;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** An append-only activity row from `public.task_activity` (powers EOD). */
+export interface TaskActivity {
+  id: string;
+  task_id: string;
+  actor_id: string | null;
+  action: "created" | "status_changed" | "assigned" | "archived";
+  from_status: TaskStatus | null;
+  to_status: TaskStatus | null;
+  created_at: string;
+}
+
+/** The counts captured in an EOD report's auto_summary. */
+export interface EodSummary {
+  created: number;
+  in_progress: number;
+  completed: number;
+  pending: number;
+}
+
+/** An end-of-day report row from `public.eod_reports`. */
+export interface EodReport {
+  id: string;
+  employee_id: string;
+  report_date: string;
+  auto_summary: EodSummary;
+  manual_note: string | null;
+  created_at: string;
+  updated_at: string;
 }

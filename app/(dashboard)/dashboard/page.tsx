@@ -1,7 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { ToolCard, type Tool } from "@/components/tool-card";
-import { BillingIcon, ChatIcon } from "@/components/icons";
+import { BillingIcon, ChatIcon, TasksIcon } from "@/components/icons";
 
 /**
  * Dashboard tools. Add a module by appending to this list and creating its
@@ -19,6 +19,12 @@ const tools: Tool[] = [
     description: "Message teammates and groups in real time.",
     href: "/chat",
     icon: ChatIcon,
+  },
+  {
+    title: "Tasks & Reporting",
+    description: "Your kanban board, team tasks, and end-of-day reports.",
+    href: "/tasks",
+    icon: TasksIcon,
   },
 ];
 

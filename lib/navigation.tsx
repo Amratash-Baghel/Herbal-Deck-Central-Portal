@@ -4,6 +4,7 @@ import {
   BillingIcon,
   ChatIcon,
   UsersIcon,
+  TasksIcon,
 } from "@/components/icons";
 
 export interface NavItem {
@@ -27,6 +28,7 @@ export interface NavItem {
  */
 export const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: DashboardIcon },
+  { label: "Tasks & Reporting", href: "/tasks", icon: TasksIcon },
   { label: "Billing", href: "/billing", icon: BillingIcon },
   { label: "Chat", href: "/chat", icon: ChatIcon },
   { label: "Employee Management", href: "/employees", icon: UsersIcon, managerOnly: true },
