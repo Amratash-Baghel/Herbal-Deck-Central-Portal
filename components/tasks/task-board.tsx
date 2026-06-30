@@ -42,6 +42,7 @@ export function TaskBoard({
   const [quickTitle, setQuickTitle] = useState("");
   const [adding, setAdding] = useState(false);
   const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const nameOf = useMemo(() => {
     const m = new Map(people.map((p) => [p.id, p.name]));
@@ -89,12 +90,17 @@ export function TaskBoard({
 
   async function handleAssign(taskId: string, assigneeId: string | null) {
     const before = tasks;
+    setActionError(null);
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, assigned_to: assigneeId } : t)),
     );
     const res = await updateTask(taskId, { assignedTo: assigneeId });
-    if (!res.ok) setTasks(before);
-    else if (res.task) replaceTask(res.task);
+    if (!res.ok) {
+      setTasks(before);
+      setActionError(res.error ?? "Could not reassign this task.");
+    } else if (res.task) {
+      replaceTask(res.task);
+    }
   }
 
   async function handleArchive(taskId: string) {
@@ -117,6 +123,15 @@ export function TaskBoard({
         <p className="mb-4 rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
           You&apos;re not in a department yet — ask an admin to add you before
           creating tasks.
+        </p>
+      )}
+
+      {actionError && (
+        <p
+          role="alert"
+          className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300"
+        >
+          {actionError}
         </p>
       )}
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { deptNoteColor, adjacentStatus } from "@/lib/tasks";
 import { daysUntil } from "@/lib/time";
 import { ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from "@/components/icons";
@@ -76,6 +77,7 @@ export function TaskCard({
   const prev = adjacentStatus(task.status, "prev");
   const next = adjacentStatus(task.status, "next");
   const tilt = tiltOf(task.id);
+  const [assignOpen, setAssignOpen] = useState(false);
 
   return (
     <div
@@ -104,25 +106,68 @@ export function TaskCard({
 
       <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-foreground/80">
         {editable && onAssign && assignable ? (
-          <label className="inline-flex items-center gap-1 text-[11px] font-medium">
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground/10 text-[8px] font-bold">
-              {assigneeName ? initials(assigneeName) : "+"}
-            </span>
-            <select
-              value={task.assigned_to ?? ""}
-              onChange={(e) => onAssign(e.target.value || null)}
-              onClick={(e) => e.stopPropagation()}
-              aria-label="Assign to"
-              className="max-w-[8.5rem] cursor-pointer rounded-md border border-foreground/15 bg-foreground/5 px-1 py-0.5 text-[11px] outline-none transition hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
+          <div
+            className="relative"
+            draggable={false}
+            onDragStart={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setAssignOpen((v) => !v);
+              }}
+              className="inline-flex items-center gap-1 rounded-md border border-foreground/15 bg-foreground/5 px-1.5 py-0.5 text-[11px] font-medium transition hover:bg-foreground/10"
             >
-              <option value="">Unassigned</option>
-              {assignable.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground/10 text-[8px] font-bold">
+                {assigneeName ? initials(assigneeName) : "+"}
+              </span>
+              {assigneeName ?? "Assign"}
+            </button>
+            {assignOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAssignOpen(false);
+                  }}
+                  className="fixed inset-0 z-40 cursor-default"
+                />
+                <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-48 overflow-y-auto rounded-xl border bg-card py-1 text-foreground shadow-lg">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAssign(null);
+                      setAssignOpen(false);
+                    }}
+                    className="block w-full px-3 py-1.5 text-left text-xs text-muted-foreground transition hover:bg-accent"
+                  >
+                    Unassigned
+                  </button>
+                  {assignable.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAssign(p.id);
+                        setAssignOpen(false);
+                      }}
+                      className={`block w-full px-3 py-1.5 text-left text-xs transition hover:bg-accent ${
+                        p.id === task.assigned_to ? "font-semibold text-primary" : ""
+                      }`}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         ) : assigneeName ? (
           <span className="inline-flex items-center gap-1 text-[11px] font-medium">
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground/10 text-[8px] font-bold">
