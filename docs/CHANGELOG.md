@@ -5,6 +5,52 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-06-30
+
+The **Chat module** (Phase 4) and a portal-wide **notification system**.
+
+### Added
+
+- **Real-time chat** (`/chat`) — direct messages and named groups, built on
+  Supabase Realtime. A single message-insert subscription (scoped by RLS to the
+  user's own conversations) powers the open thread, unread badges, conversation
+  re-ordering, and even surfaces a brand-new DM or group the moment its first
+  message lands. Messages support **@mentions** with an inline people picker.
+  - **Groups** — create a group, rename it, add/remove members, and leave.
+    Group admins (the creator) manage the roster; anyone can leave.
+  - Migration `0005_chat_and_notifications.sql` — `conversations`,
+    `conversation_participants`, `messages`, `notifications`; `SECURITY DEFINER`
+    membership helpers (avoiding RLS recursion), a read-cursor setter, an unread
+    tally, and a trigger that keeps each conversation's "last message" current.
+- **Notifications + pop-ups.** A bell (with an unread badge and a recent-items
+  dropdown) lives in the sidebar; new items also arrive as auto-dismissing
+  toasts — both fed by one realtime subscription owned by a
+  `NotificationsProvider` that wraps the whole shell. Clicking a notification
+  marks it read and jumps to its target (a chat thread, the clearing queue).
+  - **DMs always ping the recipient; group messages ping only @mentioned
+    members** (group chatter shows as unread counts instead of notifying
+    everyone). A toast is suppressed for a conversation you're already viewing.
+- **Management is notified when an invoice is posted.** Posting an invoice now
+  raises an `invoice_posted` notification to every admin + HR & Management member,
+  linking straight to the clearing queue.
+
+### Changed
+
+- **`profiles` reads opened to all signed-in users.** Chat needs a directory so
+  the team can address each other; SELECT on `profiles` is now allowed for any
+  authenticated user. Writes (insert/update/delete) stay restricted to admins +
+  HR & Management.
+
+### Notes
+
+- **No file uploads in chat (yet).** Files are shared by pasting links (e.g.
+  Google Drive) into a message. The swappable storage layer is still in place for
+  when attachments are added; nothing about this phase commits to a provider.
+- **Notifications are written server-side only.** The `notifications` table has
+  no INSERT policy — the browser can never fabricate one for another user. They
+  are created exclusively by the service-role client inside authenticated Server
+  Actions (`lib/notifications.ts`).
+
 ## [0.4.0] — 2026-06-27
 
 ### Changed

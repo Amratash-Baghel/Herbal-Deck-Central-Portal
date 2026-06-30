@@ -20,6 +20,8 @@ The first release ships that foundation. Billing and Chat are already outlined a
 - **Departments and shared authority.** Herbal Deck is ~40 people across seven departments, and people can belong to more than one. Authority runs through departments, not titles: the **HR & Management** department can manage staff and billing, alongside the owner-level admins.
 - Admins (and HR & Management) can add employees and assign them to departments directly from inside the portal — no touching Supabase.
 - A **billing module** for invoices (see below).
+- **Team chat** — real-time direct messages and group conversations, with @mentions (see below).
+- **Notifications** — a bell with unread counts and pop-up alerts, so you hear about a new direct message, a mention, or an invoice that needs clearing the moment it happens.
 - A clean dashboard with a sidebar that adjusts to your role and access.
 - Light and dark mode, built around Herbal Deck's brand colors.
 
@@ -39,6 +41,22 @@ Two decisions worth calling out, because they came from real problems:
 - **Expense tracking is built into the invoices themselves.** Rather than a separate audit log, every invoice carries who created it, who cleared it, and when. That record *is* the tracking system — the clearing dashboard's department panels, status filters, and search all read from it.
 
 There's a deeper write-up of these and other choices in [`docs/decisions.md`](./docs/decisions.md).
+
+---
+
+## Chat & notifications
+
+The team needed one place to talk, instead of bouncing between outside apps. Chat is built directly into the portal:
+
+- **Direct messages and groups.** Start a one-to-one chat with anyone, or create a named group, rename it, and add or remove members. Messages are **live** — they appear the instant they're sent, powered by Supabase Realtime.
+- **@mentions.** Type `@` to ping a specific person in a conversation.
+- **Notifications you can't miss.** A bell in the sidebar carries an unread count, and new alerts also slide in as pop-ups. Clicking one takes you straight to the right place.
+
+A couple of decisions worth calling out, again from real needs:
+
+- **Direct messages notify you; group chatter doesn't spam you.** A direct message always pings the person it's for. In a group, only the people you actually **@mention** get pinged — otherwise a busy group would notify forty people on every line. Unread counts still track everything.
+- **Posting an invoice tells management automatically.** The moment an employee posts an invoice, everyone who can clear it (admins + HR & Management) gets a notification linking to the clearing queue — so nothing sits waiting unnoticed.
+- **Files are shared by link for now.** Rather than build (and pay to store) file uploads on day one, files are shared by pasting a link — e.g. Google Drive — into a message. Uploads can be added later without changing how chat works.
 
 ---
 

@@ -45,7 +45,8 @@ Current modules:
 | Dashboard          | ✅ Live        | Tool launcher; data-driven card grid             |
 | Billing & Invoices  | ✅ Live        | Generate (8 templates) · Post · Clear · Analytics |
 | Employee Management | ✅ Live        | Add, assign departments, remove (soft) — admin / HR |
-| Chat               | 🧱 Placeholder | UI layout only; real-time messaging to follow     |
+| Chat               | ✅ Live        | Real-time DMs & groups, @mentions (links for files) |
+| Notifications      | ✅ Live        | Realtime bell + pop-ups; invoice-posted alerts    |
 
 ## Technology stack
 
@@ -151,9 +152,15 @@ In the Supabase SQL Editor, run these **once, in order**:
    — adds the `reason` column used when posting an invoice.
 4. [`supabase/migrations/0004_employee_deactivation.sql`](../supabase/migrations/0004_employee_deactivation.sql)
    — adds `deactivated_at` for soft-removing employees.
+5. [`supabase/migrations/0005_chat_and_notifications.sql`](../supabase/migrations/0005_chat_and_notifications.sql)
+   — the chat tables (`conversations`, `conversation_participants`, `messages`),
+   the `notifications` inbox, their RLS and helper functions, the realtime
+   publication, and a broadened `profiles` read policy (the chat directory).
 
 After setup, assign yourself (and your CTO) to the **HR & Management** department
-— or keep `role = 'admin'` — so billing and user management unlock.
+— or keep `role = 'admin'` — so billing and user management unlock. Chat and
+notifications work for everyone with no extra configuration — migration `0005`
+enables realtime and the app produces notifications on its own.
 
 ## Deployment pipeline
 

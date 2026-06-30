@@ -250,6 +250,59 @@ an auth ban), rather than hard-deleting the account.
 **Guards:** you can't deactivate yourself, and only an admin can deactivate
 another admin — checked in the Server Action, not just the UI.
 
+## 13. Chat realtime — one RLS-scoped subscription, no per-message fan-out
+
+**Decision:** Drive the whole chat UI from a **single** Supabase Realtime
+subscription to *message inserts* with no client-side filter, letting **RLS**
+decide which rows each client receives. Membership checks
+(`is_conversation_participant`, `is_conversation_admin`) are `SECURITY DEFINER`
+functions.
+
+**Why:**
+
+- **One stream does everything.** Because RLS only delivers messages from
+  conversations the user belongs to, that single subscription powers the open
+  thread, unread badges, conversation re-ordering, and even surfaces a brand-new
+  DM or group the instant its first message arrives — no separate channel per
+  conversation, and no extra subscription just to learn about new chats.
+- **No policy recursion.** A policy on `conversation_participants` that queried
+  that same table would recurse; the `SECURITY DEFINER` helpers read membership
+  without re-triggering RLS — the same pattern as `is_admin()` (decision 5).
+- **Right-sized for the team.** At ~40 people, Postgres Changes is more than
+  enough; the broadcast escape hatch exists if traffic ever outgrows it.
+
+**File sharing, deliberately deferred.** Chat does not upload files yet — they're
+shared by pasting a link (e.g. Google Drive) into a message. This avoids paying
+for and managing attachment storage on day one; the existing swappable storage
+layer is ready when uploads are worth adding.
+
+## 14. Notifications — written server-side only; DMs ping, group chatter doesn't
+
+**Decision:** A portal-wide notification system (a bell + pop-up toasts) fed by
+one realtime subscription, where rows are **only ever created server-side**, and
+**direct messages notify the recipient while group messages notify only the
+people @mentioned**.
+
+**Why:**
+
+- **The browser can't fabricate a notification.** The `notifications` table has
+  **no INSERT policy**, so a user can never create one for someone else. They are
+  produced exclusively by the service-role client inside authenticated Server
+  Actions (`lib/notifications.ts`) — the same trusted-elevation pattern as admin
+  user provisioning (decision 4).
+- **Notify, don't spam.** Pinging all forty members on every line of a busy group
+  would train people to ignore the bell. So a DM always pings its recipient, and
+  in a group only an explicit **@mention** pings — ordinary group traffic shows
+  up as unread counts instead. A toast is also suppressed for a conversation the
+  user is already viewing.
+- **Operational glue.** The same mechanism closes a real gap: posting an invoice
+  now notifies everyone who can clear it (admins + HR & Management), linking
+  straight to the clearing queue, so approvals don't sit unnoticed.
+
+**Implementation:** A `NotificationsProvider` wrapping the authenticated shell
+owns the single subscription and shares state with the sidebar bell and the
+toaster. See `supabase/migrations/0005_chat_and_notifications.sql`.
+
 ---
 
 ## Summary
@@ -268,3 +321,5 @@ another admin — checked in the Server Action, not just the UI.
 | Expense tracking| One invoices table | Built-in who-created / who-cleared trail    |
 | Analytics       | In-process + CSS bars | Right-sized, migration-free, no chart dep |
 | Employee removal| Soft deactivation | Preserve audit trail (FK restrict); reversible |
+| Chat realtime   | One RLS-scoped subscription | One stream drives all; no policy recursion |
+| Notifications   | Server-only writes; DMs ping, mentions ping | Unspoofable; notify without spamming |

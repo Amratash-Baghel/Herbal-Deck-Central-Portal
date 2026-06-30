@@ -1,7 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { ToolCard, type Tool } from "@/components/tool-card";
-import { BillingIcon } from "@/components/icons";
+import { BillingIcon, ChatIcon } from "@/components/icons";
 
 /**
  * Dashboard tools. Add a module by appending to this list and creating its
@@ -10,10 +10,15 @@ import { BillingIcon } from "@/components/icons";
 const tools: Tool[] = [
   {
     title: "Billing & Invoices",
-    description: "Track invoices, payments, and billing activity.",
+    description: "Generate, post, and clear invoices, and track spend.",
     href: "/billing",
     icon: BillingIcon,
-    badge: "Coming soon",
+  },
+  {
+    title: "Chat",
+    description: "Message teammates and groups in real time.",
+    href: "/chat",
+    icon: ChatIcon,
   },
 ];
 

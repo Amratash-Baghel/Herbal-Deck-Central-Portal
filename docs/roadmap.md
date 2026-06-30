@@ -99,9 +99,20 @@ Built as three separate tools (see "The billing module" in the project README):
 - **Miscellaneous payments** ⬜ — HR & Management-only ledger *(table exists; UI
   pending)*.
 
-### Phase 4 — Chat
-Department-based group chat with file and image attachments, built on Supabase
-Realtime.
+### Phase 4 — Chat & Notifications 🟡 *In progress*
+Real-time messaging built on Supabase Realtime, plus a portal-wide notification
+system.
+
+- **Direct messages & groups** ✅ — one-to-one chats and named groups (create,
+  rename, add/remove members, leave), with **@mentions**. Realtime is driven by a
+  single message-insert subscription, scoped to the user's conversations by RLS.
+- **Notifications & pop-ups** ✅ — a sidebar bell (unread badge + recent list) and
+  auto-dismissing toasts, fed by one realtime subscription. **DMs ping the
+  recipient; group messages ping only @mentioned members.** Posting an invoice
+  notifies admins + HR & Management.
+- **File attachments** ⬜ — for now, files are shared by pasting links (e.g.
+  Google Drive) into a message. Direct uploads will plug into the existing
+  storage layer later.
 
 ### Phase 5 — Operations *(later)*
 Team Lead role, task assignment, and end-of-day (EOD) reporting.

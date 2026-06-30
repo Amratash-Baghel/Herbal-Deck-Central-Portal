@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { navItems } from "@/lib/navigation";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { LogoutIcon } from "@/components/icons";
 import type { Profile } from "@/lib/types";
 
@@ -41,14 +42,17 @@ export function Sidebar({
           <Logo className="h-8 w-8" />
           <span className="font-semibold tracking-tight">Herbal Deck</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Toggle navigation"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border"
-        >
-          <span className="text-lg leading-none">{open ? "✕" : "☰"}</span>
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Toggle navigation"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border"
+          >
+            <span className="text-lg leading-none">{open ? "✕" : "☰"}</span>
+          </button>
+        </div>
       </header>
 
       <aside
@@ -61,6 +65,9 @@ export function Sidebar({
             <div className="leading-tight">
               <p className="font-semibold tracking-tight">Herbal Deck</p>
               <p className="text-xs text-muted-foreground">Employee Portal</p>
+            </div>
+            <div className="ml-auto">
+              <NotificationBell />
             </div>
           </div>
 

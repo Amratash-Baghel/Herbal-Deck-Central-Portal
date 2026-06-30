@@ -71,3 +71,63 @@ export interface Invoice {
   document: import("@/lib/invoice-pdf").InvoiceData | null;
   created_at: string;
 }
+
+// --- Chat -----------------------------------------------------------------
+
+/** A conversation is either a 1:1 direct message or a named multi-person group. */
+export type ConversationType = "dm" | "group";
+
+/** A conversation row from `public.conversations`. */
+export interface Conversation {
+  id: string;
+  type: ConversationType;
+  /** Group name; null for a DM (the UI shows the other person's name instead). */
+  name: string | null;
+  created_by: string;
+  last_message_at: string | null;
+  last_message_preview: string | null;
+  created_at: string;
+}
+
+/** A participant row from `public.conversation_participants`. */
+export interface ConversationParticipant {
+  conversation_id: string;
+  profile_id: string;
+  /** Group managers can rename the group and add/remove members. */
+  is_admin: boolean;
+  last_read_at: string;
+  joined_at: string;
+}
+
+/** A message row from `public.messages`. */
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  /** Profile ids that were @-mentioned (pinged) in the body. */
+  mentions: string[];
+  created_at: string;
+}
+
+// --- Notifications --------------------------------------------------------
+
+/** Kinds of notification the portal raises. */
+export type NotificationType =
+  | "message"
+  | "mention"
+  | "invoice_posted"
+  | "group_added";
+
+/** A notification row from `public.notifications` (one user's inbox item). */
+export interface Notification {
+  id: string;
+  recipient_id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  link: string | null;
+  data: Record<string, unknown> | null;
+  read_at: string | null;
+  created_at: string;
+}

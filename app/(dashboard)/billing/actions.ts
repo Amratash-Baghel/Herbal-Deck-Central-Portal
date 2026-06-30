@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getUserAccess, requireBillingManager } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { notifyUsers, getManagementUserIds } from "@/lib/notifications";
+import { formatMoney, type CurrencyCode } from "@/lib/money";
 
 export interface PostInvoiceState {
   error: string | null;
@@ -93,6 +95,23 @@ export async function createPostedInvoice(
     if (!upErr) {
       await admin.from("invoices").update({ file_path: path }).eq("id", inserted.id);
     }
+  }
+
+  // Alert management (admins + HR & Management) that an invoice needs clearing.
+  const managers = await getManagementUserIds(access.profile.id);
+  if (managers.length > 0) {
+    const amountText = formatMoney(amount, currency as CurrencyCode);
+    const poster = access.profile.full_name || access.profile.email;
+    await notifyUsers(
+      managers.map((recipientId) => ({
+        recipientId,
+        type: "invoice_posted" as const,
+        title: "New invoice to clear",
+        body: `${poster} posted ${amountText} for ${vendorName}`,
+        link: "/billing/clearing",
+        data: { invoiceId: inserted.id },
+      })),
+    );
   }
 
   revalidatePath("/billing/post");

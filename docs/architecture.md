@@ -37,19 +37,32 @@ app/
       post/page.tsx       #   post an invoice into tracking
       clearing/page.tsx   #   clear/reject posted invoices (admins + HR only)
       actions.ts          #   post / delete / clear / reject / upload actions
-    chat/page.tsx         # Chat module (placeholder)
+    chat/                 # Chat module
+      page.tsx            #   loads directory + conversations (server), then client
+      actions.ts          #   send / startDM / createGroup / rename / add / remove / leave
     employees/
       page.tsx            # Employee Management (admins + HR & Management)
       actions.ts          # invite / setDepartments / deactivate / reactivate
 
 components/               # Reusable, presentational UI
-  sidebar.tsx             # Role-filtered nav, branding, user info, logout
+  sidebar.tsx             # Role-filtered nav, branding, user info, logout, bell
   tool-card.tsx           # Dashboard tool card (typed by the Tool interface)
   page-header.tsx         # Shared page title/description block
   invite-user-form.tsx    # Client form bound to the inviteUser action
   theme-toggle.tsx        # Light/dark switch (persists to localStorage)
   logo.tsx                # Herbal Deck brand mark
   icons.tsx               # Inline SVG icon set (no icon dependency)
+  chat/                   # Chat client UI
+    chat-client.tsx       #   list + live thread + realtime message subscription
+    message-composer.tsx  #   input with the @mention picker
+    new-conversation-dialog.tsx  # start a DM or create a group
+    group-settings-dialog.tsx    # rename / add / remove / leave (admins)
+    types.ts              #   DirectoryEntry, ConversationSummary
+  notifications/          # Notification UI (one realtime subscription, shared)
+    notifications-provider.tsx   # context + subscription + state (wraps the shell)
+    notification-bell.tsx        # unread badge + dropdown
+    notification-toaster.tsx     # auto-dismissing pop-ups
+    notification-icon.tsx        # glyph per notification type
 
 lib/                      # Non-visual logic and configuration
   supabase/
@@ -59,18 +72,21 @@ lib/                      # Non-visual logic and configuration
     middleware.ts         # updateSession(): session refresh + route guard
   auth.ts                 # getProfile / requireProfile / requireAdmin /
                           #   getUserAccess / requireUserManager / requireBillingManager
+  notifications.ts        # notifyUsers / getManagementUserIds (server, service-role)
   invoice-pdf.ts          # builds the invoice PDF (jsPDF); dispatches to a template
   invoice-templates.ts    # the eight invoice templates
   invoice-types.ts        # invoice model + draw context (jsPDF-free, shared)
   money.ts                # currency formatting (screen symbols vs PDF-safe ASCII)
   company.ts              # fixed Herbal Deck details (invoice bill-to)
+  time.ts                 # small relative-time / clock / day-label helpers
   navigation.tsx          # navItems[]: single source of truth for the sidebar
-  types.ts                # Role, Profile, Department, Invoice, ...
+  types.ts                # Role, Profile, Department, Invoice, Conversation, Notification, ...
 
 proxy.ts                  # Next.js 16 proxy (middleware) entry point
 supabase/
   schema.sql              # Base tables, trigger, is_admin(), RLS policies
-  migrations/             # 0002 departments+billing, 0003 posting, 0004 deactivation
+  migrations/             # 0002 departments+billing, 0003 posting,
+                          #   0004 deactivation, 0005 chat + notifications
 docs/                     # Documentation set
 ```
 
@@ -103,6 +119,28 @@ docs/                     # Documentation set
   only to admins + HR & Management).
 - **Presentation reuse** — `PageHeader`, `ToolCard`, and the design tokens give
   every module a consistent look without copy-pasted styling.
+
+## Real-time and notifications
+
+Chat and the notification bell are the portal's first live features, built on
+**Supabase Realtime** (Postgres Changes). Two principles keep this simple:
+
+- **One subscription each, scoped by RLS.** The chat client subscribes to
+  *message inserts* with no client-side filter; Row Level Security delivers only
+  rows in conversations the user belongs to. That single stream drives the open
+  thread, unread badges, and re-ordering. The `NotificationsProvider` (wrapping
+  the whole authenticated shell) owns one subscription to the user's
+  *notification inserts*, feeding both the sidebar bell and the toast pop-ups.
+- **Notifications are written server-side only.** The `notifications` table has
+  no INSERT policy, so the browser can never create one for another user. They
+  are produced exclusively by the service-role client inside authenticated
+  Server Actions, via `lib/notifications.ts` — the same trusted-elevation pattern
+  used for admin user provisioning and signed-invoice uploads.
+
+Membership checks for chat (`is_conversation_participant`,
+`is_conversation_admin`) are `SECURITY DEFINER` SQL functions, mirroring the
+`is_admin()` pattern: a policy that queried the participants table directly would
+recurse, so the helpers read it without re-triggering RLS.
 
 ## Theming
 
