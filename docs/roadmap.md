@@ -96,8 +96,8 @@ Built as three separate tools (see "The billing module" in the project README):
 - **Analytics** ✅ — managers-only dashboard: cleared spend by department,
   category, and month (last 12), with pending shown for forecasting. Aggregated
   in-process; dependency-free CSS bar charts.
-- **Miscellaneous payments** ⬜ — HR & Management-only ledger *(table exists; UI
-  pending)*.
+- **Petty Cash** ✅ — HR & Management-only ledger for one-off cash payments
+  (amount, paid to, reason), with KPIs, a monthly trend, and search/sort.
 
 ### Phase 4 — Chat & Notifications 🟡 *In progress*
 Real-time messaging built on Supabase Realtime, plus a portal-wide notification

@@ -42,6 +42,8 @@ Two decisions worth calling out, because they came from real problems:
 - **Eight invoice templates, not one.** If every invoice came from a single template, a stack of them would obviously look machine-generated — which is a problem for authenticity and for taxes, where invoices are meant to come from independent providers. So the generator offers eight genuinely different designs.
 - **Expense tracking is built into the invoices themselves.** Rather than a separate audit log, every invoice carries who created it, who cleared it, and when. That record *is* the tracking system — the clearing dashboard's department panels, status filters, and search all read from it.
 
+Billing also has a fourth, simpler tool for HR & Management only: **Petty Cash** — a one-off cash payment ledger. No provider, no PDF, no approval chain: just amount, who it was paid to, and why, with searchable/sortable history and a quick monthly total.
+
 There's a deeper write-up of these and other choices in [`docs/decisions.md`](./docs/decisions.md).
 
 ---

@@ -5,6 +5,19 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] — 2026-06-30
+
+### Added
+
+- **Petty Cash** (`/billing/petty-cash`) — a simple ledger for one-off cash
+  payments, admins + HR & Management only (same gate as Clear/Analytics). No
+  provider, no PDF, no approval chain: a three-field quick entry (amount in ₹,
+  paid to, reason), KPIs (today / last 7 days / this month / all-time), a
+  6-month trend, and a searchable/sortable history with delete for corrections.
+  Built on `public.misc_payments`, which already existed (migration 0002) with
+  RLS scoped to billing managers — no new migration needed, just the UI and a
+  server action (`createPettyCashEntry`, `deletePettyCashEntry`).
+
 ## [0.6.1] — 2026-06-30
 
 ### Added

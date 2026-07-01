@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
- * Sub-navigation across the billing tools. The "Clear" tab only appears for
- * billing managers (admins + HR & Management).
+ * Sub-navigation across the billing tools. "Clear", "Analytics", and "Petty
+ * Cash" only appear for billing managers (admins + HR & Management).
  */
 export function BillingTabs({ canClear }: { canClear: boolean }) {
   const pathname = usePathname();
@@ -18,6 +18,7 @@ export function BillingTabs({ canClear }: { canClear: boolean }) {
       ? [
           { href: "/billing/clearing", label: "Clear" },
           { href: "/billing/analytics", label: "Analytics" },
+          { href: "/billing/petty-cash", label: "Petty Cash" },
         ]
       : []),
   ];

@@ -72,6 +72,25 @@ export interface Invoice {
   created_at: string;
 }
 
+/**
+ * A one-off payment from the "Petty Cash" ledger (`public.misc_payments`) —
+ * HR & Management only. Simple by design: who it was paid to, why, and how
+ * much (always INR).
+ */
+export interface MiscPayment {
+  id: string;
+  created_by: string;
+  category_id: string | null;
+  description: string;
+  paid_to: string | null;
+  amount: number;
+  currency: string;
+  payment_date: string;
+  proof_path: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
 // --- Chat -----------------------------------------------------------------
 
 /** A conversation is either a 1:1 direct message or a named multi-person group. */

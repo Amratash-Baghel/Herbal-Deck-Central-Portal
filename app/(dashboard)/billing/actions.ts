@@ -189,3 +189,58 @@ export async function uploadSignedInvoice(formData: FormData): Promise<void> {
   await admin.from("invoices").update({ file_path: path }).eq("id", id);
   revalidatePath("/billing/clearing");
 }
+
+export interface PettyCashState {
+  error: string | null;
+  success: string | null;
+}
+
+/**
+ * Record a petty cash entry — HR & Management only (also enforced by RLS on
+ * `misc_payments`, which every billing manager can read/write). Deliberately
+ * three fields: who it was paid to, why, and the amount — always INR.
+ */
+export async function createPettyCashEntry(
+  _prev: PettyCashState,
+  formData: FormData,
+): Promise<PettyCashState> {
+  const access = await getUserAccess();
+  if (!access) return { error: "You are not signed in.", success: null };
+  if (!access.canManageBilling) {
+    return { error: "Only HR & Management can record petty cash.", success: null };
+  }
+
+  const paidTo = String(formData.get("paid_to") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const amount = Number(formData.get("amount") ?? 0);
+
+  if (!paidTo) return { error: "Enter who this was paid to.", success: null };
+  if (!description) return { error: "Enter a reason.", success: null };
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "Enter a valid amount.", success: null };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("misc_payments").insert({
+    created_by: access.profile.id,
+    paid_to: paidTo,
+    description,
+    amount,
+    currency: "INR",
+  });
+
+  if (error) return { error: error.message, success: null };
+
+  revalidatePath("/billing/petty-cash");
+  return { error: null, success: "Recorded." };
+}
+
+/** Delete a petty cash entry (billing managers only, enforced by RLS). */
+export async function deletePettyCashEntry(formData: FormData): Promise<void> {
+  await requireBillingManager();
+  const id = String(formData.get("entry_id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("misc_payments").delete().eq("id", id);
+  revalidatePath("/billing/petty-cash");
+}
