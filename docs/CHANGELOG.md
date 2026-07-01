@@ -5,6 +5,35 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] — 2026-06-30
+
+### Added
+
+- **Daily EOD reminder.** A Vercel Cron job (`vercel.json`, 17:55 IST) hits
+  `/api/cron/eod-reminder`, which notifies every active employee who hasn't yet
+  submitted today's EOD report — via the existing notification bell/toasts, new
+  `eod_reminder` type, linking to `/tasks/reports`. Runs server-side on a
+  schedule, independent of anyone being signed in. Protected by a `CRON_SECRET`
+  the route checks against Vercel's automatic `Authorization: Bearer` header;
+  a 20-hour "already reminded" guard prevents duplicate pings from a retried
+  invocation.
+
+### Setup note
+
+- Add a `CRON_SECRET` environment variable in Vercel (any long random string —
+  e.g. `openssl rand -hex 32`) matching the one in your local `.env.local`.
+  Vercel Cron sends it automatically once the env var exists; no other config
+  needed. **Note:** exact-minute cron timing is a Vercel **Pro** plan feature —
+  on Hobby, daily Cron Jobs may fire anytime within the scheduled hour.
+
+### Fixed
+
+- **Notifications stayed unread after a refresh.** Marking a notification read
+  built the database update but never executed it (`void`-ing a lazy Supabase
+  query builder never sends the request) — state cleared locally, then reverted
+  on reload. Fixed for the bell, chat's per-conversation read cursor, and
+  "mark all read".
+
 ## [0.6.0] — 2026-06-30
 
 The **Tasks & Reporting** module (Phase 5) — a personal kanban that doubles as

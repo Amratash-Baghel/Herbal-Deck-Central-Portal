@@ -118,7 +118,8 @@ export type NotificationType =
   | "mention"
   | "invoice_posted"
   | "group_added"
-  | "task_assigned";
+  | "task_assigned"
+  | "eod_reminder";
 
 /** A notification row from `public.notifications` (one user's inbox item). */
 export interface Notification {

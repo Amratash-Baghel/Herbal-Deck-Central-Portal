@@ -126,7 +126,31 @@ components/tasks-tabs.tsx  # the sub-navigation
 
 lib/tasks.ts        # columns, status helpers, per-department note colours
 lib/time.ts         # IST day helpers (localDateISO, daysUntil, isoDaysAgo)
+
+app/api/cron/eod-reminder/route.ts  # daily reminder (Vercel Cron)
+vercel.json                          # cron schedule (17:55 IST daily)
 ```
+
+---
+
+## Daily EOD reminder
+
+A Vercel Cron job calls `/api/cron/eod-reminder` once a day at **17:55 IST**
+(`vercel.json`). It runs with the service-role client (there's no signed-in user
+for a scheduled job), finds every active employee **without** a submitted
+`eod_reports` row for today, and raises an `eod_reminder` notification for each
+— arriving through the same bell/toast system as everything else, linking to
+`/tasks/reports`.
+
+The route is protected by a `CRON_SECRET` — Vercel automatically sends it as
+`Authorization: Bearer <CRON_SECRET>` when the same env var is set in the
+project, so the endpoint can't be triggered from outside. A 20-hour "already
+reminded" check guards against a retried invocation double-notifying someone.
+
+**Setup:** add `CRON_SECRET` to the Vercel project's environment variables (any
+long random value). Nothing else is required — the schedule ships in
+`vercel.json`. Note that exact-minute timing is a Vercel Pro feature; on the
+Hobby plan, daily crons may fire anytime within the scheduled hour.
 
 ---
 
