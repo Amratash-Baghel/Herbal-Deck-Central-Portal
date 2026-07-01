@@ -24,6 +24,69 @@ export function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86_400_000).toISOString();
 }
 
+/**
+ * A compact human duration between two instants, e.g. "2d 4h", "3h 12m",
+ * "45m", "30s". Returns null if either end is missing/invalid or negative.
+ */
+export function formatDuration(
+  fromISO: string | null | undefined,
+  toISO: string | null | undefined,
+): string | null {
+  if (!fromISO || !toISO) return null;
+  const a = Date.parse(fromISO);
+  const b = Date.parse(toISO);
+  if (Number.isNaN(a) || Number.isNaN(b) || b < a) return null;
+  let secs = Math.floor((b - a) / 1000);
+  const d = Math.floor(secs / 86400);
+  secs -= d * 86400;
+  const h = Math.floor(secs / 3600);
+  secs -= h * 3600;
+  const m = Math.floor(secs / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${Math.max(0, Math.floor((b - a) / 1000))}s`;
+}
+
+/**
+ * The UTC ISO bounds of a local calendar day (default IST), so a
+ * `created_at >= start AND < end` filter selects exactly that day's rows.
+ */
+export function dayRangeUTC(
+  dateISO: string,
+  tz = "Asia/Kolkata",
+): { startISO: string; endISO: string } {
+  // For IST (fixed +05:30, no DST) this offset is constant.
+  const offset = tz === "Asia/Kolkata" ? "+05:30" : "Z";
+  const start = new Date(`${dateISO}T00:00:00${offset}`);
+  const end = new Date(start.getTime() + 86_400_000);
+  return { startISO: start.toISOString(), endISO: end.toISOString() };
+}
+
+/** The hour-of-day (0–23) of an instant in a given timezone (default IST). */
+export function hourInTZ(iso: string, tz = "Asia/Kolkata"): number | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const h = new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    hour: "2-digit",
+    hour12: false,
+  }).format(d);
+  const n = Number(h);
+  return Number.isNaN(n) ? null : n % 24;
+}
+
+/** Clock time in a specific timezone, e.g. "3:42 PM" (default IST). */
+export function formatClockTZ(iso: string, tz = "Asia/Kolkata"): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /** Clock time, e.g. "3:42 PM". */
 export function formatClock(iso: string): string {
   const d = new Date(iso);

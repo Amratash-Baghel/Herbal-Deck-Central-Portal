@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { deptNoteColor, adjacentStatus } from "@/lib/tasks";
-import { daysUntil } from "@/lib/time";
+import { daysUntil, formatDuration, timeAgo } from "@/lib/time";
 import { ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from "@/components/icons";
 import type { Task, TaskStatus } from "@/lib/types";
 import type { Person } from "@/components/tasks/types";
@@ -21,6 +21,27 @@ function tiltOf(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
   return (Math.abs(h) % 5) - 2; // -2..2
+}
+
+/** Lifecycle timestamps: created date + started/completed context. */
+function TaskTiming({ task }: { task: Task }) {
+  const created = new Date(task.created_at).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+  });
+  let extra: string | null = null;
+  if (task.status === "done" && task.started_at && task.completed_at) {
+    const d = formatDuration(task.started_at, task.completed_at);
+    if (d) extra = `Completed in ${d}`;
+  } else if (task.status === "in_progress" && task.started_at) {
+    extra = `Started ${timeAgo(task.started_at)}`;
+  }
+  return (
+    <p className="mt-2 text-[10px] text-foreground/50">
+      Created {created}
+      {extra && ` · ${extra}`}
+    </p>
+  );
 }
 
 function DeadlinePill({ deadline }: { deadline: string | null }) {
@@ -180,6 +201,8 @@ export function TaskCard({
         )}
         <DeadlinePill deadline={task.deadline} />
       </div>
+
+      <TaskTiming task={task} />
 
       <div className="mt-2 flex items-center justify-between border-t border-foreground/10 pt-2">
         <span className="truncate text-[10px] uppercase tracking-wide text-foreground/55">

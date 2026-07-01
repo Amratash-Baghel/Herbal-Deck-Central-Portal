@@ -131,6 +131,26 @@ export function BellIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function ReportingIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 3v18h18" />
+      <rect x="7" y="12" width="3" height="6" rx="0.5" />
+      <rect x="12" y="8" width="3" height="10" rx="0.5" />
+      <rect x="17" y="5" width="3" height="13" rx="0.5" />
+    </svg>
+  );
+}
+
+export function ClockIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
 export function SendIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>

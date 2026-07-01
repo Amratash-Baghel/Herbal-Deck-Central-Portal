@@ -1,14 +1,113 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CloseIcon, TrashIcon } from "@/components/icons";
+import { createClient } from "@/lib/supabase/client";
+import { statusLabel } from "@/lib/tasks";
+import { formatDuration, formatClockTZ } from "@/lib/time";
 import type { UpdateTaskInput, TaskResult } from "@/app/(dashboard)/tasks/actions";
-import type { Task } from "@/lib/types";
+import type { Task, TaskActivity } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
 
 const inputClass =
   "w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70";
 const labelClass = "text-xs font-medium text-muted-foreground";
+
+function fmtStamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return `${d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} ${formatClockTZ(iso)}`;
+}
+
+/** Created / started / completed timestamps + total time in progress. */
+function TaskTimestamps({ task, creatorName }: { task: Task; creatorName: string }) {
+  const timeInProgress = formatDuration(task.started_at, task.completed_at);
+  return (
+    <div className="rounded-xl border bg-muted/30 p-3 text-[11px] text-muted-foreground">
+      <div className="grid grid-cols-2 gap-y-1">
+        <span>Created</span>
+        <span className="text-right text-foreground/80">{fmtStamp(task.created_at)}</span>
+        <span>Started</span>
+        <span className="text-right text-foreground/80">
+          {task.started_at ? fmtStamp(task.started_at) : "—"}
+        </span>
+        <span>Completed</span>
+        <span className="text-right text-foreground/80">
+          {task.completed_at ? fmtStamp(task.completed_at) : "—"}
+        </span>
+        {timeInProgress && (
+          <>
+            <span>Time in progress</span>
+            <span className="text-right font-medium text-primary">{timeInProgress}</span>
+          </>
+        )}
+      </div>
+      <p className="mt-2 border-t pt-2">Created by {creatorName}</p>
+    </div>
+  );
+}
+
+function historyLabel(a: TaskActivity): string {
+  switch (a.action) {
+    case "created":
+      return "Created";
+    case "status_changed":
+      return a.from_status && a.to_status
+        ? `${statusLabel(a.from_status)} → ${statusLabel(a.to_status)}`
+        : a.to_status
+          ? `Moved to ${statusLabel(a.to_status)}`
+          : "Status changed";
+    case "assigned":
+      return "Reassigned";
+    case "archived":
+      return "Archived";
+    default:
+      return "Updated";
+  }
+}
+
+/** The full status-change log for a task, lazily loaded (RLS-scoped). */
+function TaskHistory({ taskId }: { taskId: string }) {
+  const [items, setItems] = useState<TaskActivity[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    supabase
+      .from("task_activity")
+      .select("*")
+      .eq("task_id", taskId)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (!cancelled) setItems((data ?? []) as TaskActivity[]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [taskId]);
+
+  return (
+    <div>
+      <p className={labelClass}>History</p>
+      {items === null ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">No history yet.</p>
+      ) : (
+        <ul className="mt-1.5 space-y-1.5">
+          {items.map((a) => (
+            <li key={a.id} className="flex items-baseline gap-2 text-xs">
+              <span className="w-24 shrink-0 tabular-nums text-muted-foreground">
+                {fmtStamp(a.created_at)}
+              </span>
+              <span className="text-foreground/80">{historyLabel(a)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 /**
  * View / edit a task. In editable mode (your own or assigned task) the fields
@@ -174,10 +273,9 @@ export function TaskDetailDialog({
             />
           </div>
 
-          <p className="text-[11px] text-muted-foreground">
-            Created by {creatorName} ·{" "}
-            {new Date(task.created_at).toLocaleDateString()}
-          </p>
+          <TaskTimestamps task={task} creatorName={creatorName} />
+
+          <TaskHistory taskId={task.id} />
 
           {error && (
             <p role="alert" className="text-sm text-red-600 dark:text-red-400">

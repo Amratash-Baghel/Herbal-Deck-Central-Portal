@@ -28,6 +28,8 @@ export function NotificationTypeIcon({
       return <TasksIcon {...props} />;
     case "eod_reminder":
       return <CalendarIcon {...props} />;
+    case "eod_submitted":
+      return <CalendarIcon {...props} />;
     default:
       return <ChatIcon {...props} />;
   }

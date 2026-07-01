@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   deactivateEmployee,
   reactivateEmployee,
 } from "@/app/(dashboard)/employees/actions";
 import { EditUserDepartments } from "@/components/edit-user-departments";
-import { SearchIcon, UserMinusIcon } from "@/components/icons";
+import { SearchIcon, UserMinusIcon, ReportingIcon } from "@/components/icons";
 import type { Department, Role } from "@/lib/types";
 
 export interface EmployeeRow {
@@ -150,6 +151,13 @@ export function EmployeeList({
                   </div>
 
                   <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <Link
+                      href={`/reporting/employees/${e.id}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary transition hover:underline"
+                    >
+                      <ReportingIcon className="h-3.5 w-3.5" />
+                      View report
+                    </Link>
                     <EditUserDepartments
                       userId={e.id}
                       departments={departments}

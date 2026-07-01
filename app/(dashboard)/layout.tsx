@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { headers } from "next/headers";
 import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/sidebar";
@@ -34,6 +36,18 @@ export default async function DashboardLayout({
       .order("created_at", { ascending: false })
       .limit(30),
   );
+
+  // Passive activity ("attendance") logging. Runs AFTER the response is sent
+  // via after(), so it adds no latency to the page. record_activity() keys off
+  // the session (auth.uid()), so a user can only ever stamp their own row.
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  after(async () => {
+    try {
+      await supabase.rpc("record_activity", { page: pathname });
+    } catch {
+      // Best-effort — attendance logging must never affect the request.
+    }
+  });
 
   return (
     <NotificationsProvider

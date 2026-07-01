@@ -5,6 +5,59 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-06-30
+
+A major expansion of Tasks & Reporting: passive activity tracking, a manager
+**Reporting** module, an EOD report viewer, and a task-history/timestamp rework.
+
+### Added
+
+- **Passive activity logging ("attendance").** Every time an employee uses the
+  portal, the app stamps their activity — no clock-in, nothing they do. One row
+  per person per day (`activity_logs`): first_seen ("arrived"), last_seen,
+  distinct pages visited, an action count, and eod_submitted_at ("left").
+  Recording runs *after* the response via `after()`, so it adds no latency, and
+  is keyed to the session so nobody can forge someone else's attendance.
+  Submitting an EOD is treated as "clocking out".
+- **Reporting module** (`/reporting`, admins + HR & Management), added to the
+  sidebar and dashboard:
+  - **Team Overview** — today's activity: who's online now (active in the last
+    15 min), who's submitted their EOD, who hasn't been seen, and tasks completed
+    today, filterable by department.
+  - **EOD Reports** — the full submitted-report history, filterable by employee /
+    department / date range; each report opens to the manual note plus that day's
+    task timeline with exact timestamps.
+  - **Employee Reviews** — a per-person drill-down: their activity log
+    (arrive / leave / active-for per day, with a "No EOD" flag), full task
+    history, EOD history, and stats (avg arrival, avg completed/day, EOD
+    submission rate, most active hours). Reachable from a "View report" button on
+    Employee Management.
+- **Task lifecycle timestamps.** Tasks now record `started_at` (first move to In
+  Progress) alongside `completed_at`; cards show them and compute "time in
+  progress", and the task detail dialog shows created/started/completed plus the
+  full status-change history.
+- **EOD-submitted notification.** The first time someone submits their EOD,
+  admins + HR are notified (with a link to that person's review).
+
+### Changed
+
+- **Task history survives deletion.** `task_activity` no longer cascades away
+  when a task is deleted (FK is now `ON DELETE SET NULL`) and denormalises the
+  task title + department onto each row. So a task that was *completed and then
+  deleted* stays in that day's EOD/history (it was real work), while live board
+  counts — which read the tasks table — correctly exclude deleted tasks.
+- **Auto-archive.** "Done" tasks older than 7 days move off the board
+  (archived = true) but stay in history — run daily by the existing cron.
+- `task_activity` is exposed as a `task_activity_log` view (spec-named columns).
+
+### Migrations (run in order)
+
+- `0009_activity_logs.sql` — the `activity_logs` table, its RLS + indexes, the
+  `record_activity()` writer, and the eod_reports "clock-out" trigger.
+- `0010_task_history_and_timestamps.sql` — `tasks.started_at`; makes
+  `task_activity` durable + denormalised; updates the task triggers; the
+  `task_activity_log` view; and `archive_stale_done_tasks()`.
+
 ## [0.6.3] — 2026-06-30
 
 Performance pass across the whole portal — no functional changes, only speed.

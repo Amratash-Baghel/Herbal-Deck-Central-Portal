@@ -1,13 +1,21 @@
-import { requireProfile } from "@/lib/auth";
+import { getUserAccess } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { ToolCard, type Tool } from "@/components/tool-card";
-import { BillingIcon, ChatIcon, TasksIcon } from "@/components/icons";
+import { BillingIcon, ChatIcon, TasksIcon, ReportingIcon } from "@/components/icons";
 
 /**
  * Dashboard tools. Add a module by appending to this list and creating its
- * page + nav entry. The grid scales automatically.
+ * page + nav entry. The grid scales automatically. `managerOnly` cards are
+ * shown only to admins + HR & Management.
  */
-const tools: Tool[] = [
+const tools: (Tool & { managerOnly?: boolean })[] = [
+  {
+    title: "Tasks",
+    description: "Your kanban board, team tasks, and end-of-day reports.",
+    href: "/tasks",
+    icon: TasksIcon,
+  },
   {
     title: "Billing & Invoices",
     description: "Generate, post, and clear invoices, and track spend.",
@@ -21,16 +29,20 @@ const tools: Tool[] = [
     icon: ChatIcon,
   },
   {
-    title: "Tasks & Reporting",
-    description: "Your kanban board, team tasks, and end-of-day reports.",
-    href: "/tasks",
-    icon: TasksIcon,
+    title: "Reporting",
+    description: "Team activity, EOD reports, and per-employee reviews.",
+    href: "/reporting",
+    icon: ReportingIcon,
+    managerOnly: true,
   },
 ];
 
 export default async function DashboardPage() {
-  const profile = await requireProfile();
+  const access = await getUserAccess();
+  if (!access) redirect("/login");
+  const profile = access.profile;
   const firstName = (profile.full_name || profile.email).split(/[\s@]+/)[0];
+  const visible = tools.filter((t) => !t.managerOnly || access.canManageUsers);
 
   return (
     <>
@@ -43,7 +55,7 @@ export default async function DashboardPage() {
         aria-label="Tools"
         className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"
       >
-        {tools.map((tool) => (
+        {visible.map((tool) => (
           <ToolCard key={tool.href} tool={tool} />
         ))}
       </section>

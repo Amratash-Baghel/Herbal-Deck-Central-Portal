@@ -26,6 +26,10 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   const today = localDateISO();
 
+  // Daily housekeeping: move "Done" tasks older than 7 days off the board
+  // (archived = true) while keeping them in history. Best-effort.
+  const { data: archived } = await admin.rpc("archive_stale_done_tasks");
+
   const [{ data: profiles }, { data: submitted }] = await Promise.all([
     admin.from("profiles").select("id").is("deactivated_at", null),
     admin.from("eod_reports").select("employee_id").eq("report_date", today),
@@ -64,5 +68,9 @@ export async function GET(request: NextRequest) {
     })),
   );
 
-  return NextResponse.json({ notified: toNotify.length, pending: pending.length });
+  return NextResponse.json({
+    notified: toNotify.length,
+    pending: pending.length,
+    archived: archived ?? 0,
+  });
 }

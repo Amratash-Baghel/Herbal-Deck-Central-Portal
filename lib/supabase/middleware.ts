@@ -11,6 +11,11 @@ import { NextResponse, type NextRequest } from "next/server";
  * enforced by Row Level Security in the database.
  */
 export async function updateSession(request: NextRequest) {
+  // Expose the current path to Server Components (for passive activity logging).
+  // Setting it on the forwarded request headers is the supported way to read a
+  // pathname from a layout, which otherwise doesn't receive it.
+  request.headers.set("x-pathname", request.nextUrl.pathname);
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

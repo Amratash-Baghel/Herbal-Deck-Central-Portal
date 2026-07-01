@@ -63,9 +63,10 @@ managers — everyone's.
 
 | Table | Purpose |
 | ----- | ------- |
-| `tasks` | The cards: `title`, `description`, `status` (todo/in_progress/done), `created_by`, `assigned_to`, `department_id`, `deadline`, `archived`, `completed_at`, timestamps. |
-| `task_activity` | An **append-only log** of every change (created / status_changed / assigned / archived) with the actor and time. This is the source of truth for reporting. |
+| `tasks` | The cards: `title`, `description`, `status` (todo/in_progress/done), `created_by`, `assigned_to`, `department_id`, `deadline`, `archived`, **`started_at`**, `completed_at`, timestamps. |
+| `task_activity` | An **append-only, durable log** of every change (created / status_changed / assigned / archived) with the actor, time, and denormalised task title + department. Survives task deletion (`task_id` → null). The source of truth for reporting; also exposed as the `task_activity_log` view. |
 | `eod_reports` | One row per employee per day: a snapshot of the activity counts (`auto_summary` JSON) plus the optional `manual_note`. |
+| `activity_logs` | Passive attendance — one row per employee per day: `first_seen_at`, `last_seen_at`, `pages_visited`, `actions_count`, `eod_submitted_at`. |
 
 **Triggers** keep things honest: a `before update` trigger maintains `updated_at`
 and `completed_at`; `after insert`/`after update` triggers write the activity log
@@ -150,7 +151,45 @@ reminded" check guards against a retried invocation double-notifying someone.
 **Setup:** add `CRON_SECRET` to the Vercel project's environment variables (any
 long random value). Nothing else is required — the schedule ships in
 `vercel.json`. Note that exact-minute timing is a Vercel Pro feature; on the
-Hobby plan, daily crons may fire anytime within the scheduled hour.
+Hobby plan, daily crons may fire anytime within the scheduled hour. The same
+daily job also **auto-archives** "Done" tasks older than 7 days
+(`archive_stale_done_tasks()`) — they leave the board but stay in history.
+
+---
+
+## Reporting & passive activity (0.7.0)
+
+### Passive attendance
+Every portal navigation stamps the user's activity for the day
+(`activity_logs`), driven from the dashboard layout via `after()` so it adds no
+latency. `record_activity()` is `SECURITY DEFINER` keyed to `auth.uid()`, so a
+user can only ever write their own row. **Submitting an EOD is the "clock-out"**
+— a trigger on `eod_reports` sets `eod_submitted_at`. Days are bucketed by IST.
+
+### Reporting module (`/reporting`, admins + HR & Management)
+- **Team Overview** — today's activity: online now (last 15 min), EOD submitted,
+  not-seen, and tasks completed today; filter by department.
+- **EOD Reports** — the full submitted-report history, filterable by employee /
+  department / date; each opens to the note + that day's task timeline. The
+  employee's own copy lives on `/tasks/reports` (same viewer).
+- **Employee Reviews** — a per-person page (`/reporting/employees/[id]`): the
+  activity log (arrive / leave / active-for, "No EOD" flag), full task history,
+  EOD history, and stats (avg arrival, avg completed/day, EOD submission %, most
+  active hours). Reachable from a "View report" button on Employee Management.
+
+### Task history & timestamps
+`tasks.started_at` records the first move to In Progress; cards show "time in
+progress", and the detail dialog shows the full status-change log. Crucially,
+`task_activity` **survives deletion** (`task_id` → null, title/department
+denormalised), so a task completed and later deleted stays in that day's EOD —
+while live board counts, which read the `tasks` table, exclude it.
+
+### Counts: what's included where
+- **Board / current counts** (To Do, In Progress, pending) read the `tasks`
+  table, so a deleted task disappears from them immediately.
+- **EOD & history** read the immutable `task_activity` log, so completed work
+  survives a later deletion. Doing the work happened; deleting the card doesn't
+  un-happen it.
 
 ---
 

@@ -2,6 +2,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { EodNoteForm } from "@/components/tasks/eod-note-form";
+import { EodReportCard } from "@/components/reporting/eod-report-card";
 import { localDateISO } from "@/lib/time";
 import { time } from "@/lib/perf";
 import type { EodReport, EodSummary } from "@/lib/types";
@@ -24,13 +25,6 @@ function Tile({ label, value }: { label: string; value: number }) {
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
     </div>
   );
-}
-
-function fmtDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
 /**
@@ -182,31 +176,11 @@ export default async function ReportsPage() {
               No reports submitted yet.
             </li>
           )}
-          {reports.map((r) => {
-            const s = r.auto_summary ?? ZERO;
-            return (
-              <li key={r.id} className="rounded-xl border bg-card px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-medium">
-                    {nameOf.get(r.employee_id) ?? "Someone"}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      {fmtDate(r.report_date)}
-                    </span>
-                  </span>
-                  <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-primary">
-                    Submitted
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {Number(s.created)} created · {Number(s.in_progress)} started ·{" "}
-                  {Number(s.completed)} completed · {Number(s.pending)} pending
-                </p>
-                {r.manual_note && (
-                  <p className="mt-1.5 text-sm text-foreground/80">{r.manual_note}</p>
-                )}
-              </li>
-            );
-          })}
+          {reports.map((r) => (
+            <li key={r.id}>
+              <EodReportCard report={r} employeeName={nameOf.get(r.employee_id)} />
+            </li>
+          ))}
         </ul>
       </section>
     </>

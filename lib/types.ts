@@ -149,7 +149,8 @@ export type NotificationType =
   | "invoice_posted"
   | "group_added"
   | "task_assigned"
-  | "eod_reminder";
+  | "eod_reminder"
+  | "eod_submitted";
 
 /** A notification row from `public.notifications` (one user's inbox item). */
 export interface Notification {
@@ -180,6 +181,8 @@ export interface Task {
   department_id: string;
   deadline: string | null;
   archived: boolean;
+  /** When the task first entered "In Progress" (null if it never did). */
+  started_at: string | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -191,16 +194,22 @@ export interface Task {
  * this instead of `select("*")`.
  */
 export const TASK_LIST_COLUMNS =
-  "id, title, description, status, created_by, assigned_to, department_id, deadline, archived, completed_at, created_at";
+  "id, title, description, status, created_by, assigned_to, department_id, deadline, archived, started_at, completed_at, created_at";
 
-/** An append-only activity row from `public.task_activity` (powers EOD). */
+/**
+ * An append-only activity row from `public.task_activity` — the task history
+ * log (powers EOD). `task_id` becomes null if the task is later deleted;
+ * `task_title` / `department_id` are denormalised so the row still makes sense.
+ */
 export interface TaskActivity {
   id: string;
-  task_id: string;
+  task_id: string | null;
   actor_id: string | null;
   action: "created" | "status_changed" | "assigned" | "archived";
   from_status: TaskStatus | null;
   to_status: TaskStatus | null;
+  task_title: string | null;
+  department_id: string | null;
   created_at: string;
 }
 
@@ -221,4 +230,20 @@ export interface EodReport {
   manual_note: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * A passive attendance row from `public.activity_logs` — one per employee per
+ * day. `eod_submitted_at` is the "clock-out" (null if they never submitted).
+ */
+export interface ActivityLog {
+  id: string;
+  employee_id: string;
+  date: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  pages_visited: string[];
+  actions_count: number;
+  eod_submitted_at: string | null;
+  created_at: string;
 }

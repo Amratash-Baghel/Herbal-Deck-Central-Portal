@@ -47,7 +47,8 @@ Current modules:
 | Employee Management | ✅ Live        | Add, assign departments, remove (soft) — admin / HR |
 | Chat               | ✅ Live        | Real-time DMs & groups, @mentions (links for files) |
 | Notifications      | ✅ Live        | Realtime bell + pop-ups; invoice-posted alerts    |
-| Tasks & Reporting  | ✅ Live        | Personal kanban + team/admin views + auto EOD reports |
+| Tasks              | ✅ Live        | Personal kanban + team/admin views + auto EOD reports |
+| Reporting          | ✅ Live        | Passive activity log, team overview, EOD viewer, per-employee reviews — admin / HR |
 
 ## Technology stack
 
@@ -167,6 +168,16 @@ In the Supabase SQL Editor, run these **once, in order**:
 6. [`supabase/migrations/0006_tasks_and_reporting.sql`](../supabase/migrations/0006_tasks_and_reporting.sql)
    — the `tasks` board, the append-only `task_activity` log, and `eod_reports`,
    with their triggers, `SECURITY DEFINER` reporting helpers, and RLS.
+7. [`supabase/migrations/0007_tasks_assignment_rules.sql`](../supabase/migrations/0007_tasks_assignment_rules.sql)
+   — the task assign/move/delete rules (trigger + creator-only delete).
+8. [`supabase/migrations/0008_performance_indexes.sql`](../supabase/migrations/0008_performance_indexes.sql)
+   — indexes for query patterns that weren't covered.
+9. [`supabase/migrations/0009_activity_logs.sql`](../supabase/migrations/0009_activity_logs.sql)
+   — the `activity_logs` (passive attendance) table, `record_activity()`, and
+   the EOD "clock-out" trigger.
+10. [`supabase/migrations/0010_task_history_and_timestamps.sql`](../supabase/migrations/0010_task_history_and_timestamps.sql)
+   — `tasks.started_at`; makes `task_activity` durable + denormalised; the
+   `task_activity_log` view; and `archive_stale_done_tasks()`.
 
 After setup, assign yourself (and your CTO) to the **HR & Management** department
 — or keep `role = 'admin'` — so billing and user management unlock. Chat and

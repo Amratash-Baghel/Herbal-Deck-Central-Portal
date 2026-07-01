@@ -336,6 +336,45 @@ cache (a few seconds' TTL, `unstable_cache`, etc.) for the same purpose.
 `requireUserManager`, `requireBillingManager`) is unchanged — this is purely an
 internal memoization, not a new API.
 
+## 16. Activity is tracked passively; EOD is the clock-out; deleted tasks stay in history
+
+Three linked decisions behind the reporting system.
+
+**Passive tracking — no clock-in button.**
+
+- **People forget to clock in, and a button measures compliance, not work.** The
+  point is an honest record of when someone was actually working, not a ritual
+  they have to remember. So attendance is a by-product of *using the portal*: the
+  authenticated shell already runs on every navigation, so it stamps the day's
+  `activity_logs` row (first-seen = "arrived", last-seen, pages, count). It's
+  invisible and can't be gamed by clocking in and walking away.
+- **It must add zero friction and zero latency.** The stamp is written via
+  `after()` (after the response is sent), and through a `SECURITY DEFINER`
+  function keyed to `auth.uid()` so nobody can forge another person's attendance.
+
+**EOD submission = the "clock-out" timestamp.**
+
+- **There's already a natural end-of-day action — reuse it.** Rather than a
+  second "I'm leaving" button, the moment someone submits their EOD *is* their
+  leave time (`eod_submitted_at`, set by a trigger). "Active for" = EOD − arrival.
+  If they never submit, we fall back to their last-seen time and flag "No EOD" —
+  which doubles as a gentle accountability signal.
+
+**Deleted tasks leave current counts but stay in EOD history.**
+
+- **A count and a history answer different questions.** "How much is on my board
+  right now?" must reflect reality — a deleted task is gone, so board/pending
+  counts (which read the `tasks` table) drop it immediately. "What did this person
+  do that day?" is about work that happened — and finishing a task then deleting
+  the card doesn't un-happen the work. So EOD/history read the immutable
+  `task_activity` log, which we made **survive deletion** (`task_id` → null, with
+  the title/department denormalised onto the row). One table for "now", one
+  append-only log for "what happened" — each stays correct for its own question.
+- **Archived ≠ deleted.** "Done" tasks auto-archive off the board after 7 days
+  (still in history, recoverable); deletion removes the card entirely (but not its
+  logged history). Keeping the two distinct avoids conflating "finished and filed"
+  with "removed".
+
 ---
 
 ## Summary
@@ -357,3 +396,5 @@ internal memoization, not a new API.
 | Chat realtime   | One RLS-scoped subscription | One stream drives all; no policy recursion |
 | Notifications   | Server-only writes; DMs ping, mentions ping | Unspoofable; notify without spamming |
 | Auth memoization| React `cache()`, request-scoped | Kill duplicate auth calls, zero staleness risk |
+| Activity tracking| Passive; EOD = clock-out | Honest record, no ritual; reuse a natural action |
+| Deleted tasks   | Drop from counts, keep in EOD | "Now" vs "what happened" are different questions |
