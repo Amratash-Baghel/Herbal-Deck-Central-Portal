@@ -172,7 +172,10 @@ export function ChatClient({
         window.history.replaceState(null, "", `/chat?c=${id}`);
       }
       markConversationRead(id);
-      void supabase.rpc("mark_conversation_read", { conv_id: id });
+      supabase.rpc("mark_conversation_read", { conv_id: id }).then(
+        () => {},
+        () => {},
+      );
       setConversations((prev) =>
         prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c)),
       );
@@ -209,7 +212,10 @@ export function ChatClient({
           prev.some((x) => x.id === m.id) ? prev : [...prev, m],
         );
         markConversationRead(m.conversation_id);
-        void supabase.rpc("mark_conversation_read", { conv_id: m.conversation_id });
+        supabase.rpc("mark_conversation_read", { conv_id: m.conversation_id }).then(
+          () => {},
+          () => {},
+        );
       }
 
       if (!convsRef.current.some((c) => c.id === m.conversation_id)) {

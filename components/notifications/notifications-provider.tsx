@@ -37,6 +37,18 @@ function conversationOf(n: Notification): string | null {
 }
 
 /**
+ * Fire a Supabase query builder and forget it. Builders are lazy — the request
+ * is only sent when the thenable is subscribed — so we must call `.then()`;
+ * merely referencing (or `void`-ing) the builder never hits the network.
+ */
+function run(query: PromiseLike<unknown>): void {
+  query.then(
+    () => {},
+    () => {},
+  );
+}
+
+/**
  * Holds the signed-in user's notifications and the single realtime subscription
  * that keeps them live across the whole portal. New rows raise an in-app toast
  * and bump the bell's unread badge. Wraps the authenticated shell so the bell
@@ -71,11 +83,13 @@ export function NotificationsProvider({
             : n,
         ),
       );
-      void supabase
-        .from("notifications")
-        .update({ read_at: new Date().toISOString() })
-        .eq("id", id)
-        .is("read_at", null);
+      run(
+        supabase
+          .from("notifications")
+          .update({ read_at: new Date().toISOString() })
+          .eq("id", id)
+          .is("read_at", null),
+      );
     },
     [supabase],
   );
@@ -85,11 +99,13 @@ export function NotificationsProvider({
     setNotifications((prev) =>
       prev.map((n) => (n.read_at ? n : { ...n, read_at: now })),
     );
-    void supabase
-      .from("notifications")
-      .update({ read_at: now })
-      .eq("recipient_id", userId)
-      .is("read_at", null);
+    run(
+      supabase
+        .from("notifications")
+        .update({ read_at: now })
+        .eq("recipient_id", userId)
+        .is("read_at", null),
+    );
   }, [supabase, userId]);
 
   const markConversationRead = useCallback(
@@ -107,12 +123,14 @@ export function NotificationsProvider({
         return changed ? next : prev;
       });
       // Best-effort DB sync: any unread notification for this conversation.
-      void supabase
-        .from("notifications")
-        .update({ read_at: new Date().toISOString() })
-        .eq("recipient_id", userId)
-        .is("read_at", null)
-        .contains("data", { conversationId });
+      run(
+        supabase
+          .from("notifications")
+          .update({ read_at: new Date().toISOString() })
+          .eq("recipient_id", userId)
+          .is("read_at", null)
+          .contains("data", { conversationId }),
+      );
     },
     [supabase, userId],
   );
@@ -140,7 +158,7 @@ export function NotificationsProvider({
         setNotifications((prev) =>
           prev.some((p) => p.id === n.id) ? prev : [read, ...prev],
         );
-        void supabase.from("notifications").update({ read_at: read.read_at }).eq("id", n.id);
+        run(supabase.from("notifications").update({ read_at: read.read_at }).eq("id", n.id));
         return;
       }
 
