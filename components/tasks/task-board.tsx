@@ -24,6 +24,7 @@ import type { Person, DeptRef } from "@/components/tasks/types";
  */
 export function TaskBoard({
   me,
+  canManage,
   initialTasks,
   people,
   assignable,
@@ -31,6 +32,7 @@ export function TaskBoard({
   allDepartments,
 }: {
   me: Person;
+  canManage: boolean;
   initialTasks: Task[];
   people: Person[];
   assignable: Person[];
@@ -189,6 +191,15 @@ export function TaskBoard({
               <div className="flex flex-1 flex-col gap-3">
                 {items.map((task) => {
                   const dept = deptOf(task.department_id);
+                  // Only the assignee (or a manager) may move a task forward;
+                  // an unassigned task can be moved by whoever owns it here.
+                  const canMove =
+                    canManage ||
+                    task.assigned_to === me.id ||
+                    task.assigned_to === null;
+                  // A task can be assigned once; after that only managers may
+                  // change it.
+                  const canReassign = canManage || task.assigned_to === null;
                   return (
                     <TaskCard
                       key={task.id}
@@ -200,8 +211,10 @@ export function TaskBoard({
                       editable
                       assignable={assignable}
                       onOpen={() => setOpenId(task.id)}
-                      onMove={(s) => void handleMove(task.id, s)}
-                      onAssign={(id) => void handleAssign(task.id, id)}
+                      onMove={canMove ? (s) => void handleMove(task.id, s) : undefined}
+                      onAssign={
+                        canReassign ? (id) => void handleAssign(task.id, id) : undefined
+                      }
                     />
                   );
                 })}
@@ -220,6 +233,7 @@ export function TaskBoard({
         <TaskDetailDialog
           task={openTask}
           editable
+          canReassign={canManage || openTask.assigned_to === null}
           assignable={assignable}
           departments={departments}
           creatorName={nameOf(openTask.created_by) ?? "Someone"}

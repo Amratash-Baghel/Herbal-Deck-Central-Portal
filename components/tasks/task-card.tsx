@@ -81,7 +81,7 @@ export function TaskCard({
 
   return (
     <div
-      draggable={editable}
+      draggable={editable && !!onMove}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", task.id);
         e.dataTransfer.effectAllowed = "move";

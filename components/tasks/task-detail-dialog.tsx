@@ -17,6 +17,7 @@ const labelClass = "text-xs font-medium text-muted-foreground";
 export function TaskDetailDialog({
   task,
   editable,
+  canReassign = true,
   assignable,
   departments,
   creatorName,
@@ -28,6 +29,7 @@ export function TaskDetailDialog({
 }: {
   task: Task;
   editable: boolean;
+  canReassign?: boolean;
   assignable: Person[];
   departments: DeptRef[];
   creatorName: string;
@@ -121,7 +123,7 @@ export function TaskDetailDialog({
               <select
                 id="t-assignee"
                 value={assignedTo}
-                disabled={!editable}
+                disabled={!editable || !canReassign}
                 onChange={(e) => setAssignedTo(e.target.value)}
                 className={inputClass}
               >
@@ -132,6 +134,11 @@ export function TaskDetailDialog({
                   </option>
                 ))}
               </select>
+              {editable && !canReassign && (
+                <p className="text-[11px] text-muted-foreground">
+                  Assigned — only HR/admin can change this.
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <label className={labelClass} htmlFor="t-dept">

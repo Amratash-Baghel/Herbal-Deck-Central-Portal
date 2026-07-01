@@ -125,7 +125,12 @@ export async function createTask(input: CreateTaskInput): Promise<TaskResult> {
   return { ok: true, task: data as Task };
 }
 
-/** Move a task to a new column (status). */
+/**
+ * Move a task to a new column (status). Only the assignee may push a task
+ * forward — the creator can put one in someone's To Do but not move it on for
+ * them. Admins + HR & Management may move anything; an unassigned task may be
+ * moved by whoever has edit access (typically the creator).
+ */
 export async function moveTask(
   taskId: string,
   status: TaskStatus,
@@ -134,6 +139,21 @@ export async function moveTask(
   if (!access) return { ok: false, error: "You are not signed in." };
 
   const supabase = await createClient();
+  const { data: current } = await supabase
+    .from("tasks")
+    .select("assigned_to")
+    .eq("id", taskId)
+    .single();
+  if (!current) return { ok: false, error: "Task not found." };
+
+  const canMove =
+    access.canManageUsers ||
+    current.assigned_to === null ||
+    current.assigned_to === access.profile.id;
+  if (!canMove) {
+    return { ok: false, error: "Only the assignee can move this task." };
+  }
+
   const { data, error } = await supabase
     .from("tasks")
     .update({ status })
@@ -166,6 +186,14 @@ export async function updateTask(
 
   const supabase = await createClient();
 
+  // Load the current row so we can enforce the "assign once" rule.
+  const { data: current } = await supabase
+    .from("tasks")
+    .select("assigned_to")
+    .eq("id", taskId)
+    .single();
+  if (!current) return { ok: false, error: "Task not found." };
+
   const patch: Record<string, unknown> = {};
   if (input.title !== undefined) {
     const t = input.title.trim();
@@ -175,7 +203,18 @@ export async function updateTask(
   if (input.description !== undefined) {
     patch.description = input.description?.trim() || null;
   }
-  if (input.assignedTo !== undefined) patch.assigned_to = input.assignedTo;
+  if (input.assignedTo !== undefined) {
+    const changing =
+      (current.assigned_to ?? null) !== (input.assignedTo ?? null);
+    // A task can be assigned once; after that only admins + HR can change it.
+    if (changing && current.assigned_to !== null && !access.canManageUsers) {
+      return {
+        ok: false,
+        error: "Only HR or admin can change who a task is assigned to.",
+      };
+    }
+    patch.assigned_to = input.assignedTo;
+  }
   if (input.deadline !== undefined) patch.deadline = input.deadline || null;
   if (input.departmentId !== undefined) {
     if (!access.isAdmin) {
@@ -231,11 +270,22 @@ export async function archiveTask(taskId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
-/** Delete a task outright (creator or manager, enforced by RLS). */
+/** Delete a task — only its creator, never anyone else's (enforced by RLS too). */
 export async function deleteTask(taskId: string): Promise<ActionResult> {
   const access = await getUserAccess();
   if (!access) return { ok: false, error: "You are not signed in." };
   const supabase = await createClient();
+
+  const { data: current } = await supabase
+    .from("tasks")
+    .select("created_by")
+    .eq("id", taskId)
+    .single();
+  if (!current) return { ok: false, error: "Task not found." };
+  if (current.created_by !== access.profile.id) {
+    return { ok: false, error: "You can only delete tasks you created." };
+  }
+
   const { error } = await supabase.from("tasks").delete().eq("id", taskId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/tasks");

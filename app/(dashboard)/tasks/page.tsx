@@ -42,11 +42,28 @@ export default async function TasksPage() {
   const allDepartments: DeptRef[] = (allDepts ?? []) as DeptRef[];
   const myDepartments = allDepartments.filter((d) => myDeptIds.includes(d.id));
 
-  // Anyone on the team can be assigned a task (the database still controls who
-  // can edit/see each one). Keeping the picker to the full active roster avoids
-  // dead-ends where a small or single-member department leaves nobody to assign.
   const people = ((profs ?? []) as ProfileRow[]).map(toPerson);
-  const assignable = people;
+
+  // Admins + HR & Management can assign to anyone; everyone else to people in
+  // their own department(s) (plus themselves).
+  const canManage =
+    profile.role === "admin" ||
+    myDepartments.some((d) => d.slug === "hr-management");
+
+  let assignable: Person[];
+  if (canManage) {
+    assignable = people;
+  } else {
+    const ids = new Set<string>([me]);
+    if (myDeptIds.length > 0) {
+      const { data: memberRows } = await supabase
+        .from("profile_departments")
+        .select("profile_id")
+        .in("department_id", myDeptIds);
+      for (const r of memberRows ?? []) ids.add(r.profile_id as string);
+    }
+    assignable = people.filter((p) => ids.has(p.id));
+  }
 
   return (
     <>
@@ -56,6 +73,7 @@ export default async function TasksPage() {
       />
       <TaskBoard
         me={toPerson(profile)}
+        canManage={canManage}
         initialTasks={(taskRows ?? []) as Task[]}
         people={people}
         assignable={assignable}
