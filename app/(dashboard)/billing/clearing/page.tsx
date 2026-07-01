@@ -7,7 +7,8 @@ import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { InvoiceManageActions } from "@/components/invoice-manage-actions";
 import { InvoiceSearch } from "@/components/invoice-search";
 import { formatMoney, type CurrencyCode } from "@/lib/money";
-import type { Invoice, InvoiceStatus } from "@/lib/types";
+import { time } from "@/lib/perf";
+import { INVOICE_LIST_COLUMNS, type Invoice, type InvoiceStatus } from "@/lib/types";
 
 type Named = { id: string; name: string };
 type Search = { status?: string; dept?: string; q?: string; sort?: string };
@@ -65,11 +66,16 @@ export default async function ClearingPage({
   };
 
   const supabase = await createClient();
-  const [invoiceRes, deptRes, catRes] = await Promise.all([
-    supabase.from("invoices").select("*").order("created_at", { ascending: false }),
-    supabase.from("departments").select("id, name").order("name"),
-    supabase.from("invoice_categories").select("id, name"),
-  ]);
+  const [invoiceRes, deptRes, catRes] = await time("billing/clearing:list+depts+cats", () =>
+    Promise.all([
+      supabase
+        .from("invoices")
+        .select(INVOICE_LIST_COLUMNS)
+        .order("created_at", { ascending: false }),
+      supabase.from("departments").select("id, name").order("name"),
+      supabase.from("invoice_categories").select("id, name"),
+    ]),
+  );
 
   const all = (invoiceRes.data as Invoice[]) ?? [];
   const departments = (deptRes.data as Named[]) ?? [];
@@ -129,17 +135,20 @@ export default async function ClearingPage({
     (profilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
   );
 
+  // One batched call for every attached file instead of one per invoice.
+  const withFiles = invoices.filter((i) => i.file_path);
   const signedUrl = new Map<string, string>();
-  await Promise.all(
-    invoices
-      .filter((i) => i.file_path)
-      .map(async (i) => {
-        const { data } = await admin.storage
-          .from("invoices")
-          .createSignedUrl(i.file_path as string, 3600);
-        if (data?.signedUrl) signedUrl.set(i.id, data.signedUrl);
-      }),
-  );
+  if (withFiles.length > 0) {
+    const { data: signed } = await time("billing/clearing:signed-urls", () =>
+      admin.storage.from("invoices").createSignedUrls(
+        withFiles.map((i) => i.file_path as string),
+        3600,
+      ),
+    );
+    signed?.forEach((s, idx) => {
+      if (s.signedUrl) signedUrl.set(withFiles[idx].id, s.signedUrl);
+    });
+  }
 
   const statusCount = (s: InvoiceStatus) => all.filter((i) => i.status === s).length;
   const allCount = all.length;

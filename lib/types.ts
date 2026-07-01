@@ -73,6 +73,17 @@ export interface Invoice {
 }
 
 /**
+ * Columns actually read by the billing pages (post/clearing/analytics),
+ * deliberately excluding `document` (a jsonb blob from an earlier design that
+ * posting no longer writes — nothing in the UI reads it) and `description` /
+ * `due_date` (unused fields on this table). Selecting this list instead of
+ * `select("*")` keeps invoice queries light as the table grows, without
+ * changing what any page shows.
+ */
+export const INVOICE_LIST_COLUMNS =
+  "id, invoice_number, created_by, department_id, category_id, vendor_name, amount, currency, issue_date, file_path, status, cleared_by, cleared_at, reason, created_at";
+
+/**
  * A one-off payment from the "Petty Cash" ledger (`public.misc_payments`) —
  * HR & Management only. Simple by design: who it was paid to, why, and how
  * much (always INR).
@@ -173,6 +184,14 @@ export interface Task {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * Columns the task board/list/reporting UI actually reads. Excludes
+ * `updated_at`, which nothing in the app displays — every task query selects
+ * this instead of `select("*")`.
+ */
+export const TASK_LIST_COLUMNS =
+  "id, title, description, status, created_by, assigned_to, department_id, deadline, archived, completed_at, created_at";
 
 /** An append-only activity row from `public.task_activity` (powers EOD). */
 export interface TaskActivity {

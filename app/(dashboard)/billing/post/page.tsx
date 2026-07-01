@@ -6,7 +6,8 @@ import { PostInvoiceForm } from "@/components/post-invoice-form";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { InvoiceManageActions } from "@/components/invoice-manage-actions";
 import { formatMoney, type CurrencyCode } from "@/lib/money";
-import type { Invoice } from "@/lib/types";
+import { time } from "@/lib/perf";
+import { INVOICE_LIST_COLUMNS, type Invoice } from "@/lib/types";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -29,18 +30,20 @@ export default async function PostInvoicePage() {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [deptRes, catRes, mineRes] = await Promise.all([
-    supabase
-      .from("profile_departments")
-      .select("departments(id, name)")
-      .eq("profile_id", profile.id),
-    supabase.from("invoice_categories").select("id, name").order("name"),
-    supabase
-      .from("invoices")
-      .select("*")
-      .eq("created_by", profile.id)
-      .order("created_at", { ascending: false }),
-  ]);
+  const [deptRes, catRes, mineRes] = await time("billing/post:depts+cats+mine", () =>
+    Promise.all([
+      supabase
+        .from("profile_departments")
+        .select("departments(id, name)")
+        .eq("profile_id", profile.id),
+      supabase.from("invoice_categories").select("id, name").order("name"),
+      supabase
+        .from("invoices")
+        .select(INVOICE_LIST_COLUMNS)
+        .eq("created_by", profile.id)
+        .order("created_at", { ascending: false }),
+    ]),
+  );
 
   // FK embeds come back as one row but are typed as arrays — normalise.
   const departments: Named[] = ((deptRes.data ?? []) as Array<{
@@ -55,19 +58,22 @@ export default async function PostInvoicePage() {
   const mine = (mineRes.data as Invoice[]) ?? [];
   const deptName = new Map(departments.map((d) => [d.id, d.name]));
 
-  // Signed URLs for any attached files.
+  // Signed URLs for any attached files — one batched call instead of one
+  // network round trip per file.
   const admin = createAdminClient();
+  const withFiles = mine.filter((i) => i.file_path);
   const signedUrl = new Map<string, string>();
-  await Promise.all(
-    mine
-      .filter((i) => i.file_path)
-      .map(async (i) => {
-        const { data } = await admin.storage
-          .from("invoices")
-          .createSignedUrl(i.file_path as string, 3600);
-        if (data?.signedUrl) signedUrl.set(i.id, data.signedUrl);
-      }),
-  );
+  if (withFiles.length > 0) {
+    const { data: signed } = await time("billing/post:signed-urls", () =>
+      admin.storage.from("invoices").createSignedUrls(
+        withFiles.map((i) => i.file_path as string),
+        3600,
+      ),
+    );
+    signed?.forEach((s, idx) => {
+      if (s.signedUrl) signedUrl.set(withFiles[idx].id, s.signedUrl);
+    });
+  }
 
   return (
     <>

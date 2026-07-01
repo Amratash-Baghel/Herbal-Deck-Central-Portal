@@ -1,12 +1,24 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
 /**
- * Returns the signed-in user's profile, or null if not signed in / no profile.
- * Safe to call from any Server Component.
+ * Fetches the raw profile row for the signed-in user (or null), including
+ * deactivated accounts — callers decide how to treat that.
+ *
+ * Wrapped in React's `cache()` so that within a single request/render pass,
+ * calling this any number of times — once from the shared dashboard layout,
+ * again from a page's `requireProfile()`/`getUserAccess()`, again from a
+ * nested component — issues the underlying `auth.getUser()` + `profiles`
+ * query exactly ONCE. Without this, every navigation was re-running the same
+ * auth check two or three times (layout + page + any extra caller), which was
+ * the single biggest contributor to the delay between clicking a link and the
+ * next page rendering. This does not cache across requests/users — React's
+ * `cache()` scope is one render pass, so every navigation still gets a fresh,
+ * fully-verified session check.
  */
-export async function getProfile(): Promise<Profile | null> {
+const fetchProfileRow = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient();
 
   const {
@@ -21,7 +33,15 @@ export async function getProfile(): Promise<Profile | null> {
     .eq("id", user.id)
     .single();
 
-  const row = (profile as Profile) ?? null;
+  return (profile as Profile) ?? null;
+});
+
+/**
+ * Returns the signed-in user's profile, or null if not signed in / no profile.
+ * Safe to call from any Server Component.
+ */
+export async function getProfile(): Promise<Profile | null> {
+  const row = await fetchProfileRow();
   // A deactivated (soft-removed) employee has no access.
   if (!row || row.deactivated_at) return null;
   return row;
@@ -63,29 +83,14 @@ export interface UserAccess {
   canManageBilling: boolean;
 }
 
-export async function getUserAccess(): Promise<UserAccess | null> {
+/** The department slugs a profile belongs to. Cached per-request per user id. */
+const fetchDepartmentSlugs = cache(async (userId: string): Promise<string[]> => {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
-  const { data: profileRow } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  if (!profileRow) return null;
-  const profile = profileRow as Profile;
-  if (profile.deactivated_at) return null;
 
   const { data: memberships } = await supabase
     .from("profile_departments")
     .select("departments(slug)")
-    .eq("profile_id", user.id);
+    .eq("profile_id", userId);
 
   // A foreign-key embed returns a single related row at runtime, though the
   // generated types model it as an array — handle both shapes defensively.
@@ -93,13 +98,26 @@ export async function getUserAccess(): Promise<UserAccess | null> {
   const membershipRows = (memberships ?? []) as Array<{
     departments: SlugRow | SlugRow[] | null;
   }>;
-  const departmentSlugs = membershipRows
+  return membershipRows
     .map((m) => {
       const d = m.departments;
       if (!d) return undefined;
       return Array.isArray(d) ? d[0]?.slug : d.slug;
     })
     .filter((s): s is string => Boolean(s));
+});
+
+/**
+ * Resolves the signed-in user's access. Cached per-request (see
+ * `fetchProfileRow` above) — the dashboard layout, individual pages, and any
+ * guard (`requireUserManager`, `requireBillingManager`) all share one result.
+ */
+export const getUserAccess = cache(async (): Promise<UserAccess | null> => {
+  const row = await fetchProfileRow();
+  if (!row || row.deactivated_at) return null;
+  const profile = row;
+
+  const departmentSlugs = await fetchDepartmentSlugs(profile.id);
 
   const isAdmin = profile.role === "admin";
   const isHrManagement = departmentSlugs.includes("hr-management");
@@ -113,7 +131,7 @@ export async function getUserAccess(): Promise<UserAccess | null> {
     canManageUsers: canManage,
     canManageBilling: canManage,
   };
-}
+});
 
 /**
  * Gates pages/actions that require staff- or billing-management authority

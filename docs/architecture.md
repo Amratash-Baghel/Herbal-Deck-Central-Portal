@@ -87,6 +87,8 @@ lib/                      # Non-visual logic and configuration
     middleware.ts         # updateSession(): session refresh + route guard
   auth.ts                 # getProfile / requireProfile / requireAdmin /
                           #   getUserAccess / requireUserManager / requireBillingManager
+                          #   (request-memoized via React cache() — see "Performance")
+  perf.ts                 # time(): logs how long a page's data loading took
   notifications.ts        # notifyUsers / getManagementUserIds (server, service-role)
   invoice-pdf.ts          # builds the invoice PDF (jsPDF); dispatches to a template
   invoice-templates.ts    # the eight invoice templates
@@ -158,6 +160,30 @@ Membership checks for chat (`is_conversation_participant`,
 `is_conversation_admin`) are `SECURITY DEFINER` SQL functions, mirroring the
 `is_admin()` pattern: a policy that queried the participants table directly would
 recurse, so the helpers read it without re-triggering RLS.
+
+## Performance
+
+Every route lives under the same authenticated shell (`app/(dashboard)/layout.tsx`),
+so its auth check runs on every navigation — by design, for security. Two
+conventions keep that from being paid for twice:
+
+- **Request-scoped memoization.** `lib/auth.ts`'s helpers (`getProfile`,
+  `getUserAccess`, and everything built on them) are wrapped in React's
+  `cache()`. The layout resolves access once; if a page's own guard
+  (`requireProfile()`, `requireBillingManager()`, …) calls the same underlying
+  function again, it reuses that request's result instead of re-querying. This
+  is scoped to a single render pass — every navigation still gets a fully fresh
+  check — it just stops the *same* navigation from checking twice.
+- **Select only what's rendered.** Pages select an explicit column list rather
+  than `select("*")` wherever a table has columns the UI doesn't use (see
+  `INVOICE_LIST_COLUMNS` / `TASK_LIST_COLUMNS` in `lib/types.ts`). Bulk
+  per-row work (like invoice signed URLs) uses Storage's batched
+  `createSignedUrls()` instead of one request per row.
+
+`lib/perf.ts` wraps a page's data-loading step in `time(label, fn)`, logging how
+long it took — visible in Vercel's Runtime Logs, no extra service required.
+`@vercel/speed-insights` is mounted in the root layout for real per-page Core
+Web Vitals (enable "Speed Insights" once in the Vercel project settings).
 
 ## Theming
 

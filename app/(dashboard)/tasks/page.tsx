@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { TaskBoard } from "@/components/tasks/task-board";
 import type { Person, DeptRef } from "@/components/tasks/types";
-import type { Task } from "@/lib/types";
+import { time } from "@/lib/perf";
+import { TASK_LIST_COLUMNS, type Task } from "@/lib/types";
 
 type ProfileRow = { id: string; full_name: string | null; email: string };
 const toPerson = (p: ProfileRow): Person => ({
@@ -22,21 +23,23 @@ export default async function TasksPage() {
   const me = profile.id;
 
   const [{ data: pdRows }, { data: allDepts }, { data: profs }, { data: taskRows }] =
-    await Promise.all([
-      supabase.from("profile_departments").select("department_id").eq("profile_id", me),
-      supabase.from("departments").select("id, name, slug").order("name"),
-      supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .is("deactivated_at", null)
-        .order("full_name", { nullsFirst: false }),
-      supabase
-        .from("tasks")
-        .select("*")
-        .or(`created_by.eq.${me},assigned_to.eq.${me}`)
-        .eq("archived", false)
-        .order("created_at", { ascending: false }),
-    ]);
+    await time("tasks:board-queries", () =>
+      Promise.all([
+        supabase.from("profile_departments").select("department_id").eq("profile_id", me),
+        supabase.from("departments").select("id, name, slug").order("name"),
+        supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .is("deactivated_at", null)
+          .order("full_name", { nullsFirst: false }),
+        supabase
+          .from("tasks")
+          .select(TASK_LIST_COLUMNS)
+          .or(`created_by.eq.${me},assigned_to.eq.${me}`)
+          .eq("archived", false)
+          .order("created_at", { ascending: false }),
+      ]),
+    );
 
   const myDeptIds = (pdRows ?? []).map((r) => r.department_id as string);
   const allDepartments: DeptRef[] = (allDepts ?? []) as DeptRef[];

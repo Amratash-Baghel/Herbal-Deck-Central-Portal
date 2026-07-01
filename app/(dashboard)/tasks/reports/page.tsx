@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { EodNoteForm } from "@/components/tasks/eod-note-form";
 import { localDateISO } from "@/lib/time";
+import { time } from "@/lib/perf";
 import type { EodReport, EodSummary } from "@/lib/types";
 
 type ProfileRow = { id: string; full_name: string | null; email: string };
@@ -52,33 +53,35 @@ export default async function ReportsPage() {
     { data: overview },
     { data: recent },
     { data: profs },
-  ] = await Promise.all([
-    supabase.rpc("eod_summary", { emp: me, d: today }),
-    supabase
-      .from("tasks")
-      .select("id, title")
-      .eq("assigned_to", me)
-      .neq("status", "done")
-      .eq("archived", false)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("eod_reports")
-      .select("*")
-      .eq("employee_id", me)
-      .eq("report_date", today)
-      .maybeSingle(),
-    supabase.rpc("eod_overview", { d: today }),
-    supabase
-      .from("eod_reports")
-      .select("*")
-      .order("report_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(50),
-    supabase
-      .from("profiles")
-      .select("id, full_name, email")
-      .is("deactivated_at", null),
-  ]);
+  ] = await time("tasks/reports:all-queries", () =>
+    Promise.all([
+      supabase.rpc("eod_summary", { emp: me, d: today }),
+      supabase
+        .from("tasks")
+        .select("id, title")
+        .eq("assigned_to", me)
+        .neq("status", "done")
+        .eq("archived", false)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("eod_reports")
+        .select("*")
+        .eq("employee_id", me)
+        .eq("report_date", today)
+        .maybeSingle(),
+      supabase.rpc("eod_overview", { d: today }),
+      supabase
+        .from("eod_reports")
+        .select("*")
+        .order("report_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(50),
+      supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .is("deactivated_at", null),
+    ]),
+  );
 
   const mine: EodSummary = (summaryData as EodSummary | null) ?? ZERO;
   const myPending = (pendingData ?? []) as { id: string; title: string }[];

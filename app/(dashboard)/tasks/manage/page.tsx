@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { TaskList } from "@/components/tasks/task-list";
 import { localDateISO, isoDaysAgo } from "@/lib/time";
-import type { Task } from "@/lib/types";
+import { time } from "@/lib/perf";
+import { TASK_LIST_COLUMNS, type Task } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
 
 type ProfileRow = { id: string; full_name: string | null; email: string };
@@ -44,22 +45,24 @@ export default async function ManageTasksPage() {
     { data: overview },
     { data: profs },
     { data: depts },
-  ] = await Promise.all([
-    supabase.from("tasks").select("*").eq("archived", false),
-    supabase
-      .from("task_activity")
-      .select("actor_id, created_at")
-      .eq("action", "status_changed")
-      .eq("to_status", "done")
-      .gte("created_at", weekAgo),
-    supabase.rpc("eod_overview", { d: today }),
-    supabase
-      .from("profiles")
-      .select("id, full_name, email")
-      .is("deactivated_at", null)
-      .order("full_name", { nullsFirst: false }),
-    supabase.from("departments").select("id, name, slug").order("name"),
-  ]);
+  ] = await time("tasks/manage:all-queries", () =>
+    Promise.all([
+      supabase.from("tasks").select(TASK_LIST_COLUMNS).eq("archived", false),
+      supabase
+        .from("task_activity")
+        .select("actor_id, created_at")
+        .eq("action", "status_changed")
+        .eq("to_status", "done")
+        .gte("created_at", weekAgo),
+      supabase.rpc("eod_overview", { d: today }),
+      supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .is("deactivated_at", null)
+        .order("full_name", { nullsFirst: false }),
+      supabase.from("departments").select("id, name, slug").order("name"),
+    ]),
+  );
 
   const tasks = (tasksData ?? []) as Task[];
   const people = ((profs ?? []) as ProfileRow[]).map(toPerson);

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/sidebar";
 import { NotificationsProvider } from "@/components/notifications/notifications-provider";
 import { NotificationToaster } from "@/components/notifications/notification-toaster";
+import { time } from "@/lib/perf";
 import type { Notification } from "@/lib/types";
 
 /**
@@ -21,16 +22,18 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const access = await getUserAccess();
+  const access = await time("layout:getUserAccess", () => getUserAccess());
   if (!access) redirect("/login");
 
   const supabase = await createClient();
-  const { data: notifications } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("recipient_id", access.profile.id)
-    .order("created_at", { ascending: false })
-    .limit(30);
+  const { data: notifications } = await time("layout:notifications", () =>
+    supabase
+      .from("notifications")
+      .select("id, type, title, body, link, data, read_at, created_at")
+      .eq("recipient_id", access.profile.id)
+      .order("created_at", { ascending: false })
+      .limit(30),
+  );
 
   return (
     <NotificationsProvider

@@ -5,7 +5,11 @@ import { PettyCashForm } from "@/components/petty-cash-form";
 import { PettyCashList } from "@/components/petty-cash-list";
 import { formatMoney } from "@/lib/money";
 import { localDateISO, isoDaysAgo } from "@/lib/time";
+import { time } from "@/lib/perf";
 import type { MiscPayment } from "@/lib/types";
+
+/** Columns the KPIs, trend, and list actually use — see `MiscPayment`. */
+const PETTY_CASH_COLUMNS = "id, paid_to, description, amount, created_at";
 
 function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -38,11 +42,13 @@ export default async function PettyCashPage() {
   await requireBillingManager();
 
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("misc_payments")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(500);
+  const { data } = await time("billing/petty-cash:list", () =>
+    supabase
+      .from("misc_payments")
+      .select(PETTY_CASH_COLUMNS)
+      .order("created_at", { ascending: false })
+      .limit(500),
+  );
   const entries = (data ?? []) as MiscPayment[];
 
   const today = localDateISO();

@@ -2,7 +2,8 @@ import { requireBillingManager } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { formatMoney, type CurrencyCode } from "@/lib/money";
-import type { Invoice } from "@/lib/types";
+import { time } from "@/lib/perf";
+import { INVOICE_LIST_COLUMNS, type Invoice } from "@/lib/types";
 
 // Totals are summed in the company's base currency (see note in the UI).
 const BASE: CurrencyCode = "INR";
@@ -77,11 +78,13 @@ export default async function AnalyticsPage() {
   await requireBillingManager();
 
   const supabase = await createClient();
-  const [invoiceRes, deptRes, catRes] = await Promise.all([
-    supabase.from("invoices").select("*"),
-    supabase.from("departments").select("id, name").order("name"),
-    supabase.from("invoice_categories").select("id, name").order("name"),
-  ]);
+  const [invoiceRes, deptRes, catRes] = await time("billing/analytics:list+depts+cats", () =>
+    Promise.all([
+      supabase.from("invoices").select(INVOICE_LIST_COLUMNS),
+      supabase.from("departments").select("id, name").order("name"),
+      supabase.from("invoice_categories").select("id, name").order("name"),
+    ]),
+  );
 
   const all = (invoiceRes.data as Invoice[]) ?? [];
   const departments = (deptRes.data as { id: string; name: string }[]) ?? [];

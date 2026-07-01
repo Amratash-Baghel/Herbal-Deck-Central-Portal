@@ -17,7 +17,10 @@ export default async function EmployeesPage() {
   const supabase = await createClient();
 
   const [usersRes, deptRes, membRes] = await Promise.all([
-    supabase.from("profiles").select("*").order("created_at", { ascending: true }),
+    supabase
+      .from("profiles")
+      .select("id, email, full_name, role, deactivated_at")
+      .order("created_at", { ascending: true }),
     supabase.from("departments").select("*").order("name", { ascending: true }),
     supabase.from("profile_departments").select("profile_id, department_id"),
   ]);

@@ -303,6 +303,39 @@ people @mentioned**.
 owns the single subscription and shares state with the sidebar bell and the
 toaster. See `supabase/migrations/0005_chat_and_notifications.sql`.
 
+## 15. Request-scoped memoization for auth, not a data cache
+
+**Decision:** Wrap `lib/auth.ts`'s helpers in React's `cache()` so the
+underlying `auth.getUser()` + `profiles` query runs at most once per
+navigation, however many places call them — rather than adding a time-based
+cache (a few seconds' TTL, `unstable_cache`, etc.) for the same purpose.
+
+**Why:**
+
+- **The actual problem was duplication, not staleness.** Every route sits under
+  the same authenticated shell, so its layout resolves access on every
+  navigation — correctly, since re-verifying the session on each request is a
+  security property, not overhead to remove (see decision 5). The real issue
+  was that most pages *also* called their own guard (`requireProfile()`,
+  `requireBillingManager()`, …), independently repeating the identical
+  `auth.getUser()` network call and `profiles` lookup the layout had just made
+  — noticeable specifically as the delay between clicking a link and the next
+  page appearing, since two or three redundant auth round trips ran before the
+  page could even start its own queries.
+- **A TTL-based cache would trade a real bug for a subtler one.** Caching the
+  session for even a few seconds means a just-deactivated or just-demoted
+  employee could keep acting on stale authority until it expires — unacceptable
+  for a permission system whose whole design is "verify on every request."
+  React's `cache()` has no such window: its scope is one render pass, so the
+  *next* navigation is a fully fresh check. It only prevents the *same*
+  navigation from asking the same question twice.
+
+**Implementation:** `fetchProfileRow`, `fetchDepartmentSlugs`, and
+`getUserAccess` are wrapped in `cache()` from `react`. Every existing signature
+(`getProfile`, `requireProfile`, `requireAdmin`, `getUserAccess`,
+`requireUserManager`, `requireBillingManager`) is unchanged — this is purely an
+internal memoization, not a new API.
+
 ---
 
 ## Summary
@@ -323,3 +356,4 @@ toaster. See `supabase/migrations/0005_chat_and_notifications.sql`.
 | Employee removal| Soft deactivation | Preserve audit trail (FK restrict); reversible |
 | Chat realtime   | One RLS-scoped subscription | One stream drives all; no policy recursion |
 | Notifications   | Server-only writes; DMs ping, mentions ping | Unspoofable; notify without spamming |
+| Auth memoization| React `cache()`, request-scoped | Kill duplicate auth calls, zero staleness risk |

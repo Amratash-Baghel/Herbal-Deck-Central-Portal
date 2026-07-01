@@ -5,6 +5,53 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] — 2026-06-30
+
+Performance pass across the whole portal — no functional changes, only speed.
+
+### Fixed
+
+- **Duplicate auth checks on every navigation.** The shared dashboard layout
+  resolves the signed-in user's access (`getUserAccess()`), and nearly every
+  page ALSO called its own guard (`requireProfile()`, `requireBillingManager()`,
+  etc.) — each one independently re-running `auth.getUser()` (a real network
+  call to Supabase Auth) plus the `profiles` lookup. That's why the delay was
+  felt specifically *between clicking a link and the next page appearing*: the
+  same session check was running two or three times before the page could even
+  start its own data queries. Fixed by wrapping the auth helpers in
+  (`lib/auth.ts`) so the underlying calls run at most once per navigation, no
+  matter how many places call them — a straightforward request-scoped memoization,
+  not a cache with any staleness risk (every navigation still gets a fresh check).
+- **One Storage API call per file → one batched call.** Generating "view PDF"
+  links for posted invoices was firing one `createSignedUrl()` request per
+  attached file, in parallel. `/billing/clearing` and `/billing/post` now use
+  Storage's batched `createSignedUrls()` — one network round trip for every
+  file on the page instead of one per file.
+
+### Changed
+
+- **Trimmed over-fetching.** Several list queries used `select("*")` and pulled
+  back columns nothing renders — most notably `invoices.document`, a jsonb blob
+  left over from an earlier design that posting no longer writes. Billing
+  (post/clearing/analytics), Tasks (board/team/manage), Employee Management, and
+  Petty Cash now select only the columns their pages actually use.
+- **Added indexes for query patterns that weren't covered.** Migration `0008`
+  adds four indexes tied to specific queries: `task_activity(action, to_status,
+  created_at)` for the Manage dashboard's weekly-completions count,
+  `eod_reports(report_date desc, created_at desc)` for the site-wide recent-
+  reports list and the EOD-reminder cron, and `created_at` indexes on
+  `misc_payments` and `invoices` for their date-ordered lists.
+
+### Added
+
+- **Lightweight performance monitoring.** `lib/perf.ts` wraps a page's data
+  loading in a `time()` call that logs duration — visible in Vercel's Runtime
+  Logs, searchable by route, no new infrastructure. Anything slower than 400ms
+  logs as a warning so it's easy to spot. Wired into every page that talks to
+  the database. `@vercel/speed-insights` is also now in the root layout for
+  real Core Web Vitals per page (needs "Speed Insights" turned on once in the
+  Vercel project settings).
+
 ## [0.6.2] — 2026-06-30
 
 ### Added

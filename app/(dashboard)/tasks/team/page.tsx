@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { TaskList } from "@/components/tasks/task-list";
 import { localDateISO } from "@/lib/time";
-import type { Task } from "@/lib/types";
+import { TASK_LIST_COLUMNS, type Task } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
 
 type ProfileRow = { id: string; full_name: string | null; email: string };
@@ -40,7 +40,7 @@ export default async function TeamTasksPage() {
   if (myDeptIds.length > 0) {
     const { data } = await supabase
       .from("tasks")
-      .select("*")
+      .select(TASK_LIST_COLUMNS)
       .in("department_id", myDeptIds)
       .eq("archived", false);
     tasks = (data ?? []) as Task[];

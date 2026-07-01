@@ -2,6 +2,7 @@ import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { ChatClient } from "@/components/chat/chat-client";
+import { time } from "@/lib/perf";
 import type { DirectoryEntry, ConversationSummary } from "@/components/chat/types";
 import type { Conversation, ConversationType, Profile } from "@/lib/types";
 
@@ -22,10 +23,12 @@ export default async function ChatPage({
   const meId = profile.id;
 
   // Company directory (names for labels + the people pickers).
-  const { data: people } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, deactivated_at")
-    .order("full_name", { nullsFirst: false });
+  const { data: people } = await time("chat:directory", () =>
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, deactivated_at")
+      .order("full_name", { nullsFirst: false }),
+  );
   const directory: DirectoryEntry[] = (people ?? []).map((p) => {
     const row = p as Pick<Profile, "id" | "full_name" | "email" | "deactivated_at">;
     return {
@@ -49,14 +52,16 @@ export default async function ChatPage({
   let conversations: ConversationSummary[] = [];
   if (convIds.length > 0) {
     const [{ data: convRows }, { data: allParts }, { data: unread }] =
-      await Promise.all([
-        supabase.from("conversations").select("*").in("id", convIds),
-        supabase
-          .from("conversation_participants")
-          .select("conversation_id, profile_id")
-          .in("conversation_id", convIds),
-        supabase.rpc("unread_counts"),
-      ]);
+      await time("chat:conversations+participants+unread", () =>
+        Promise.all([
+          supabase.from("conversations").select("*").in("id", convIds),
+          supabase
+            .from("conversation_participants")
+            .select("conversation_id, profile_id")
+            .in("conversation_id", convIds),
+          supabase.rpc("unread_counts"),
+        ]),
+      );
 
     const participantsByConv = new Map<string, string[]>();
     for (const row of allParts ?? []) {
