@@ -27,7 +27,6 @@ export async function createPostedInvoice(
   if (!access) return { error: "You are not signed in.", success: null };
 
   const vendorName = String(formData.get("vendor_name") ?? "").trim();
-  const invoiceNumber = String(formData.get("invoice_number") ?? "").trim();
   const departmentId = String(formData.get("department_id") ?? "");
   const categoryId = String(formData.get("category_id") ?? "") || null;
   const reason = String(formData.get("reason") ?? "").trim();
@@ -37,7 +36,6 @@ export async function createPostedInvoice(
   const file = formData.get("file");
 
   if (!vendorName) return { error: "Enter the service provider's name.", success: null };
-  if (!invoiceNumber) return { error: "Enter the invoice number.", success: null };
   if (!departmentId) return { error: "Choose a department.", success: null };
   if (!reason) return { error: "Add a short reason for posting.", success: null };
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -62,7 +60,7 @@ export async function createPostedInvoice(
   const { data: inserted, error } = await supabase
     .from("invoices")
     .insert({
-      invoice_number: invoiceNumber,
+      // invoice_number is assigned by the database (default → next_invoice_number()).
       created_by: access.profile.id,
       department_id: departmentId,
       category_id: categoryId,

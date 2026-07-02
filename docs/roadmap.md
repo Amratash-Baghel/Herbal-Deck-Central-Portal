@@ -86,10 +86,11 @@ restore, preserving history). *(0.2.0, enhanced in 0.4.0.)*
 Built as three separate tools (see "The billing module" in the project README):
 
 - **Generate** ✅ — invoice generator: form → branded PDF, **eight templates**,
-  fixed Herbal Deck bill-to, auto number/date, payment-details block. Rendered
-  client-side; download only.
+  fixed Herbal Deck bill-to, auto date, optional invoice number, payment-details
+  block. Rendered client-side; download only.
 - **Post** ✅ — record an invoice into tracking (provider, amount, department,
-  reason, optional PDF upload).
+  reason, optional PDF upload). The official sequential invoice number is
+  assigned automatically at this step.
 - **Clear** ✅ — admins + HR & Management: department panels, status views
   (pending / cleared / rejected), search, sort; clear / reject / upload signed
   copy, with clearer tracking. *(Generate/Post/Clear released as 0.3.0.)*

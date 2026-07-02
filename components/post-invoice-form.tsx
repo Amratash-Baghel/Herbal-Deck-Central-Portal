@@ -67,15 +67,10 @@ export function PostInvoiceForm({
           <input id="vendor_name" name="vendor_name" required className={inputClass} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className={labelClass} htmlFor="invoice_number">
-            Invoice number
-          </label>
-          <input
-            id="invoice_number"
-            name="invoice_number"
-            required
-            className={inputClass}
-          />
+          <label className={labelClass}>Invoice number</label>
+          <div className="flex h-[38px] items-center rounded-xl border border-dashed bg-muted/40 px-3 text-sm text-muted-foreground">
+            Assigned automatically when posted
+          </div>
         </div>
 
         <div className="flex flex-col gap-1.5">

@@ -5,6 +5,18 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] — 2026-06-30
+
+### Changed
+
+- **Invoice numbers are assigned at posting, not generation.** The generator no
+  longer invents a number (that spent a number on every PDF, including ones never
+  filed) — its invoice-number field is now optional. The **official, sequential
+  number is assigned by the database when an invoice is posted** (`HD-00001`,
+  `HD-00002`, …), so numbers are only used for invoices that are actually
+  tracked. Migration `0011_auto_invoice_number.sql` adds the sequence + a column
+  default; the posting form no longer asks for a number.
+
 ## [0.7.0] — 2026-06-30
 
 A major expansion of Tasks & Reporting: passive activity tracking, a manager

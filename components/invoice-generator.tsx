@@ -22,14 +22,6 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function suggestNumber(): string {
-  const now = new Date();
-  const yy = String(now.getFullYear()).slice(2);
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const rand = Math.floor(100 + Math.random() * 900);
-  return `HD-${yy}${mm}-${rand}`;
-}
-
 const emptyPayment: PaymentDetails = {
   accountHolder: "",
   accountNumber: "",
@@ -50,15 +42,16 @@ const PAYMENT_FIELDS: { key: keyof PaymentDetails; label: string }[] = [
 
 /**
  * Standalone invoice generator. The provider (issuer) fills in their details,
- * line items, and bank info; "Bill To" is fixed to Herbal Deck; the number and
- * date are pre-filled. Pick one of eight templates, watch the live PDF preview,
- * and download. This tool only creates PDFs — posting lives elsewhere.
+ * line items, and bank info; "Bill To" is fixed to Herbal Deck; the date is
+ * pre-filled and the invoice number is optional (the official number is
+ * assigned when the invoice is posted). Pick one of eight templates, watch the
+ * live PDF preview, and download. This tool only creates PDFs — posting elsewhere.
  */
 export function InvoiceGenerator() {
   const [templateId, setTemplateId] = useState(TEMPLATES[0].id);
   const [fromName, setFromName] = useState("");
   const [fromDetails, setFromDetails] = useState("");
-  const [invoiceNumber, setInvoiceNumber] = useState(suggestNumber);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [issueDate, setIssueDate] = useState(todayIso);
   const [currency, setCurrency] = useState<CurrencyCode>("INR");
   const [taxRate, setTaxRate] = useState(0);
@@ -203,13 +196,14 @@ export function InvoiceGenerator() {
             <div className="flex flex-col gap-1.5">
               <label className={labelClass} htmlFor="invoiceNumber">
                 Invoice number{" "}
-                <span className="font-normal text-muted-foreground">(auto)</span>
+                <span className="font-normal text-muted-foreground">(optional)</span>
               </label>
               <input
                 id="invoiceNumber"
                 className={inputClass}
                 value={invoiceNumber}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
+                placeholder="Leave blank — assigned when posted"
               />
             </div>
             <div className="flex flex-col gap-1.5">
