@@ -55,7 +55,7 @@ function Toast({
   return (
     <div className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-lg">
       <div className="flex items-start gap-3 p-3">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-primary dark:text-ring">
           <NotificationTypeIcon type={toast.type} className="h-[18px] w-[18px]" />
         </span>
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">

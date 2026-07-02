@@ -56,7 +56,7 @@ export default async function BillingPage() {
             href={card.href}
             className="group flex flex-col rounded-2xl border bg-card p-6 shadow-sm transition hover:border-primary/40 hover:shadow"
           >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-primary">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-primary dark:text-ring">
               <BillingIcon className="h-5 w-5" />
             </span>
             <h2 className="mt-4 text-base font-semibold tracking-tight">

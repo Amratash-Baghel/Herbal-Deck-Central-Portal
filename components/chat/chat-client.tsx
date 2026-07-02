@@ -419,7 +419,7 @@ export function ChatClient({
         >
           {!selectedConv ? (
             <div className="flex flex-1 flex-col items-center justify-center p-10 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-primary">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-primary dark:text-ring">
                 <ChatIcon className="h-6 w-6" />
               </span>
               <h2 className="mt-3 text-lg font-medium">Select a conversation</h2>

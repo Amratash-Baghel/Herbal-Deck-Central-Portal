@@ -22,7 +22,7 @@ export function ToolCard({ tool }: { tool: Tool }) {
       className="group flex flex-col rounded-2xl border bg-card p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex items-start justify-between">
-        <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-primary">
+        <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-primary dark:text-ring">
           <Icon className="h-5 w-5" />
         </span>
         {tool.badge && (
