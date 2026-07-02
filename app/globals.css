@@ -63,11 +63,11 @@
   --sidebar: #040605;
   --sidebar-foreground: #eafff1;
 
-  /* Brand — a calmer, muted green (less neon) on black */
-  --primary: #3fa168;
-  --primary-foreground: #f1fff7;  /* light text on the softer button   */
-  --accent: #0f2419;            /* green-tinted hover/active           */
-  --ring: #3fa168;
+  /* Brand — the same green accents as the Dark theme */
+  --primary: #1a5c38;
+  --primary-foreground: #ffffff;
+  --accent: #153d27;            /* green-tinted hover/active           */
+  --ring: #2f8f5b;
 }
 
 @theme inline {
