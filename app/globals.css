@@ -38,36 +38,36 @@
   --foreground: #ffffff;        /* white text                         */
   --card: #0f3420;             /* slightly raised surface            */
   --muted: #123b24;            /* subtle dark panel background        */
-  --muted-foreground: #9bb3a5;
-  --border: #1c4730;
+  --muted-foreground: #b3c9bc;  /* brighter sage — better icon/text contrast */
+  --border: #234f37;           /* a touch lighter, more visible hairline    */
   --sidebar: #0a2114;
   --sidebar-foreground: #ffffff;
 
-  /* Brand — same green accents */
+  /* Brand — deep green stays; the accent green is lighter for visibility */
   --primary: #1a5c38;
   --primary-foreground: #ffffff;
-  --accent: #153d27;
-  --ring: #2f8f5b;
+  --accent: #1b4a30;            /* lighter hover/active tint           */
+  --ring: #3ea873;              /* lighter, more visible accent green  */
 }
 
-/* Midnight — near-black surfaces with a vivid green accent, tuned for high
+/* Midnight — near-black surfaces with the same brand green, tuned for high
  * contrast (the standard Dark theme is green-on-green and can read flat). */
 .midnight {
   /* Surfaces */
   --background: #050706;        /* near-black                          */
-  --foreground: #eafff1;        /* bright, slightly green-white text    */
+  --foreground: #ffffff;        /* pure white text                     */
   --card: #0b100d;             /* raised near-black surface            */
   --muted: #101915;            /* subtle panel background              */
-  --muted-foreground: #8bb8a1;  /* readable secondary text             */
-  --border: #1e2a23;           /* visible-but-subtle hairline          */
+  --muted-foreground: #a8c9b8;  /* brighter sage — better icon/text contrast */
+  --border: #26332c;           /* a touch lighter, more visible hairline    */
   --sidebar: #040605;
-  --sidebar-foreground: #eafff1;
+  --sidebar-foreground: #ffffff;
 
-  /* Brand — the same green accents as the Dark theme */
+  /* Brand — deep green stays; the accent green is lighter for visibility */
   --primary: #1a5c38;
   --primary-foreground: #ffffff;
-  --accent: #153d27;            /* green-tinted hover/active           */
-  --ring: #2f8f5b;
+  --accent: #1b4a30;            /* lighter hover/active tint           */
+  --ring: #3ea873;              /* lighter, more visible accent green  */
 }
 
 @theme inline {
