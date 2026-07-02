@@ -98,11 +98,16 @@ export default async function EmployeeReviewPage({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, full_name, email")
+    .select("id, full_name, email, post")
     .eq("id", id)
     .maybeSingle();
   if (!profile) notFound();
-  const p = profile as { id: string; full_name: string | null; email: string };
+  const p = profile as {
+    id: string;
+    full_name: string | null;
+    email: string;
+    post: string | null;
+  };
   const name = p.full_name || p.email;
 
   const [{ data: membs }, { data: depts }, { data: activity }, { data: reports }, { data: taskActs }] =
@@ -179,7 +184,7 @@ export default async function EmployeeReviewPage({
       </div>
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <PageHeader title={name} description={p.email} />
+        <PageHeader title={name} description={p.post ? `${p.post} · ${p.email}` : p.email} />
         <Link
           href={`/reporting/eod?employee=${id}`}
           className="rounded-xl border px-3 py-2 text-sm font-medium transition hover:bg-accent"

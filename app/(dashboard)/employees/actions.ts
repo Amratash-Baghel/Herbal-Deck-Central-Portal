@@ -32,6 +32,7 @@ export async function inviteUser(
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const fullName = String(formData.get("full_name") ?? "").trim();
+  const post = String(formData.get("post") ?? "").trim();
   const role = String(formData.get("role") ?? "employee") as Role;
   const password = String(formData.get("password") ?? "");
   const departmentIds = formData
@@ -55,7 +56,7 @@ export async function inviteUser(
     email,
     password,
     email_confirm: true, // internal tool: skip the confirmation email
-    user_metadata: { full_name: fullName, role },
+    user_metadata: { full_name: fullName, role, post: post || null },
   });
 
   if (error) {

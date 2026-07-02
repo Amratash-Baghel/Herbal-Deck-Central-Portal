@@ -15,6 +15,7 @@ export interface EmployeeRow {
   fullName: string | null;
   email: string;
   role: Role;
+  post: string | null;
   departmentIds: string[];
   deactivated: boolean;
 }
@@ -59,7 +60,7 @@ export function EmployeeList({
       const depts = e.departmentIds
         .map((id) => deptName.get(id) ?? "")
         .join(" ");
-      return `${e.fullName ?? ""} ${e.email} ${depts}`
+      return `${e.fullName ?? ""} ${e.post ?? ""} ${e.email} ${depts}`
         .toLowerCase()
         .includes(q);
     });
@@ -130,6 +131,7 @@ export function EmployeeList({
                     </span>
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
+                    {e.post ? `${e.post} · ` : ""}
                     {e.email}
                   </p>
 

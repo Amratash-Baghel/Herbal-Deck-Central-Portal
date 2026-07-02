@@ -59,6 +59,20 @@ export function InviteUserForm({ departments }: { departments: Department[] }) {
         </div>
 
         <div className="flex flex-col gap-1.5">
+          <label htmlFor="post" className="text-sm font-medium">
+            Post{" "}
+            <span className="font-normal text-muted-foreground">(optional)</span>
+          </label>
+          <input
+            id="post"
+            name="post"
+            type="text"
+            placeholder="e.g. Video Editor"
+            className={inputClass}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
           <label htmlFor="role" className="text-sm font-medium">
             Account role
           </label>

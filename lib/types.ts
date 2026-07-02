@@ -18,6 +18,8 @@ export interface Profile {
   email: string;
   full_name: string | null;
   role: Role;
+  /** Job title / designation, e.g. "Video Editor" (optional). */
+  post: string | null;
   created_at: string;
   /** Set when the employee has been deactivated (soft-removed); null if active. */
   deactivated_at: string | null;
