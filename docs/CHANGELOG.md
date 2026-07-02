@@ -5,6 +5,16 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] — 2026-06-30
+
+### Added
+
+- **Midnight theme.** A third theme alongside Light and Dark — near-black
+  surfaces with a vivid green accent, tuned for high contrast (the standard Dark
+  theme is green-on-green and can read flat). The sidebar's theme control is now
+  a Light / Dark / Midnight picker; the choice persists and applies pre-paint
+  (no flash). Frontend-only — no migration.
+
 ## [0.7.2] — 2026-06-30
 
 ### Added

@@ -9,7 +9,10 @@
  * automatically in dark mode with almost no `dark:` overrides.
  * ------------------------------------------------------------------------- */
 
-@custom-variant dark (&:where(.dark, .dark *));
+/* `dark:` utilities apply under BOTH the Dark and Midnight themes, so
+ * component-level dark overrides (error alerts, status colours, …) work in
+ * either. Each theme still fully overrides the semantic tokens below. */
+@custom-variant dark (&:where(.dark, .dark *, .midnight, .midnight *));
 
 :root {
   /* Surfaces */
@@ -45,6 +48,26 @@
   --primary-foreground: #ffffff;
   --accent: #153d27;
   --ring: #2f8f5b;
+}
+
+/* Midnight — near-black surfaces with a vivid green accent, tuned for high
+ * contrast (the standard Dark theme is green-on-green and can read flat). */
+.midnight {
+  /* Surfaces */
+  --background: #050706;        /* near-black                          */
+  --foreground: #eafff1;        /* bright, slightly green-white text    */
+  --card: #0b100d;             /* raised near-black surface            */
+  --muted: #101915;            /* subtle panel background              */
+  --muted-foreground: #8bb8a1;  /* readable secondary text             */
+  --border: #1e2a23;           /* visible-but-subtle hairline          */
+  --sidebar: #040605;
+  --sidebar-foreground: #eafff1;
+
+  /* Brand — vivid green that pops on black */
+  --primary: #22c55e;
+  --primary-foreground: #04130a;  /* dark text on the bright button    */
+  --accent: #0f2419;            /* green-tinted hover/active           */
+  --ring: #22c55e;
 }
 
 @theme inline {

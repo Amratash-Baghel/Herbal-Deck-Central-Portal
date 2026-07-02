@@ -22,6 +22,7 @@ const themeInitScript = `
     try {
       var t = localStorage.getItem('theme');
       if (t === 'dark') document.documentElement.classList.add('dark');
+      else if (t === 'midnight') document.documentElement.classList.add('midnight');
     } catch (e) {}
   })();
 `;
