@@ -2,6 +2,7 @@
 export interface Person {
   id: string;
   name: string;
+  avatarPath?: string | null;
 }
 
 /** A department reference for pickers, labels, and sticky-note colour. */

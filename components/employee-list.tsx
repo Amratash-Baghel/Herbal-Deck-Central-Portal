@@ -5,8 +5,10 @@ import Link from "next/link";
 import {
   deactivateEmployee,
   reactivateEmployee,
+  setUserRole,
 } from "@/app/(dashboard)/employees/actions";
 import { EditUserDepartments } from "@/components/edit-user-departments";
+import { Avatar } from "@/components/avatar";
 import { SearchIcon, UserMinusIcon, ReportingIcon } from "@/components/icons";
 import type { Department, Role } from "@/lib/types";
 
@@ -16,17 +18,15 @@ export interface EmployeeRow {
   email: string;
   role: Role;
   post: string | null;
+  avatarPath: string | null;
   departmentIds: string[];
   deactivated: boolean;
 }
 
-function initials(name: string | null, email: string): string {
-  return (name || email)
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
+function roleLabel(role: Role): string {
+  if (role === "team_lead") return "Team Lead";
+  if (role === "admin") return "Admin";
+  return "Employee";
 }
 
 /**
@@ -107,9 +107,12 @@ export function EmployeeList({
           return (
             <li key={e.id} className="px-6 py-4">
               <div className="flex items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-primary">
-                  {initials(e.fullName, e.email)}
-                </span>
+                <Avatar
+                  name={e.fullName || e.email}
+                  path={e.avatarPath}
+                  className="h-9 w-9 rounded-full"
+                  fallbackClassName="bg-accent text-xs font-semibold text-primary"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-medium">
@@ -121,13 +124,15 @@ export function EmployeeList({
                       </span>
                     )}
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         e.role === "admin"
                           ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
+                          : e.role === "team_lead"
+                            ? "bg-accent text-primary"
+                            : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {e.role}
+                      {roleLabel(e.role)}
                     </span>
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
@@ -165,6 +170,22 @@ export function EmployeeList({
                       departments={departments}
                       selectedIds={e.departmentIds}
                     />
+                    {isAdmin && e.id !== currentUserId && (
+                      <form action={setUserRole}>
+                        <input type="hidden" name="user_id" value={e.id} />
+                        <select
+                          name="role"
+                          defaultValue={e.role}
+                          onChange={(ev) => ev.currentTarget.form?.requestSubmit()}
+                          aria-label="Change role"
+                          className="rounded-lg border bg-background px-2 py-1 text-xs font-medium outline-none transition hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <option value="employee">Employee</option>
+                          <option value="team_lead">Team Lead</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </form>
+                    )}
                     {canRemove(e) && (
                       <form action={deactivateEmployee}>
                         <input type="hidden" name="user_id" value={e.id} />

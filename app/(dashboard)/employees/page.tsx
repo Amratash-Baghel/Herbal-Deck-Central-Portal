@@ -19,7 +19,7 @@ export default async function EmployeesPage() {
   const [usersRes, deptRes, membRes] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, email, full_name, role, post, deactivated_at")
+      .select("id, email, full_name, role, post, avatar_path, deactivated_at")
       .order("created_at", { ascending: true }),
     supabase.from("departments").select("*").order("name", { ascending: true }),
     supabase.from("profile_departments").select("profile_id, department_id"),
@@ -44,6 +44,7 @@ export default async function EmployeesPage() {
     email: u.email,
     role: u.role,
     post: u.post,
+    avatarPath: u.avatar_path,
     departmentIds: deptIdsByUser.get(u.id) ?? [],
     deactivated: Boolean(u.deactivated_at),
   }));

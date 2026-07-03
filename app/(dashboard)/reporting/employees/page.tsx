@@ -1,3 +1,4 @@
+import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -9,9 +10,13 @@ type ProfileRow = { id: string; full_name: string | null; email: string };
 
 /**
  * Employee Reviews index — a searchable roster; pick anyone to drill into their
- * activity, task history, EOD reports, and stats.
+ * activity, task history, EOD reports, and stats. Admins + HR see everyone;
+ * team leads see only their own department(s).
  */
 export default async function EmployeeReviewsPage() {
+  const access = await getUserAccess();
+  const scopeDeptIds =
+    access && !access.canManageUsers ? new Set(access.departmentIds) : null;
   const supabase = await createClient();
 
   const [{ data: profs }, { data: depts }, { data: membs }] = await Promise.all([
@@ -28,14 +33,25 @@ export default async function EmployeeReviewsPage() {
     ((depts ?? []) as { id: string; name: string }[]).map((d) => [d.id, d.name]),
   );
   const deptsByPerson = new Map<string, string[]>();
+  const deptIdsByPerson = new Map<string, string[]>();
   for (const m of (membs ?? []) as { profile_id: string; department_id: string }[]) {
     const list = deptsByPerson.get(m.profile_id) ?? [];
     const name = deptNameById.get(m.department_id);
     if (name) list.push(name);
     deptsByPerson.set(m.profile_id, list);
+    const ids = deptIdsByPerson.get(m.profile_id) ?? [];
+    ids.push(m.department_id);
+    deptIdsByPerson.set(m.profile_id, ids);
   }
 
-  const rows: ReviewListRow[] = ((profs ?? []) as ProfileRow[]).map((p) => ({
+  let people = (profs ?? []) as ProfileRow[];
+  if (scopeDeptIds) {
+    people = people.filter((p) =>
+      (deptIdsByPerson.get(p.id) ?? []).some((id) => scopeDeptIds.has(id)),
+    );
+  }
+
+  const rows: ReviewListRow[] = people.map((p) => ({
     id: p.id,
     name: p.full_name || p.email,
     email: p.email,

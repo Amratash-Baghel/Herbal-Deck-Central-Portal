@@ -78,6 +78,7 @@ export function InviteUserForm({ departments }: { departments: Department[] }) {
           </label>
           <select id="role" name="role" defaultValue="employee" className={inputClass}>
             <option value="employee">Employee</option>
+            <option value="team_lead">Team Lead (department-scoped)</option>
             <option value="admin">Admin (owner-level)</option>
           </select>
         </div>

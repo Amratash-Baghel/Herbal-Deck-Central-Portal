@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { notifyUsers, getManagementUserIds } from "@/lib/notifications";
+import { notifyUsers } from "@/lib/notifications";
 import { localDateISO } from "@/lib/time";
 import type { Task, TaskStatus } from "@/lib/types";
 
@@ -303,22 +303,14 @@ export async function saveEodNote(note: string): Promise<ActionResult> {
   const supabase = await createClient();
   const today = localDateISO();
 
-  // Was today's report already submitted? (So we only notify managers on the
-  // FIRST submission of the day, not on every note edit.)
-  const { data: existing } = await supabase
-    .from("eod_reports")
-    .select("id")
-    .eq("employee_id", access.profile.id)
-    .eq("report_date", today)
-    .maybeSingle();
-  const firstSubmission = !existing;
-
   // Snapshot the counts from the activity log via the SECURITY DEFINER helper.
   const { data: summary } = await supabase.rpc("eod_summary", {
     emp: access.profile.id,
     d: today,
   });
 
+  // Admins + HR are notified by a database trigger on eod_reports INSERT
+  // (see migration 0014) — reliable regardless of the service-role env var.
   const { error } = await supabase.from("eod_reports").upsert(
     {
       employee_id: access.profile.id,
@@ -331,24 +323,6 @@ export async function saveEodNote(note: string): Promise<ActionResult> {
   );
 
   if (error) return { ok: false, error: error.message };
-
-  // Notify admins + HR the first time someone wraps up their day.
-  if (firstSubmission) {
-    const managers = await getManagementUserIds(access.profile.id);
-    if (managers.length > 0) {
-      const who = access.profile.full_name || access.profile.email;
-      await notifyUsers(
-        managers.map((recipientId) => ({
-          recipientId,
-          type: "eod_submitted" as const,
-          title: "EOD submitted",
-          body: `${who} submitted their end-of-day report`,
-          link: `/reporting/employees/${access.profile.id}`,
-          data: { employeeId: access.profile.id, date: today },
-        })),
-      );
-    }
-  }
 
   revalidatePath("/tasks/reports");
   revalidatePath("/reporting");

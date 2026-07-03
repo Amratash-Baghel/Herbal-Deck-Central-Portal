@@ -1,3 +1,4 @@
+import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { EodList, type EodListPerson } from "@/components/reporting/eod-list";
@@ -20,6 +21,9 @@ export default async function EodReportsPage({
   searchParams: Promise<{ employee?: string; date?: string }>;
 }) {
   const { employee, date } = await searchParams;
+  const access = await getUserAccess();
+  const scopeDeptIds =
+    access && !access.canManageUsers ? new Set(access.departmentIds) : null;
   const supabase = await createClient();
 
   const [{ data: reports }, { data: profs }, { data: membs }, { data: depts }] =
@@ -48,11 +52,16 @@ export default async function EodReportsPage({
     deptIdsByPerson.set(m.profile_id, list);
   }
 
-  const people: EodListPerson[] = ((profs ?? []) as ProfileRow[]).map((p) => ({
+  let people: EodListPerson[] = ((profs ?? []) as ProfileRow[]).map((p) => ({
     id: p.id,
     name: p.full_name || p.email,
     departmentIds: deptIdsByPerson.get(p.id) ?? [],
   }));
+  // Team leads: the filter only offers their own department's people (the
+  // reports themselves are already RLS-scoped to what they may see).
+  if (scopeDeptIds) {
+    people = people.filter((p) => p.departmentIds.some((id) => scopeDeptIds.has(id)));
+  }
 
   return (
     <>
@@ -63,7 +72,9 @@ export default async function EodReportsPage({
       <EodList
         reports={(reports ?? []) as EodReport[]}
         people={people}
-        departments={(depts ?? []) as DeptRef[]}
+        departments={((depts ?? []) as DeptRef[]).filter(
+          (d) => !scopeDeptIds || scopeDeptIds.has(d.id),
+        )}
         initialEmployee={employee ?? ""}
         initialDate={date ?? ""}
       />

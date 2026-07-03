@@ -13,6 +13,7 @@ export interface OverviewRow {
   arrivedAt: string | null;
   lastSeenAt: string | null;
   eodSubmittedAt: string | null;
+  incomplete: boolean;
   completedToday: number;
 }
 
@@ -145,6 +146,10 @@ export function TeamOverview({
                         >
                           {formatClockTZ(r.eodSubmittedAt)}
                         </Link>
+                      ) : r.incomplete ? (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                          Incomplete
+                        </span>
                       ) : (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
                           Not submitted

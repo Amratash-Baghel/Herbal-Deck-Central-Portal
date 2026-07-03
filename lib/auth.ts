@@ -77,35 +77,46 @@ export async function requireAdmin(): Promise<Profile> {
 export interface UserAccess {
   profile: Profile;
   departmentSlugs: string[];
+  departmentIds: string[];
   isAdmin: boolean;
   isHrManagement: boolean;
+  /** Department-scoped middle tier (role === 'team_lead'). */
+  isTeamLead: boolean;
+  /** Add / remove employees, assign roles, clear invoices — admins + HR only. */
   canManageUsers: boolean;
   canManageBilling: boolean;
+  /**
+   * Access to the Reporting module. Admins + HR see everyone; team leads see
+   * only their own department(s) — the pages scope the data accordingly.
+   */
+  canViewReports: boolean;
 }
 
-/** The department slugs a profile belongs to. Cached per-request per user id. */
-const fetchDepartmentSlugs = cache(async (userId: string): Promise<string[]> => {
-  const supabase = await createClient();
+/** The departments (id + slug) a profile belongs to. Cached per-request. */
+const fetchDepartments = cache(
+  async (userId: string): Promise<{ id: string; slug: string }[]> => {
+    const supabase = await createClient();
 
-  const { data: memberships } = await supabase
-    .from("profile_departments")
-    .select("departments(slug)")
-    .eq("profile_id", userId);
+    const { data: memberships } = await supabase
+      .from("profile_departments")
+      .select("departments(id, slug)")
+      .eq("profile_id", userId);
 
-  // A foreign-key embed returns a single related row at runtime, though the
-  // generated types model it as an array — handle both shapes defensively.
-  type SlugRow = { slug: string };
-  const membershipRows = (memberships ?? []) as Array<{
-    departments: SlugRow | SlugRow[] | null;
-  }>;
-  return membershipRows
-    .map((m) => {
-      const d = m.departments;
-      if (!d) return undefined;
-      return Array.isArray(d) ? d[0]?.slug : d.slug;
-    })
-    .filter((s): s is string => Boolean(s));
-});
+    // A foreign-key embed returns a single related row at runtime, though the
+    // generated types model it as an array — handle both shapes defensively.
+    type DeptRow = { id: string; slug: string };
+    const rows = (memberships ?? []) as Array<{
+      departments: DeptRow | DeptRow[] | null;
+    }>;
+    return rows
+      .map((m) => {
+        const d = m.departments;
+        if (!d) return undefined;
+        return Array.isArray(d) ? d[0] : d;
+      })
+      .filter((d): d is DeptRow => Boolean(d));
+  },
+);
 
 /**
  * Resolves the signed-in user's access. Cached per-request (see
@@ -117,19 +128,25 @@ export const getUserAccess = cache(async (): Promise<UserAccess | null> => {
   if (!row || row.deactivated_at) return null;
   const profile = row;
 
-  const departmentSlugs = await fetchDepartmentSlugs(profile.id);
+  const departments = await fetchDepartments(profile.id);
+  const departmentSlugs = departments.map((d) => d.slug);
+  const departmentIds = departments.map((d) => d.id);
 
   const isAdmin = profile.role === "admin";
+  const isTeamLead = profile.role === "team_lead";
   const isHrManagement = departmentSlugs.includes("hr-management");
   const canManage = isAdmin || isHrManagement;
 
   return {
     profile,
     departmentSlugs,
+    departmentIds,
     isAdmin,
     isHrManagement,
+    isTeamLead,
     canManageUsers: canManage,
     canManageBilling: canManage,
+    canViewReports: canManage || isTeamLead,
   };
 });
 
@@ -153,5 +170,17 @@ export async function requireBillingManager(): Promise<UserAccess> {
   const access = await getUserAccess();
   if (!access) redirect("/login");
   if (!access.canManageBilling) redirect("/dashboard");
+  return access;
+}
+
+/**
+ * Gates the Reporting module — admins, HR & Management, and team leads. Team
+ * leads see only their own department(s); the pages scope the data. Everyone
+ * else is sent to the dashboard.
+ */
+export async function requireReportViewer(): Promise<UserAccess> {
+  const access = await getUserAccess();
+  if (!access) redirect("/login");
+  if (!access.canViewReports) redirect("/dashboard");
   return access;
 }

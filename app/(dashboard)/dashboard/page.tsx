@@ -9,7 +9,7 @@ import { BillingIcon, ChatIcon, TasksIcon, ReportingIcon } from "@/components/ic
  * page + nav entry. The grid scales automatically. `managerOnly` cards are
  * shown only to admins + HR & Management.
  */
-const tools: (Tool & { managerOnly?: boolean })[] = [
+const tools: (Tool & { managerOnly?: boolean; reportViewerOnly?: boolean })[] = [
   {
     title: "Tasks",
     description: "Your kanban board, team tasks, and end-of-day reports.",
@@ -33,7 +33,7 @@ const tools: (Tool & { managerOnly?: boolean })[] = [
     description: "Team activity, EOD reports, and per-employee reviews.",
     href: "/reporting",
     icon: ReportingIcon,
-    managerOnly: true,
+    reportViewerOnly: true,
   },
 ];
 
@@ -42,7 +42,11 @@ export default async function DashboardPage() {
   if (!access) redirect("/login");
   const profile = access.profile;
   const firstName = (profile.full_name || profile.email).split(/[\s@]+/)[0];
-  const visible = tools.filter((t) => !t.managerOnly || access.canManageUsers);
+  const visible = tools.filter((t) => {
+    if (t.managerOnly && !access.canManageUsers) return false;
+    if (t.reportViewerOnly && !access.canViewReports) return false;
+    return true;
+  });
 
   return (
     <>

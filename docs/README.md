@@ -48,7 +48,8 @@ Current modules:
 | Chat               | ✅ Live        | Real-time DMs & groups, @mentions (links for files) |
 | Notifications      | ✅ Live        | Realtime bell + pop-ups; invoice-posted alerts    |
 | Tasks              | ✅ Live        | Personal kanban + team/admin views + auto EOD reports |
-| Reporting          | ✅ Live        | Passive activity log, team overview, EOD viewer, per-employee reviews — admin / HR |
+| Reporting          | ✅ Live        | Passive activity log, team overview, EOD viewer, per-employee reviews — admin / HR / team lead |
+| Profiles           | ✅ Live        | Per-employee profile + avatar upload; change-password moved here |
 
 ## Technology stack
 
@@ -178,6 +179,16 @@ In the Supabase SQL Editor, run these **once, in order**:
 10. [`supabase/migrations/0010_task_history_and_timestamps.sql`](../supabase/migrations/0010_task_history_and_timestamps.sql)
    — `tasks.started_at`; makes `task_activity` durable + denormalised; the
    `task_activity_log` view; and `archive_stale_done_tasks()`.
+11. [`supabase/migrations/0011_auto_invoice_number.sql`](../supabase/migrations/0011_auto_invoice_number.sql)
+   — sequential invoice numbers assigned at posting.
+12. [`supabase/migrations/0012_profile_post.sql`](../supabase/migrations/0012_profile_post.sql)
+   — `profiles.post` (designation).
+13. [`supabase/migrations/0013_avatars_and_team_lead_role.sql`](../supabase/migrations/0013_avatars_and_team_lead_role.sql)
+   — the public `avatars` storage bucket + RLS, `profiles.avatar_path`, and the
+   `team_lead` role. **Run on its own, before 0014.**
+14. [`supabase/migrations/0014_team_lead_and_eod.sql`](../supabase/migrations/0014_team_lead_and_eod.sql)
+   — `is_team_lead()`, the EOD-submitted notification trigger,
+   `activity_logs.incomplete`, and `finalize_incomplete_attendance()`.
 
 After setup, assign yourself (and your CTO) to the **HR & Management** department
 — or keep `role = 'admin'` — so billing and user management unlock. Chat and

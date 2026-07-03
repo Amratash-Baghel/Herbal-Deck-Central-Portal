@@ -46,7 +46,7 @@ export async function inviteUser(
   if (password.length < 8) {
     return { error: "Temporary password must be at least 8 characters.", success: null };
   }
-  if (role !== "admin" && role !== "employee") {
+  if (role !== "admin" && role !== "employee" && role !== "team_lead") {
     return { error: "Invalid role.", success: null };
   }
 
@@ -132,6 +132,25 @@ export async function setUserDepartments(
 
   revalidatePath("/employees");
   return { error: null, success: "Departments updated." };
+}
+
+/**
+ * Server Action: change an existing employee's role (admins only). Used to
+ * promote someone to team_lead (or admin), or back to employee. You can't
+ * change your own role. Team-lead authority is department-scoped, so it takes
+ * effect against whatever departments the person already belongs to.
+ */
+export async function setUserRole(formData: FormData): Promise<void> {
+  const access = await requireUserManager();
+  if (!access.isAdmin) return; // only owner-level admins assign roles
+  const userId = String(formData.get("user_id") ?? "");
+  const role = String(formData.get("role") ?? "") as Role;
+  if (!userId || userId === access.profile.id) return;
+  if (role !== "admin" && role !== "employee" && role !== "team_lead") return;
+
+  const admin = createAdminClient();
+  await admin.from("profiles").update({ role }).eq("id", userId);
+  revalidatePath("/employees");
 }
 
 /**

@@ -1,3 +1,4 @@
+import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { TeamOverview, type OverviewRow } from "@/components/reporting/team-overview";
@@ -11,15 +12,19 @@ type ActivityRow = {
   first_seen_at: string;
   last_seen_at: string;
   eod_submitted_at: string | null;
+  incomplete: boolean;
 };
 type EodOverviewRow = { employee_id: string; completed: number };
 
 /**
- * Team Overview — today's activity at a glance (admins + HR & Management). Who's
- * online now, who has submitted their EOD, who hasn't been seen, plus tasks
- * completed today per person. Filterable by department.
+ * Team Overview — today's activity at a glance. Who's online now, who has
+ * submitted their EOD, who's incomplete, plus tasks completed today. Admins +
+ * HR see everyone; team leads see only their own department(s).
  */
 export default async function TeamOverviewPage() {
+  const access = await getUserAccess();
+  const scopeDeptIds =
+    access && !access.canManageUsers ? new Set(access.departmentIds) : null;
   const supabase = await createClient();
   const today = localDateISO();
 
@@ -35,7 +40,7 @@ export default async function TeamOverviewPage() {
         supabase.from("profile_departments").select("profile_id, department_id"),
         supabase
           .from("activity_logs")
-          .select("employee_id, first_seen_at, last_seen_at, eod_submitted_at")
+          .select("employee_id, first_seen_at, last_seen_at, eod_submitted_at, incomplete")
           .eq("date", today),
         supabase.rpc("eod_overview", { d: today }),
       ]),
@@ -56,7 +61,7 @@ export default async function TeamOverviewPage() {
     ((overview ?? []) as EodOverviewRow[]).map((o) => [o.employee_id, Number(o.completed)]),
   );
 
-  const rows: OverviewRow[] = ((profs ?? []) as ProfileRow[]).map((p) => {
+  let rows: OverviewRow[] = ((profs ?? []) as ProfileRow[]).map((p) => {
     const a = activityByPerson.get(p.id);
     const deptIds = deptIdsByPerson.get(p.id) ?? [];
     return {
@@ -67,9 +72,17 @@ export default async function TeamOverviewPage() {
       arrivedAt: a?.first_seen_at ?? null,
       lastSeenAt: a?.last_seen_at ?? null,
       eodSubmittedAt: a?.eod_submitted_at ?? null,
+      incomplete: a?.incomplete ?? false,
       completedToday: completedByPerson.get(p.id) ?? 0,
     };
   });
+
+  // Team leads only see their own department(s).
+  let visibleDepartments = departments;
+  if (scopeDeptIds) {
+    rows = rows.filter((r) => r.departmentIds.some((id) => scopeDeptIds.has(id)));
+    visibleDepartments = departments.filter((d) => scopeDeptIds.has(d.id));
+  }
 
   return (
     <>
@@ -77,7 +90,7 @@ export default async function TeamOverviewPage() {
         title="Team Overview"
         description="Today's activity — who's online, who's wrapped up, and who hasn't shown up."
       />
-      <TeamOverview rows={rows} departments={departments} today={today} />
+      <TeamOverview rows={rows} departments={visibleDepartments} today={today} />
     </>
   );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { EodReportCard } from "@/components/reporting/eod-report-card";
@@ -135,11 +136,22 @@ export default async function EmployeeReviewPage({
         .limit(300),
     ]);
 
+  const targetDeptIds = ((membs ?? []) as { department_id: string }[]).map(
+    (m) => m.department_id,
+  );
+
+  // Team leads may only review employees in their own department(s).
+  const access = await getUserAccess();
+  if (access && !access.canManageUsers) {
+    const mine = new Set(access.departmentIds);
+    if (!targetDeptIds.some((d) => mine.has(d))) notFound();
+  }
+
   const deptNameById = new Map(
     ((depts ?? []) as { id: string; name: string }[]).map((d) => [d.id, d.name]),
   );
-  const deptNames = ((membs ?? []) as { department_id: string }[])
-    .map((m) => deptNameById.get(m.department_id))
+  const deptNames = targetDeptIds
+    .map((d) => deptNameById.get(d))
     .filter((x): x is string => Boolean(x));
 
   const activityRows = (activity ?? []) as ActivityLog[];
@@ -237,10 +249,16 @@ export default async function EmployeeReviewPage({
                       </td>
                       <td className="px-3 py-2.5 tabular-nums text-muted-foreground">
                         {formatClockTZ(left)}
-                        {noEod && (
-                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-                            No EOD
+                        {a.incomplete ? (
+                          <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                            Incomplete
                           </span>
+                        ) : (
+                          noEod && (
+                            <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                              No EOD
+                            </span>
+                          )
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-muted-foreground">

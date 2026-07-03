@@ -6,8 +6,11 @@
  * server and client components.
  */
 
-/** The two account-level roles. Owner-level access (founder, CTO) is "admin". */
-export type Role = "admin" | "employee";
+/**
+ * Account-level roles. "admin" = owner-level (founder, CTO). "team_lead" is a
+ * department-scoped middle tier (see decisions.md). "employee" is the default.
+ */
+export type Role = "admin" | "team_lead" | "employee";
 
 /**
  * A user profile row from `public.profiles`. One profile exists per
@@ -20,6 +23,8 @@ export interface Profile {
   role: Role;
   /** Job title / designation, e.g. "Video Editor" (optional). */
   post: string | null;
+  /** Storage path of the profile picture in the `avatars` bucket (or null). */
+  avatar_path: string | null;
   created_at: string;
   /** Set when the employee has been deactivated (soft-removed); null if active. */
   deactivated_at: string | null;
@@ -247,5 +252,7 @@ export interface ActivityLog {
   pages_visited: string[];
   actions_count: number;
   eod_submitted_at: string | null;
+  /** True when they were active but never submitted an EOD by end of day. */
+  incomplete: boolean;
   created_at: string;
 }

@@ -55,7 +55,11 @@ export default async function DashboardLayout({
       initial={(notifications ?? []) as Notification[]}
     >
       <div className="min-h-screen bg-background">
-        <Sidebar profile={access.profile} canManageUsers={access.canManageUsers} />
+        <Sidebar
+          profile={access.profile}
+          canManageUsers={access.canManageUsers}
+          canViewReports={access.canViewReports}
+        />
         <div className="md:pl-64">
           <main className="mx-auto w-full max-w-6xl px-5 py-8 md:px-10 md:py-12">
             {children}

@@ -6,10 +6,16 @@ import type { Person, DeptRef } from "@/components/tasks/types";
 import { time } from "@/lib/perf";
 import { TASK_LIST_COLUMNS, type Task } from "@/lib/types";
 
-type ProfileRow = { id: string; full_name: string | null; email: string };
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+  email: string;
+  avatar_path: string | null;
+};
 const toPerson = (p: ProfileRow): Person => ({
   id: p.id,
   name: p.full_name || p.email,
+  avatarPath: p.avatar_path,
 });
 
 /**
@@ -29,7 +35,7 @@ export default async function TasksPage() {
         supabase.from("departments").select("id, name, slug").order("name"),
         supabase
           .from("profiles")
-          .select("id, full_name, email")
+          .select("id, full_name, email, avatar_path")
           .is("deactivated_at", null)
           .order("full_name", { nullsFirst: false }),
         supabase

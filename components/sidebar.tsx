@@ -5,34 +5,29 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navItems } from "@/lib/navigation";
 import { Logo } from "@/components/logo";
+import { Avatar } from "@/components/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/notifications/notification-bell";
-import { LogoutIcon, KeyIcon } from "@/components/icons";
+import { LogoutIcon } from "@/components/icons";
 import type { Profile } from "@/lib/types";
-
-function initials(profile: Profile) {
-  const source = profile.full_name || profile.email;
-  return source
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
-}
 
 export function Sidebar({
   profile,
   canManageUsers,
+  canViewReports,
 }: {
   profile: Profile;
   canManageUsers: boolean;
+  canViewReports: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  const visibleItems = navItems.filter(
-    (item) => !item.managerOnly || canManageUsers,
-  );
+  const visibleItems = navItems.filter((item) => {
+    if (item.managerOnly && !canManageUsers) return false;
+    if (item.reportViewerOnly && !canViewReports) return false;
+    return true;
+  });
 
   return (
     <>
@@ -99,30 +94,30 @@ export function Sidebar({
           {/* Footer: user, theme, logout */}
           <div className="mt-4 flex flex-col gap-3 border-t pt-4">
             <div className="flex items-center gap-3 px-1">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-foreground">
-                {initials(profile)}
-              </span>
-              <div className="min-w-0 leading-tight">
-                <p className="truncate text-sm font-medium">
-                  {profile.full_name || profile.email}
-                </p>
-                <p className="truncate text-xs capitalize text-muted-foreground">
-                  {profile.role}
-                </p>
-              </div>
+              <Link
+                href="/profile"
+                onClick={() => setOpen(false)}
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1 transition hover:bg-accent"
+              >
+                <Avatar
+                  name={profile.full_name || profile.email}
+                  path={profile.avatar_path}
+                  className="h-9 w-9 rounded-full"
+                  fallbackClassName="bg-accent text-xs font-semibold text-foreground"
+                />
+                <div className="min-w-0 leading-tight">
+                  <p className="truncate text-sm font-medium">
+                    {profile.full_name || profile.email}
+                  </p>
+                  <p className="truncate text-xs capitalize text-muted-foreground">
+                    {profile.role === "team_lead" ? "team lead" : profile.role}
+                  </p>
+                </div>
+              </Link>
               <div className="ml-auto">
                 <ThemeToggle />
               </div>
             </div>
-
-            <Link
-              href="/forgot-password"
-              onClick={() => setOpen(false)}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground"
-            >
-              <KeyIcon className="h-[18px] w-[18px]" />
-              Change password
-            </Link>
 
             <form action="/auth/signout" method="post">
               <button

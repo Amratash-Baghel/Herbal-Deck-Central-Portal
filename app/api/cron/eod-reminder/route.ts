@@ -4,13 +4,12 @@ import { notifyUsers } from "@/lib/notifications";
 import { localDateISO } from "@/lib/time";
 
 /**
- * Daily EOD reminder. Triggered by Vercel Cron (see `vercel.json`, scheduled
- * for 17:55 IST) — not tied to any user session, so it runs whether or not
- * anyone is using the app.
+ * EOD reminder — 30 minutes before end of day. Triggered by Vercel Cron (see
+ * `vercel.json`, scheduled for 17:30 IST). Not tied to any user session.
  *
- * Notifies every active employee who has not yet submitted today's end-of-day
- * report (`eod_reports` has no row for them for today). Runs with the
- * service-role client since there is no signed-in user for a cron request.
+ * Warns every active employee who hasn't yet submitted today's EOD that they
+ * have 30 minutes left before their attendance is marked incomplete. The
+ * companion `eod-finalize` cron (18:00 IST) does the marking.
  *
  * Auth: Vercel automatically sends `Authorization: Bearer <CRON_SECRET>` for
  * configured Cron Jobs when the `CRON_SECRET` environment variable is set —
@@ -25,10 +24,6 @@ export async function GET(request: NextRequest) {
 
   const admin = createAdminClient();
   const today = localDateISO();
-
-  // Daily housekeeping: move "Done" tasks older than 7 days off the board
-  // (archived = true) while keeping them in history. Best-effort.
-  const { data: archived } = await admin.rpc("archive_stale_done_tasks");
 
   const [{ data: profiles }, { data: submitted }] = await Promise.all([
     admin.from("profiles").select("id").is("deactivated_at", null),
@@ -62,8 +57,8 @@ export async function GET(request: NextRequest) {
     toNotify.map((recipientId) => ({
       recipientId,
       type: "eod_reminder" as const,
-      title: "Time to submit your EOD report",
-      body: "Wrap up your day — log what you did and add a note if you'd like.",
+      title: "You haven't submitted your EOD yet",
+      body: "Submit within 30 minutes or your attendance for today will not be counted.",
       link: "/tasks/reports",
     })),
   );
@@ -71,6 +66,5 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     notified: toNotify.length,
     pending: pending.length,
-    archived: archived ?? 0,
   });
 }

@@ -375,6 +375,40 @@ Three linked decisions behind the reporting system.
   logged history). Keeping the two distinct avoids conflating "finished and filed"
   with "removed".
 
+## 17. Team Lead authority is department-scoped, not portal-wide
+
+**Decision:** The `team_lead` role grants elevated capability (task assignment,
+reporting, and viewing) **only over the department(s) the person belongs to** —
+never the whole portal. It is a scoped tier below admin/HR, not a smaller copy
+of them.
+
+**Why:**
+
+- **A team lead's authority comes from running a team, not from rank.** The
+  natural unit of their responsibility is their department — so their power
+  should end exactly at that boundary. A creative-team lead has no business
+  reading the finance team's EOD reports. Scoping to their departments makes the
+  permission match the real-world responsibility instead of inventing a new
+  global rank.
+- **It reuses the model already in place.** Authority in this portal was already
+  department-based (decision on the authority model): HR & Management is a
+  department, not a title, and `my_department_ids()` is the unit of scope
+  everywhere. Team leads slot straight into that — their scope *is* their
+  department membership. No parallel concept, no per-feature ACLs.
+- **Least privilege, and it composes.** Team leads explicitly cannot manage
+  staff, clear invoices, change roles, or see other departments — those stay
+  with admins + HR. RLS already limits reporting/EOD/task reads to shared
+  departments, so the database enforces the boundary; the app layer only adds
+  the *page access* (the Reporting UI) and scopes each page's employee list to
+  the viewer's departments. If a team lead leads two departments, they see both,
+  automatically — the scope follows membership with no extra wiring.
+
+**Implementation:** `role = 'team_lead'` + `is_team_lead()`; `getUserAccess()`
+exposes `isTeamLead` / `canViewReports` and the caller's `departmentIds`.
+`requireReportViewer()` gates `/reporting`, and each reporting page filters to
+`departmentIds` when the viewer isn't a full manager. Staff management and
+billing-clear gates (`canManageUsers` / `canManageBilling`) remain admins + HR.
+
 ---
 
 ## Summary
@@ -398,3 +432,4 @@ Three linked decisions behind the reporting system.
 | Auth memoization| React `cache()`, request-scoped | Kill duplicate auth calls, zero staleness risk |
 | Activity tracking| Passive; EOD = clock-out | Honest record, no ritual; reuse a natural action |
 | Deleted tasks   | Drop from counts, keep in EOD | "Now" vs "what happened" are different questions |
+| Team Lead role  | Department-scoped, not portal-wide | Authority follows responsibility; reuses dept model |

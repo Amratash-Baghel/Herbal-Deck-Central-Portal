@@ -20,6 +20,11 @@ export interface NavItem {
    * (admins or HR & Management).
    */
   managerOnly?: boolean;
+  /**
+   * When true, shown to anyone who can view Reporting — admins, HR & Management,
+   * and team leads (team leads see only their own department's data).
+   */
+  reportViewerOnly?: boolean;
 }
 
 /**
@@ -32,6 +37,6 @@ export const navItems: NavItem[] = [
   { label: "Tasks", href: "/tasks", icon: TasksIcon },
   { label: "Billing", href: "/billing", icon: BillingIcon },
   { label: "Chat", href: "/chat", icon: ChatIcon },
-  { label: "Reporting", href: "/reporting", icon: ReportingIcon, managerOnly: true },
+  { label: "Reporting", href: "/reporting", icon: ReportingIcon, reportViewerOnly: true },
   { label: "Employee Management", href: "/employees", icon: UsersIcon, managerOnly: true },
 ];

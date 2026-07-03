@@ -5,6 +5,46 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-07-03
+
+Employee profiles + avatars, the department-scoped **team_lead** role, and EOD
+notification/attendance fixes.
+
+### Added
+
+- **Employee profiles** (`/profile`). Every employee has a profile page showing
+  their name, email, post, role, department(s), and join date, and can **upload
+  a profile picture** (stored in a new public `avatars` bucket). The
+  **Change-password** control moved here from the sidebar. Avatars now appear in
+  the sidebar and the Employee Management list (task-card / chat-message avatars
+  are wired in the data layer and will surface next).
+- **Team Lead role** — a department-scoped middle tier. Team leads can assign
+  tasks to their department's members and open the **Reporting** module scoped
+  to their own department(s) only (team overview, EOD reports, per-employee
+  reviews). They cannot manage staff, clear invoices, see other departments'
+  data, or touch admin settings. Admins assign the role from Employee Management
+  (a per-row role selector) or when adding an employee.
+- **Incomplete attendance.** If someone was active but never submitted their EOD
+  by end of day, their attendance is flagged **Incomplete** (shown in the team
+  overview and employee review).
+
+### Fixed / Changed
+
+- **EOD-submitted notifications now fire reliably.** They were raised from a
+  Server Action via the service-role client; if that key wasn't present at
+  runtime the insert silently failed. Moved into a **database trigger** on
+  `eod_reports` insert, so admins + HR are notified independently of any env var.
+- **EOD reminder reworked.** The reminder now runs at **17:30 IST** ("submit
+  within 30 minutes or your attendance won't be counted"); a new **18:00 IST**
+  finalize cron marks incomplete attendance and archives stale done tasks.
+
+### Migrations (run in order)
+
+- `0013_avatars_and_team_lead_role.sql` — `avatars` bucket + RLS, `avatar_path`,
+  and the `team_lead` enum value.
+- `0014_team_lead_and_eod.sql` — `is_team_lead()`, the EOD-submitted trigger,
+  `activity_logs.incomplete`, and `finalize_incomplete_attendance()`.
+
 ## [0.7.3] — 2026-06-30
 
 ### Added
