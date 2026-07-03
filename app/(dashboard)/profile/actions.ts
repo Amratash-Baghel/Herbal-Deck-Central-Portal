@@ -9,7 +9,36 @@ export interface AvatarState {
   success: string | null;
 }
 
+export interface NameState {
+  error: string | null;
+  success: string | null;
+}
+
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/** Update the signed-in user's own display name. */
+export async function updateName(
+  _prev: NameState,
+  formData: FormData,
+): Promise<NameState> {
+  const profile = await getProfile();
+  if (!profile) return { error: "You are not signed in.", success: null };
+
+  const name = String(formData.get("full_name") ?? "").trim();
+  if (!name) return { error: "Enter your name.", success: null };
+  if (name.length > 100) return { error: "That name is too long.", success: null };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ full_name: name })
+    .eq("id", profile.id);
+  if (error) return { error: error.message, success: null };
+
+  revalidatePath("/profile");
+  revalidatePath("/", "layout"); // refresh the sidebar name
+  return { error: null, success: "Name updated." };
+}
 
 /**
  * Upload (replace) the signed-in user's profile picture. The file goes to the

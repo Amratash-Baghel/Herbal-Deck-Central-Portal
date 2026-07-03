@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { AvatarUpload } from "@/components/avatar-upload";
 import { ChangePasswordCard } from "@/components/change-password-card";
+import { ProfileNameForm } from "@/components/profile-name-form";
 
 function roleLabel(role: string): string {
   if (role === "team_lead") return "Team Lead";
@@ -63,8 +64,10 @@ export default async function ProfilePage() {
 
         <section className="rounded-2xl border bg-card p-6 shadow-sm">
           <h2 className="text-base font-semibold tracking-tight">Details</h2>
-          <div className="mt-3">
-            <Detail label="Full name" value={profile.full_name || "—"} />
+          <div className="mt-4">
+            <ProfileNameForm fullName={profile.full_name} />
+          </div>
+          <div className="mt-4">
             <Detail label="Email" value={profile.email} />
             {profile.post && <Detail label="Post" value={profile.post} />}
             <Detail label="Role" value={roleLabel(profile.role)} />
