@@ -1,4 +1,5 @@
-import { requireProfile } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { TaskList } from "@/components/tasks/task-list";
@@ -10,19 +11,17 @@ type ProfileRow = { id: string; full_name: string | null; email: string };
 const toPerson = (p: ProfileRow): Person => ({ id: p.id, name: p.full_name || p.email });
 
 /**
- * Team view — every task across the departments the user belongs to, read-only.
- * Filter by team member (and by department when the user is in more than one).
+ * Team view — visibility is role-scoped (and enforced by RLS underneath):
+ *   - regular employee → only their own tasks
+ *   - team lead        → every task in their department(s)
+ *   - admin / HR        → all tasks, everywhere
  */
 export default async function TeamTasksPage() {
-  const profile = await requireProfile();
+  const access = await getUserAccess();
+  if (!access) redirect("/login");
+  const me = access.profile.id;
+  const myDeptIds = access.departmentIds;
   const supabase = await createClient();
-  const me = profile.id;
-
-  const { data: pdRows } = await supabase
-    .from("profile_departments")
-    .select("department_id")
-    .eq("profile_id", me);
-  const myDeptIds = (pdRows ?? []).map((r) => r.department_id as string);
 
   const [{ data: allDepts }, { data: profs }] = await Promise.all([
     supabase.from("departments").select("id, name, slug").order("name"),
@@ -36,35 +35,45 @@ export default async function TeamTasksPage() {
   const myDepartments = allDepartments.filter((d) => myDeptIds.includes(d.id));
   const people = ((profs ?? []) as ProfileRow[]).map(toPerson);
 
-  let tasks: Task[] = [];
-  if (myDeptIds.length > 0) {
-    const { data } = await supabase
-      .from("tasks")
-      .select(TASK_LIST_COLUMNS)
-      .in("department_id", myDeptIds)
-      .eq("archived", false);
-    tasks = (data ?? []) as Task[];
+  // Build the query per role. (RLS returns only what each role may see anyway,
+  // so this is the UI matching the data boundary — not the only enforcement.)
+  let query = supabase
+    .from("tasks")
+    .select(TASK_LIST_COLUMNS)
+    .eq("archived", false);
+  if (access.canManageUsers) {
+    // all tasks
+  } else if (access.isTeamLead && myDeptIds.length > 0) {
+    query = query.in("department_id", myDeptIds);
+  } else {
+    query = query.or(`created_by.eq.${me},assigned_to.eq.${me}`);
   }
+  const { data } = await query.order("created_at", { ascending: false });
+  const tasks = (data ?? []) as Task[];
+
+  const description = access.canManageUsers
+    ? "Every task across all departments."
+    : access.isTeamLead
+      ? "Tasks across your department — see what everyone's working on."
+      : "Your tasks. Only you (and your team lead) can see them.";
+
+  // Managers can filter by any department; team leads by their own (if >1);
+  // employees have nothing to filter (it's just their own tasks).
+  const filterDepartments = access.canManageUsers ? allDepartments : myDepartments;
 
   return (
     <>
-      <PageHeader
-        title="Team"
-        description="Tasks across your department — see what everyone's working on."
+      <PageHeader title="Team" description={description} />
+      <TaskList
+        tasks={tasks}
+        people={people}
+        departments={filterDepartments}
+        todayISO={localDateISO()}
+        filters={{
+          person: access.canManageUsers || access.isTeamLead,
+          department: filterDepartments.length > 1,
+        }}
       />
-      {myDeptIds.length === 0 ? (
-        <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
-          You&apos;re not in a department yet — ask an admin to add you.
-        </p>
-      ) : (
-        <TaskList
-          tasks={tasks}
-          people={people}
-          departments={myDepartments}
-          todayISO={localDateISO()}
-          filters={{ person: true, department: myDepartments.length > 1 }}
-        />
-      )}
     </>
   );
 }

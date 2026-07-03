@@ -71,6 +71,8 @@ export interface Invoice {
   issue_date: string | null;
   due_date: string | null;
   file_path: string | null;
+  /** Storage path (in the `payment-proofs` bucket) of the proof attached when cleared. */
+  payment_proof_path: string | null;
   status: InvoiceStatus;
   cleared_by: string | null;
   cleared_at: string | null;
@@ -88,7 +90,7 @@ export interface Invoice {
  * changing what any page shows.
  */
 export const INVOICE_LIST_COLUMNS =
-  "id, invoice_number, created_by, department_id, category_id, vendor_name, amount, currency, issue_date, file_path, status, cleared_by, cleared_at, reason, created_at";
+  "id, invoice_number, created_by, department_id, category_id, vendor_name, amount, currency, issue_date, file_path, payment_proof_path, status, cleared_by, cleared_at, reason, created_at";
 
 /**
  * A one-off payment from the "Petty Cash" ledger (`public.misc_payments`) —
@@ -156,6 +158,8 @@ export type NotificationType =
   | "invoice_posted"
   | "group_added"
   | "task_assigned"
+  | "task_due_soon"
+  | "task_overdue"
   | "eod_reminder"
   | "eod_submitted";
 

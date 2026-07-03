@@ -90,6 +90,11 @@ export interface UserAccess {
    * only their own department(s) — the pages scope the data accordingly.
    */
   canViewReports: boolean;
+  /**
+   * Read-only view of a department's invoices. Admins + HR (all) and team leads
+   * (their own department[s]). Clearing/rejecting stays with billing managers.
+   */
+  canViewDeptInvoices: boolean;
 }
 
 /** The departments (id + slug) a profile belongs to. Cached per-request. */
@@ -147,6 +152,7 @@ export const getUserAccess = cache(async (): Promise<UserAccess | null> => {
     canManageUsers: canManage,
     canManageBilling: canManage,
     canViewReports: canManage || isTeamLead,
+    canViewDeptInvoices: canManage || isTeamLead,
   };
 });
 

@@ -5,6 +5,50 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-07-03
+
+Trial-feedback fixes for the Influencer team: task permissions, role-scoped
+visibility, deadline notifications, a team-lead invoice view, and mandatory
+payment proof on clearing.
+
+### Fixed
+
+- **Task assignment for team leads was blocked.** The old "assign once, only
+  managers reassign" rule stopped team leads (and made the assignee dropdown
+  useless). Now:
+  - **Team leads** create + assign tasks to anyone **in their department(s)**.
+  - **Admins + HR** assign to anyone.
+  - **Regular employees** can only create tasks **for themselves** — they can't
+    assign to others.
+- **Team view leaked everyone's tasks to everyone.** Visibility is now
+  role-scoped **and enforced by RLS** (not just the UI):
+  - employee → **only their own** tasks;
+  - team lead → **their department(s)** only;
+  - admin / HR → all departments.
+
+### Added
+
+- **Deadline notifications** (via the existing 18:00 IST cron): a task due
+  **tomorrow** reminds its assignee; an **overdue** task notifies the assignee
+  **and their department's team lead(s)**. New `task_due_soon` / `task_overdue`
+  types.
+- **Department invoices** (`/billing/department`) — a read-only view for **team
+  leads** (and admins/HR) of every invoice posted by their department: employee
+  name, amount, status, date, with **search** (employee / amount / details) and
+  **sort** (date / amount / status / employee), and a link to each payment proof.
+- **Mandatory payment proof on clearing.** Clearing an invoice now **requires**
+  attaching a proof file (image/PDF) — the Clear button opens a file picker and
+  refuses without one ("Payment proof is required to clear an invoice"). The
+  proof is stored in the private `payment-proofs` bucket; the poster, team lead,
+  and managers can open it via a **View payment proof** link on the invoice.
+
+### Migration
+
+- `0015_task_visibility_and_assignment.sql` — the new task SELECT/INSERT/UPDATE
+  policies, the `can_assign_to()` helper, and the updated rules trigger.
+  (`payment_proof_path` and the `payment-proofs` bucket already existed from
+  migration 0002 — no change needed there.)
+
 ## [0.8.0] — 2026-07-03
 
 Employee profiles + avatars, the department-scoped **team_lead** role, and EOD

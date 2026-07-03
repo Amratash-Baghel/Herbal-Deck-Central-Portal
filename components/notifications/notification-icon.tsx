@@ -26,6 +26,10 @@ export function NotificationTypeIcon({
       return <GroupIcon {...props} />;
     case "task_assigned":
       return <TasksIcon {...props} />;
+    case "task_due_soon":
+      return <CalendarIcon {...props} />;
+    case "task_overdue":
+      return <CalendarIcon {...props} />;
     case "eod_reminder":
       return <CalendarIcon {...props} />;
     case "eod_submitted":

@@ -1,4 +1,5 @@
-import { requireProfile } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { TaskBoard } from "@/components/tasks/task-board";
@@ -24,7 +25,9 @@ const toPerson = (p: ProfileRow): Person => ({
  * people they can assign, and their departments) and hands off to the client.
  */
 export default async function TasksPage() {
-  const profile = await requireProfile();
+  const access = await getUserAccess();
+  if (!access) redirect("/login");
+  const profile = access.profile;
   const supabase = await createClient();
   const me = profile.id;
 
@@ -53,25 +56,23 @@ export default async function TasksPage() {
 
   const people = ((profs ?? []) as ProfileRow[]).map(toPerson);
 
-  // Admins + HR & Management can assign to anyone; everyone else to people in
-  // their own department(s) (plus themselves).
-  const canManage =
-    profile.role === "admin" ||
-    myDepartments.some((d) => d.slug === "hr-management");
-
+  // Who can this person assign tasks to?
+  //   admin / HR → anyone;  team lead → their department(s);  employee → self.
+  const canManage = access.canManageUsers;
   let assignable: Person[];
   if (canManage) {
     assignable = people;
-  } else {
+  } else if (access.isTeamLead && myDeptIds.length > 0) {
     const ids = new Set<string>([me]);
-    if (myDeptIds.length > 0) {
-      const { data: memberRows } = await supabase
-        .from("profile_departments")
-        .select("profile_id")
-        .in("department_id", myDeptIds);
-      for (const r of memberRows ?? []) ids.add(r.profile_id as string);
-    }
+    const { data: memberRows } = await supabase
+      .from("profile_departments")
+      .select("profile_id")
+      .in("department_id", myDeptIds);
+    for (const r of memberRows ?? []) ids.add(r.profile_id as string);
     assignable = people.filter((p) => ids.has(p.id));
+  } else {
+    // Regular employees can only create tasks for themselves.
+    assignable = people.filter((p) => p.id === me);
   }
 
   return (

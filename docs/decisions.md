@@ -409,6 +409,43 @@ exposes `isTeamLead` / `canViewReports` and the caller's `departmentIds`.
 `departmentIds` when the viewer isn't a full manager. Staff management and
 billing-clear gates (`canManageUsers` / `canManageBilling`) remain admins + HR.
 
+## 18. Task visibility is role-scoped, enforced in the database
+
+**Decision:** Who can *see* a task follows the same three-tier shape as the rest
+of the portal, and it's enforced by RLS — not hidden in the UI:
+
+- **employee** → only their own tasks (created by or assigned to them);
+- **team lead** → every task in their department(s);
+- **admin / HR** → all tasks, everywhere.
+
+Assignment mirrors it: an employee can only assign to themselves, a team lead
+only to people in their department(s), admins/HR to anyone.
+
+**Why:**
+
+- **Tasks are personal work, not shared documents.** The original design let any
+  employee see their whole department's board — fine for a tiny team, but the
+  Influencer trial showed it's wrong: an individual contributor doesn't need
+  (or want) to see everyone else's task list. The person who *does* need the
+  department view is the one responsible for the department — the team lead. So
+  visibility maps to responsibility: you see your own work; your team lead sees
+  the team's; admins/HR see everything.
+- **It must hold at the data layer, not the UI.** Hiding rows in React is not
+  security — a crafted query would still return them. The rules live in the
+  `tasks` RLS policies (`tasks_select` for visibility, `can_assign_to()` in the
+  insert/update checks, plus the rules trigger), so the boundary holds even if
+  the client is bypassed. The UI simply matches what the database already
+  enforces (better UX, not the enforcement).
+- **It reuses the department-scoped model (decision 17).** Team-lead scope is
+  their `profile_departments` membership via `my_department_ids()` /
+  `can_assign_to()` — no new concept, and a lead who runs two departments sees
+  both automatically.
+
+**Implementation:** migration `0015` — `tasks_select` (own / team-lead-dept /
+manager), `can_assign_to(target)` used in `tasks_insert` / `tasks_update` checks
+and the `tasks_enforce_rules` trigger. The app's server actions and the Team
+view branch on `getUserAccess()` (`isTeamLead` / `canManageUsers`) to match.
+
 ---
 
 ## Summary
@@ -433,3 +470,4 @@ billing-clear gates (`canManageUsers` / `canManageBilling`) remain admins + HR.
 | Activity tracking| Passive; EOD = clock-out | Honest record, no ritual; reuse a natural action |
 | Deleted tasks   | Drop from counts, keep in EOD | "Now" vs "what happened" are different questions |
 | Team Lead role  | Department-scoped, not portal-wide | Authority follows responsibility; reuses dept model |
+| Task visibility | Role-scoped, RLS-enforced | Tasks are personal work; boundary must hold at DB layer |

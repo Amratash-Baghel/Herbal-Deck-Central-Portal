@@ -189,6 +189,9 @@ In the Supabase SQL Editor, run these **once, in order**:
 14. [`supabase/migrations/0014_team_lead_and_eod.sql`](../supabase/migrations/0014_team_lead_and_eod.sql)
    — `is_team_lead()`, the EOD-submitted notification trigger,
    `activity_logs.incomplete`, and `finalize_incomplete_attendance()`.
+15. [`supabase/migrations/0015_task_visibility_and_assignment.sql`](../supabase/migrations/0015_task_visibility_and_assignment.sql)
+   — role-scoped task visibility + assignment (RLS + `can_assign_to()` + rules
+   trigger).
 
 After setup, assign yourself (and your CTO) to the **HR & Management** department
 — or keep `role = 'admin'` — so billing and user management unlock. Chat and

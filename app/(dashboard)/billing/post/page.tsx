@@ -75,6 +75,21 @@ export default async function PostInvoicePage() {
     });
   }
 
+  // Payment proofs (once cleared) — the poster can view them.
+  const withProof = mine.filter((i) => i.payment_proof_path);
+  const proofUrl = new Map<string, string>();
+  if (withProof.length > 0) {
+    const { data: signed } = await admin.storage
+      .from("payment-proofs")
+      .createSignedUrls(
+        withProof.map((i) => i.payment_proof_path as string),
+        3600,
+      );
+    signed?.forEach((s, idx) => {
+      if (s.signedUrl) proofUrl.set(withProof[idx].id, s.signedUrl);
+    });
+  }
+
   return (
     <>
       <PageHeader
@@ -146,6 +161,7 @@ export default async function PostInvoicePage() {
                             canManage={false}
                             canDelete={invoice.status === "pending"}
                             hasSignedFile={Boolean(invoice.file_path)}
+                            paymentProofUrl={proofUrl.get(invoice.id) ?? null}
                           />
                         </div>
                       </div>

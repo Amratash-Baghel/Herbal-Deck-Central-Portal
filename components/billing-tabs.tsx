@@ -7,13 +7,23 @@ import { usePathname } from "next/navigation";
  * Sub-navigation across the billing tools. "Clear", "Analytics", and "Petty
  * Cash" only appear for billing managers (admins + HR & Management).
  */
-export function BillingTabs({ canClear }: { canClear: boolean }) {
+export function BillingTabs({
+  canClear,
+  canViewDeptInvoices,
+}: {
+  canClear: boolean;
+  canViewDeptInvoices: boolean;
+}) {
   const pathname = usePathname();
 
   const tabs = [
     { href: "/billing", label: "Overview", exact: true },
     { href: "/billing/generate", label: "Generate" },
     { href: "/billing/post", label: "Post" },
+    // Team leads (and managers) get the read-only department invoice view.
+    ...(canViewDeptInvoices
+      ? [{ href: "/billing/department", label: "Department" }]
+      : []),
     ...(canClear
       ? [
           { href: "/billing/clearing", label: "Clear" },

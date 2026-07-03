@@ -28,6 +28,32 @@ function displayName(p: { full_name: string | null; email: string }): string {
   return p.full_name || p.email;
 }
 
+/**
+ * May `access` assign a task to `target`? Self / unassigned is always allowed;
+ * admins + HR can assign to anyone; team leads only to people who share one of
+ * their departments. Mirrors the `can_assign_to()` SQL used by RLS.
+ */
+async function canAssignTo(
+  access: Awaited<ReturnType<typeof getUserAccess>>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  target: string | null | undefined,
+): Promise<boolean> {
+  if (!access) return false;
+  if (!target || target === access.profile.id) return true;
+  if (access.canManageUsers) return true;
+  if (access.isTeamLead && access.departmentIds.length > 0) {
+    const { data } = await supabase
+      .from("profile_departments")
+      .select("profile_id")
+      .eq("profile_id", target)
+      .in("department_id", access.departmentIds)
+      .limit(1)
+      .maybeSingle();
+    return Boolean(data);
+  }
+  return false;
+}
+
 /** Notify an assignee (when it's someone other than the actor). */
 async function notifyAssignee(
   assigneeId: string | null | undefined,
@@ -101,6 +127,15 @@ export async function createTask(input: CreateTaskInput): Promise<TaskResult> {
 
   const assignedTo =
     input.assignedTo === undefined ? access.profile.id : input.assignedTo;
+
+  if (!(await canAssignTo(access, supabase, assignedTo))) {
+    return {
+      ok: false,
+      error: access.isTeamLead
+        ? "You can only assign tasks to people in your department."
+        : "Only team leads and managers can assign tasks to others.",
+    };
+  }
 
   const { data, error } = await supabase
     .from("tasks")
@@ -206,11 +241,14 @@ export async function updateTask(
   if (input.assignedTo !== undefined) {
     const changing =
       (current.assigned_to ?? null) !== (input.assignedTo ?? null);
-    // A task can be assigned once; after that only admins + HR can change it.
-    if (changing && current.assigned_to !== null && !access.canManageUsers) {
+    // The new assignee must be someone the caller may assign to (self /
+    // team-lead's department / manager anyone).
+    if (changing && !(await canAssignTo(access, supabase, input.assignedTo))) {
       return {
         ok: false,
-        error: "Only HR or admin can change who a task is assigned to.",
+        error: access.isTeamLead
+          ? "You can only assign tasks to people in your department."
+          : "Only team leads and managers can assign tasks to others.",
       };
     }
     patch.assigned_to = input.assignedTo;

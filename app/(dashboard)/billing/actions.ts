@@ -130,21 +130,60 @@ export async function deleteInvoice(formData: FormData): Promise<void> {
   revalidatePath("/billing/clearing");
 }
 
-/** Mark an invoice cleared (billing managers only), recording who cleared it. */
-export async function clearInvoice(formData: FormData): Promise<void> {
+export interface ClearState {
+  error: string | null;
+  success: string | null;
+}
+
+/**
+ * Mark an invoice cleared (billing managers only). A **payment proof** file
+ * (image or PDF) is MANDATORY — the invoice can't be cleared without one. The
+ * proof is stored in the private `payment-proofs` bucket and its path saved on
+ * the invoice, so the poster / team lead / managers can view it afterwards.
+ */
+export async function clearInvoice(
+  _prev: ClearState,
+  formData: FormData,
+): Promise<ClearState> {
   const access = await requireBillingManager();
   const id = String(formData.get("invoice_id") ?? "");
-  if (!id) return;
+  if (!id) return { error: "Missing invoice.", success: null };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Payment proof is required to clear an invoice.", success: null };
+  }
+  const okType =
+    file.type.startsWith("image/") || file.type === "application/pdf";
+  if (!okType) {
+    return { error: "Payment proof must be an image or a PDF.", success: null };
+  }
+
+  const admin = createAdminClient();
+  const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+  const path = `${id}/proof-${Date.now()}.${ext}`;
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const { error: upErr } = await admin.storage
+    .from("payment-proofs")
+    .upload(path, bytes, { contentType: file.type, upsert: true });
+  if (upErr) return { error: upErr.message, success: null };
+
   const supabase = await createClient();
-  await supabase
+  const { error } = await supabase
     .from("invoices")
     .update({
       status: "cleared",
       cleared_by: access.profile.id,
       cleared_at: new Date().toISOString(),
+      payment_proof_path: path,
     })
     .eq("id", id);
+  if (error) return { error: error.message, success: null };
+
   revalidatePath("/billing/clearing");
+  revalidatePath("/billing/post");
+  revalidatePath("/billing/department");
+  return { error: null, success: "Invoice cleared." };
 }
 
 /** Mark an invoice rejected (billing managers only), recording who rejected it. */

@@ -15,7 +15,10 @@ export default async function BillingLayout({
 
   return (
     <>
-      <BillingTabs canClear={Boolean(access?.canManageBilling)} />
+      <BillingTabs
+        canClear={Boolean(access?.canManageBilling)}
+        canViewDeptInvoices={Boolean(access?.canViewDeptInvoices)}
+      />
       {children}
     </>
   );
