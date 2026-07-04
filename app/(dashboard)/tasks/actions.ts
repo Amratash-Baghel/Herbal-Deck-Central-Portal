@@ -221,10 +221,10 @@ export async function updateTask(
 
   const supabase = await createClient();
 
-  // Load the current row so we can enforce the "assign once" rule.
+  // Load the current row so we can enforce the assignment rules.
   const { data: current } = await supabase
     .from("tasks")
-    .select("assigned_to")
+    .select("assigned_to, status")
     .eq("id", taskId)
     .single();
   if (!current) return { ok: false, error: "Task not found." };
@@ -241,6 +241,10 @@ export async function updateTask(
   if (input.assignedTo !== undefined) {
     const changing =
       (current.assigned_to ?? null) !== (input.assignedTo ?? null);
+    // A completed task's assignee is locked.
+    if (changing && current.status === "done") {
+      return { ok: false, error: "A completed task cannot be reassigned." };
+    }
     // The new assignee must be someone the caller may assign to (self /
     // team-lead's department / manager anyone).
     if (changing && !(await canAssignTo(access, supabase, input.assignedTo))) {

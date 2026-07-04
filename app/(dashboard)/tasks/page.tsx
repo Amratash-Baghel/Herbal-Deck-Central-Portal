@@ -84,6 +84,7 @@ export default async function TasksPage() {
       <TaskBoard
         me={toPerson(profile)}
         canManage={canManage}
+        canAssignOthers={access.canManageUsers || access.isTeamLead}
         initialTasks={(taskRows ?? []) as Task[]}
         people={people}
         assignable={assignable}

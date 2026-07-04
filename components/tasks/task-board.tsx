@@ -25,6 +25,7 @@ import type { Person, DeptRef } from "@/components/tasks/types";
 export function TaskBoard({
   me,
   canManage,
+  canAssignOthers,
   initialTasks,
   people,
   assignable,
@@ -33,6 +34,8 @@ export function TaskBoard({
 }: {
   me: Person;
   canManage: boolean;
+  /** Can assign tasks to other people (admins/HR anyone; team leads their dept). */
+  canAssignOthers: boolean;
   initialTasks: Task[];
   people: Person[];
   assignable: Person[];
@@ -191,15 +194,18 @@ export function TaskBoard({
               <div className="flex flex-1 flex-col gap-3">
                 {items.map((task) => {
                   const dept = deptOf(task.department_id);
-                  // Only the assignee (or a manager) may move a task forward;
-                  // an unassigned task can be moved by whoever owns it here.
+                  // The assignee, a manager, or someone who can assign others
+                  // (team lead over their dept) may move a task.
                   const canMove =
                     canManage ||
+                    canAssignOthers ||
                     task.assigned_to === me.id ||
                     task.assigned_to === null;
-                  // A task can be assigned once; after that only managers may
-                  // change it.
-                  const canReassign = canManage || task.assigned_to === null;
+                  // Reassign: managers + team leads (or an unassigned task) — but
+                  // never once the task is Done (its assignee is locked).
+                  const canReassign =
+                    (canAssignOthers || task.assigned_to === null) &&
+                    task.status !== "done";
                   return (
                     <TaskCard
                       key={task.id}
@@ -233,7 +239,10 @@ export function TaskBoard({
         <TaskDetailDialog
           task={openTask}
           editable
-          canReassign={canManage || openTask.assigned_to === null}
+          canReassign={
+            (canAssignOthers || openTask.assigned_to === null) &&
+            openTask.status !== "done"
+          }
           assignable={assignable}
           departments={departments}
           creatorName={nameOf(openTask.created_by) ?? "Someone"}

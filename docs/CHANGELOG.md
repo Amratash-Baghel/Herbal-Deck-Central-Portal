@@ -5,6 +5,41 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] — 2026-07-04
+
+More trial fixes: correct counts, team-lead assignment, report privacy, and
+"done" task stability.
+
+### Fixed
+
+- **Team leads couldn't assign tasks.** The board only let *managers* (or an
+  unassigned task) change the assignee, so a team lead's picker was locked the
+  moment a task was self-assigned. Team leads can now assign/reassign within
+  their department (the board respects a new "can assign others" capability).
+- **Counts double-counted.** EOD/report counts were summed from the append-only
+  activity log, so moving a task in and out of a column added to the totals each
+  time. Counts now come from the **current state of the tasks table** — each
+  task counts once. Move a task back out of Done and *completed* drops by one
+  while *in progress* rises by one.
+- **Employees could see the whole team's reports.** EOD, activity, and task
+  history are now **own-only for employees**; team leads see their department;
+  admins + HR see everyone (RLS-enforced). The EOD page hides the team sections
+  for regular employees.
+
+### Changed
+
+- **Completed tasks are stable.** A task's assignee is **locked once it's Done**
+  (can't be reassigned), and no further activity is recorded. Moving a task back
+  out of Done **removes its completion from history** (un-completes it), so the
+  counts and the timeline stay honest.
+
+### Migration
+
+- `0016_counts_visibility_and_done_lock.sql` — rewrites `eod_summary` /
+  `eod_overview` to count current task state, tightens the EOD / activity /
+  task-history read policies to be role-scoped, and updates the task triggers
+  for the done-lock + un-complete behaviour.
+
 ## [0.9.0] — 2026-07-03
 
 Trial-feedback fixes for the Influencer team: task permissions, role-scoped

@@ -1,4 +1,5 @@
-import { requireProfile } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { EodNoteForm } from "@/components/tasks/eod-note-form";
@@ -35,9 +36,13 @@ function Tile({ label, value }: { label: string; value: number }) {
  * own, your department's, and — for managers — everyone's.
  */
 export default async function ReportsPage() {
-  const profile = await requireProfile();
+  const access = await getUserAccess();
+  if (!access) redirect("/login");
+  const me = access.profile.id;
+  // Only team leads + managers see the team-wide sections; employees see just
+  // their own report and history.
+  const canViewTeam = access.canViewReports;
   const supabase = await createClient();
-  const me = profile.id;
   const today = localDateISO();
 
   const [
@@ -120,7 +125,8 @@ export default async function ReportsPage() {
         <EodNoteForm initialNote={existingNote} alreadySubmitted={submittedToday} />
       </section>
 
-      {/* Team today */}
+      {/* Team today — team leads + managers only */}
+      {canViewTeam && (
       <section className="mb-8">
         <h2 className="mb-3 text-base font-semibold tracking-tight">Today across the team</h2>
         <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -166,10 +172,13 @@ export default async function ReportsPage() {
           </table>
         </div>
       </section>
+      )}
 
-      {/* Recent submitted reports */}
+      {/* Recent submitted reports (own only for employees) */}
       <section>
-        <h2 className="mb-3 text-base font-semibold tracking-tight">Recent reports</h2>
+        <h2 className="mb-3 text-base font-semibold tracking-tight">
+          {canViewTeam ? "Recent reports" : "Your recent reports"}
+        </h2>
         <ul className="space-y-2">
           {reports.length === 0 && (
             <li className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
@@ -178,7 +187,10 @@ export default async function ReportsPage() {
           )}
           {reports.map((r) => (
             <li key={r.id}>
-              <EodReportCard report={r} employeeName={nameOf.get(r.employee_id)} />
+              <EodReportCard
+                report={r}
+                employeeName={canViewTeam ? nameOf.get(r.employee_id) : undefined}
+              />
             </li>
           ))}
         </ul>
