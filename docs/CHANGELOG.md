@@ -5,6 +5,35 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] — 2026-07-05
+
+Fixes the EOD "Started" count and tightens what a finalised report remembers
+about pending work.
+
+### Fixed
+
+- **"Started" count dropped back to zero.** It was computed from tasks
+  *currently* in progress, so moving a task on to Done (or back to To Do) the
+  same day it started removed it from the count entirely, even though work had
+  genuinely begun. It's now keyed off `started_at`'s date alone, independent of
+  the task's current status — so it sticks for the day once a task first enters
+  In Progress, no matter how many times it's moved afterward. "Completed" keeps
+  its existing, deliberately revocable behaviour (moving a task out of Done
+  still un-completes it); "pending" still follows current status.
+
+### Changed
+
+- **A finalised EOD report's "pending" count now only counts deadline work.**
+  The live "Pending" tile on the reports page still shows every outstanding
+  task, but the snapshot saved when you submit/update your EOD only counts
+  pending tasks that have a deadline — undated pending work isn't a same-day
+  concern and shouldn't clutter the historical record.
+
+### Migration
+
+- `0020_started_count_fix.sql` — updates `eod_summary()` / `eod_overview()`
+  so "started" no longer requires the task to still be in progress.
+
 ## [0.10.1] — 2026-07-05
 
 Follow-up fixes to the 0.10.0 dropdown and colour work: the notification bell

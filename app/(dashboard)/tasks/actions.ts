@@ -365,13 +365,29 @@ export async function saveEodNote(note: string): Promise<ActionResult> {
     d: today,
   });
 
+  // The live "pending" tile counts all outstanding tasks, but a finalised EOD
+  // report only records pending work that has a deadline — undated pending
+  // tasks aren't a same-day concern and shouldn't clutter the historical record.
+  const { count: pendingWithDeadline } = await supabase
+    .from("tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("assigned_to", access.profile.id)
+    .neq("status", "done")
+    .eq("archived", false)
+    .not("deadline", "is", null);
+
+  const snapshot = {
+    ...((summary as Record<string, unknown>) ?? {}),
+    pending: pendingWithDeadline ?? 0,
+  };
+
   // Admins + HR are notified by a database trigger on eod_reports INSERT
   // (see migration 0014) — reliable regardless of the service-role env var.
   const { error } = await supabase.from("eod_reports").upsert(
     {
       employee_id: access.profile.id,
       report_date: today,
-      auto_summary: summary ?? {},
+      auto_summary: snapshot,
       manual_note: note.trim() || null,
       updated_at: new Date().toISOString(),
     },
