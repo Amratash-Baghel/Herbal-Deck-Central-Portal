@@ -463,20 +463,25 @@ the same permission gives that flexibility with zero backward-compatibility risk
 `is_hr_management()` simply ORs the two checks, so every existing policy keeps
 working untouched.
 
-## 20. Employees get a department-unique default colour
+## 20. Employees get a department-unique default *note* colour
 
-**Decision:** Assign each employee an accent colour that no one else in their
-department shares, shown as a dot / border beside their name (and as a task's
-accent when no custom colour is set).
+**Decision:** Assign each employee a default sticky-note colour that no one else
+in their department shares, and use it as the **note's background** for their
+tasks when no custom colour is set. Identity is carried by the *whole note's
+colour*, not a small dot beside the name (an earlier iteration used a dot — it
+was too easy to miss on a dense board).
 
-**Why:** On the Team and Manage boards you're scanning a wall of tasks and the
-question is "whose is this?". Names require reading; a consistent colour is
-recognisable at a glance. Uniqueness *within a department* is what matters —
-that's the group you compare within — so colours only need to be distinct there,
-which a small palette easily covers. People in multiple departments get one
-stable colour (their primary department's) so their identity doesn't flicker
-between views. Manual task colours (a separate, deliberate choice) always win
-over the default.
+**Why:** On the Team and Manage boards you're scanning a wall of notes and the
+question is "whose is this?". Names require reading; the entire card taking on a
+person's colour is recognisable at a glance from across the screen — far more so
+than a 2 px dot. Uniqueness *within a department* is what matters — that's the
+group you compare within — so colours only need to be distinct there, which the
+ten-colour palette easily covers. People in multiple departments get one stable
+colour (their primary department's) so their identity doesn't flicker between
+views. Priority is explicit: a manually-chosen note colour wins, then the
+assignee's default, then the department colour (for unassigned notes). The pool
+is the same `NOTE_COLORS` palette used by the manual picker, so defaults and
+manual choices always look consistent.
 
 ---
 

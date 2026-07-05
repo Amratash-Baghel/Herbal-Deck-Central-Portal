@@ -27,6 +27,11 @@ export interface Profile {
   avatar_path: string | null;
   /** Default accent colour (hex), unique within their department. */
   color: string | null;
+  /**
+   * Default sticky-note colour key (see NOTE_COLORS), unique within their
+   * department — the note background when a task of theirs has no custom colour.
+   */
+  note_color: string | null;
   created_at: string;
   /** Set when the employee has been deactivated (soft-removed); null if active. */
   deactivated_at: string | null;

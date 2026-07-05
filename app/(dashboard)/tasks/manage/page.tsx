@@ -7,11 +7,11 @@ import { time } from "@/lib/perf";
 import { TASK_LIST_COLUMNS, type Task } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
 
-type ProfileRow = { id: string; full_name: string | null; email: string; color: string | null };
+type ProfileRow = { id: string; full_name: string | null; email: string; note_color: string | null };
 const toPerson = (p: ProfileRow): Person => ({
   id: p.id,
   name: p.full_name || p.email,
-  color: p.color,
+  noteColor: p.note_color,
 });
 
 type OverviewRow = {
@@ -61,7 +61,7 @@ export default async function ManageTasksPage() {
       supabase.rpc("eod_overview", { d: today }),
       supabase
         .from("profiles")
-        .select("id, full_name, email, color")
+        .select("id, full_name, email, note_color")
         .is("deactivated_at", null)
         .order("full_name", { nullsFirst: false }),
       supabase.from("departments").select("id, name, slug").order("name"),

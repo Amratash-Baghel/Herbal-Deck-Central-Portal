@@ -57,8 +57,8 @@ export function TaskList({
     const m = new Map(people.map((p) => [p.id, p.name]));
     return (id: string | null) => (id ? m.get(id) ?? "Someone" : null);
   }, [people]);
-  const colorOf = useMemo(() => {
-    const m = new Map(people.map((p) => [p.id, p.color ?? null]));
+  const noteColorOf = useMemo(() => {
+    const m = new Map(people.map((p) => [p.id, p.noteColor ?? null]));
     return (id: string | null) => (id ? m.get(id) ?? null : null);
   }, [people]);
   const deptOf = useMemo(() => {
@@ -149,12 +149,10 @@ export function TaskList({
         {filtered.map((t) => {
           const d = deptOf(t.department_id);
           const days = daysUntil(t.deadline);
-          const assigneeColor = colorOf(t.assigned_to);
           return (
             <li
               key={t.id}
-              style={assigneeColor ? { borderLeftColor: assigneeColor } : undefined}
-              className={`flex items-start gap-3 rounded-xl border-l-4 px-4 py-3 ${noteColor(t.color, d?.slug)}`}
+              className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${noteColor(t.color, noteColorOf(t.assigned_to), d?.slug)}`}
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -162,12 +160,6 @@ export function TaskList({
                   <StatusBadge status={t.status} />
                 </div>
                 <p className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-foreground/70">
-                  {assigneeColor && (
-                    <span
-                      className="inline-block h-2 w-2 rounded-full"
-                      style={{ backgroundColor: assigneeColor }}
-                    />
-                  )}
                   {nameOf(t.assigned_to) ?? "Unassigned"} · {d?.name ?? "—"} · by{" "}
                   {nameOf(t.created_by)}
                   {days !== null && (

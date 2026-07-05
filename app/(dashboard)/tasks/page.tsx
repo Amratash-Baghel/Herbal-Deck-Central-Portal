@@ -12,13 +12,13 @@ type ProfileRow = {
   full_name: string | null;
   email: string;
   avatar_path: string | null;
-  color: string | null;
+  note_color: string | null;
 };
 const toPerson = (p: ProfileRow): Person => ({
   id: p.id,
   name: p.full_name || p.email,
   avatarPath: p.avatar_path,
-  color: p.color,
+  noteColor: p.note_color,
 });
 
 /**
@@ -40,7 +40,7 @@ export default async function TasksPage() {
         supabase.from("departments").select("id, name, slug").order("name"),
         supabase
           .from("profiles")
-          .select("id, full_name, email, avatar_path, color")
+          .select("id, full_name, email, avatar_path, note_color")
           .is("deactivated_at", null)
           .order("full_name", { nullsFirst: false }),
         supabase

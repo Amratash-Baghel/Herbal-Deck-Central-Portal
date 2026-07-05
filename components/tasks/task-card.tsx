@@ -18,19 +18,11 @@ function initials(name: string): string {
     .join("");
 }
 
-/** Initials bubble ringed with the assignee's personal colour (if any). */
-function AssigneeDot({
-  color,
-  children,
-}: {
-  color?: string | null;
-  children: ReactNode;
-}) {
+/** A small initials bubble for the assignee (whose-task identity is carried by
+ *  the note's background colour, not a coloured dot). */
+function AssigneeDot({ children }: { children: ReactNode }) {
   return (
-    <span
-      className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground/10 text-[8px] font-bold"
-      style={color ? { boxShadow: `0 0 0 1.5px ${color}` } : undefined}
-    >
+    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground/10 text-[8px] font-bold">
       {children}
     </span>
   );
@@ -100,7 +92,7 @@ export function TaskCard({
   deptSlug,
   editable,
   assignable,
-  assigneeColor,
+  assigneeNoteColor,
   onOpen,
   onMove,
   onAssign,
@@ -112,7 +104,8 @@ export function TaskCard({
   deptSlug: string | null;
   editable: boolean;
   assignable?: Person[];
-  assigneeColor?: string | null;
+  /** The assignee's default note-colour key — the note's fallback background. */
+  assigneeNoteColor?: string | null;
   onOpen: () => void;
   onMove?: (status: TaskStatus) => void;
   onAssign?: (assigneeId: string | null) => void;
@@ -131,6 +124,7 @@ export function TaskCard({
       style={{ transform: `rotate(${tilt}deg)` }}
       className={`group rounded-xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:rotate-0 hover:shadow-md ${noteColor(
         task.color,
+        assigneeNoteColor,
         deptSlug,
       )} ${editable ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
@@ -156,7 +150,7 @@ export function TaskCard({
             buttonClassName="inline-flex items-center gap-1 rounded-md border border-foreground/15 bg-foreground/5 px-1.5 py-0.5 text-[11px] font-medium transition hover:bg-foreground/10"
             button={
               <>
-                <AssigneeDot color={assigneeColor}>
+                <AssigneeDot>
                   {assigneeName ? initials(assigneeName) : "+"}
                 </AssigneeDot>
                 {assigneeName ?? "Assign"}
@@ -183,16 +177,10 @@ export function TaskCard({
                       onAssign(p.id);
                       close();
                     }}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition hover:bg-accent ${
+                    className={`block w-full px-3 py-1.5 text-left text-xs transition hover:bg-accent ${
                       p.id === task.assigned_to ? "font-semibold text-primary" : ""
                     }`}
                   >
-                    {p.color && (
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: p.color }}
-                      />
-                    )}
                     {p.name}
                   </button>
                 ))}
@@ -201,7 +189,7 @@ export function TaskCard({
           </PopoverMenu>
         ) : assigneeName ? (
           <span className="inline-flex items-center gap-1 text-[11px] font-medium">
-            <AssigneeDot color={assigneeColor}>{initials(assigneeName)}</AssigneeDot>
+            <AssigneeDot>{initials(assigneeName)}</AssigneeDot>
             {assigneeName}
           </span>
         ) : (

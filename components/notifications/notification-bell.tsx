@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useNotifications } from "@/components/notifications/notifications-provider";
 import { NotificationTypeIcon } from "@/components/notifications/notification-icon";
@@ -27,6 +28,24 @@ export function NotificationBell() {
     if (n.link) router.push(n.link);
   }
 
+  // Close (rather than chase) the panel on scroll/resize/Escape, matching the
+  // task PopoverMenu so it never drifts off its anchor or lingers stale.
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   return (
     <div className="relative">
       <button
@@ -43,17 +62,21 @@ export function NotificationBell() {
         )}
       </button>
 
-      {open && (
-        <>
-          {/* Click-away backdrop */}
-          <button
-            type="button"
-            aria-hidden="true"
-            tabIndex={-1}
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-40 cursor-default"
-          />
-          <div className="fixed left-3 right-3 top-16 z-50 w-auto rounded-2xl border bg-card shadow-lg md:left-[17rem] md:right-auto md:top-4 md:w-96">
+      {open &&
+        createPortal(
+          <>
+            {/* Click-away backdrop. Rendered in a portal to <body> at a high
+                z-index so, like the task PopoverMenu, the panel escapes the
+                sidebar's stacking context and never bleeds into the content
+                behind it. */}
+            <button
+              type="button"
+              aria-hidden="true"
+              tabIndex={-1}
+              onClick={() => setOpen(false)}
+              className="fixed inset-0 z-[100] cursor-default"
+            />
+            <div className="fixed left-3 right-3 top-16 z-[101] w-auto rounded-2xl border bg-card shadow-lg md:left-[17rem] md:right-auto md:top-4 md:w-96">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <p className="text-sm font-semibold tracking-tight">Notifications</p>
               {unreadCount > 0 && (
@@ -110,8 +133,9 @@ export function NotificationBell() {
               })}
             </ul>
           </div>
-        </>
-      )}
+          </>,
+          document.body,
+        )}
     </div>
   );
 }

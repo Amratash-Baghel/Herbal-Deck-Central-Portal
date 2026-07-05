@@ -222,13 +222,15 @@ export function TaskDetailDialog({
           {editable && (
             <div className="space-y-1.5">
               <label className={labelClass}>Note colour</label>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-3 py-1">
                 <button
                   type="button"
                   onClick={() => setColor(null)}
-                  title="Department default"
-                  className={`h-6 w-6 rounded-full border-2 bg-muted text-[9px] ${
-                    color === null ? "border-primary" : "border-transparent"
+                  title="Assignee's default colour"
+                  aria-label="Default colour"
+                  aria-pressed={color === null}
+                  className={`flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[9px] ring-offset-2 ring-offset-card transition ${
+                    color === null ? "ring-2 ring-primary" : "ring-1 ring-border"
                   }`}
                 >
                   —
@@ -240,9 +242,12 @@ export function TaskDetailDialog({
                     onClick={() => setColor(c.key)}
                     title={c.label}
                     aria-label={c.label}
+                    aria-pressed={color === c.key}
                     style={{ backgroundColor: c.swatch }}
-                    className={`h-6 w-6 rounded-full border-2 ${
-                      color === c.key ? "border-primary" : "border-transparent"
+                    className={`h-6 w-6 rounded-full ring-offset-2 ring-offset-card transition ${
+                      color === c.key
+                        ? "ring-2 ring-primary"
+                        : "ring-1 ring-black/10 hover:ring-black/25"
                     }`}
                   />
                 ))}

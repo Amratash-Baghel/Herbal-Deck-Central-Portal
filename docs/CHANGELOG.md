@@ -5,6 +5,46 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] — 2026-07-05
+
+Follow-up fixes to the 0.10.0 dropdown and colour work: the notification bell
+now escapes its stacking context too, the colour picker clearly shows the
+selected swatch and has a cleaner palette, and per-employee colour is now the
+note's own background (not a dot beside the name).
+
+### Fixed
+
+- **Notification dropdown still bled into the content behind it.** The 0.10.0
+  fix covered the task popovers but the bell's panel was still a plain
+  `fixed` element at `z-50` inside the sidebar, so it could sit under page
+  content. It now renders through a **portal to `<body>`** at the same high
+  z-index as the task menus (`z-[100]/[101]`) and closes on
+  outside-click / Escape / scroll — matching `PopoverMenu`.
+  (`components/notifications/notification-bell.tsx`)
+- **The colour picker didn't show which colour was selected.** The selected
+  swatch now gets a clear **ring halo** (offset ring) instead of a faint 2 px
+  border, so the current choice is obvious. (`task-detail-dialog.tsx`)
+- **The palette had two near-identical yellows and no red.** Dropped the
+  duplicate (`amber`), added **red**, plus **orange** and **indigo** — ten
+  visually distinct colours. (`lib/tasks.ts`)
+
+### Changed
+
+- **Per-employee colour is now the note's background, not a dot.** Each employee
+  still gets a colour that's **unique within their department**, but instead of a
+  small dot beside their name, the whole sticky note takes on that colour when a
+  task of theirs has no custom colour — so whose-note-is-whose reads at a glance
+  on the Team and Manage boards. Priority: manual colour → assignee's default →
+  department colour. The employee's default is drawn from the same `NOTE_COLORS`
+  palette as the manual picker. (`task-card.tsx`, `task-list.tsx`, `task-board.tsx`)
+
+### Migration
+
+- `0019_employee_note_colors.sql` — adds `profiles.note_color` and backfills a
+  department-unique key per employee. (`profiles.color` from 0018 is retired from
+  the UI but left in place; new employees are assigned a `note_color` by the
+  invite action.)
+
 ## [0.10.0] — 2026-07-04
 
 Dropdown overlay fix, HR & Management as a role, and sticky-note colours + rich

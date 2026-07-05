@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUserManager } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { EMPLOYEE_COLOR_PALETTE } from "@/lib/tasks";
+import { NOTE_COLOR_KEYS } from "@/lib/tasks";
 import type { Role } from "@/lib/types";
 
 export interface MutationState {
@@ -84,10 +84,11 @@ export async function inviteUser(
     }
   }
 
-  // Assign a default accent colour, unique within the new employee's primary
-  // department (fall back to cycling the palette if all are taken).
+  // Assign a default sticky-note colour, unique within the new employee's
+  // primary department (fall back to cycling the palette if all are taken) — so
+  // their notes are visually distinguishable from their teammates' at a glance.
   if (newUserId) {
-    let color = EMPLOYEE_COLOR_PALETTE[0];
+    let noteColor = NOTE_COLOR_KEYS[0];
     const primaryDept = departmentIds[0];
     if (primaryDept) {
       const { data: peerRows } = await admin
@@ -101,19 +102,19 @@ export async function inviteUser(
       if (peerIds.length > 0) {
         const { data: colorRows } = await admin
           .from("profiles")
-          .select("color")
+          .select("note_color")
           .in("id", peerIds);
         used = new Set(
           (colorRows ?? [])
-            .map((r) => r.color as string | null)
+            .map((r) => r.note_color as string | null)
             .filter((c): c is string => Boolean(c)),
         );
       }
-      color =
-        EMPLOYEE_COLOR_PALETTE.find((c) => !used.has(c)) ??
-        EMPLOYEE_COLOR_PALETTE[peerIds.length % EMPLOYEE_COLOR_PALETTE.length];
+      noteColor =
+        NOTE_COLOR_KEYS.find((c) => !used.has(c)) ??
+        NOTE_COLOR_KEYS[peerIds.length % NOTE_COLOR_KEYS.length];
     }
-    await admin.from("profiles").update({ color }).eq("id", newUserId);
+    await admin.from("profiles").update({ note_color: noteColor }).eq("id", newUserId);
   }
 
   revalidatePath("/employees");
