@@ -25,6 +25,25 @@ export function isoDaysAgo(days: number): string {
 }
 
 /**
+ * A compact human duration from a raw millisecond span, e.g. "2d 4h", "3h 12m",
+ * "45m", "30s". Returns null for a missing/invalid/negative span.
+ */
+export function formatMs(ms: number | null | undefined): string | null {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return null;
+  let secs = Math.floor(ms / 1000);
+  const d = Math.floor(secs / 86400);
+  secs -= d * 86400;
+  const h = Math.floor(secs / 3600);
+  secs -= h * 3600;
+  const m = Math.floor(secs / 60);
+  secs -= m * 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${secs}s`;
+}
+
+/**
  * A compact human duration between two instants, e.g. "2d 4h", "3h 12m",
  * "45m", "30s". Returns null if either end is missing/invalid or negative.
  */
@@ -36,16 +55,7 @@ export function formatDuration(
   const a = Date.parse(fromISO);
   const b = Date.parse(toISO);
   if (Number.isNaN(a) || Number.isNaN(b) || b < a) return null;
-  let secs = Math.floor((b - a) / 1000);
-  const d = Math.floor(secs / 86400);
-  secs -= d * 86400;
-  const h = Math.floor(secs / 3600);
-  secs -= h * 3600;
-  const m = Math.floor(secs / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return `${Math.max(0, Math.floor((b - a) / 1000))}s`;
+  return formatMs(b - a);
 }
 
 /**

@@ -4,7 +4,8 @@ import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { EodReportCard } from "@/components/reporting/eod-report-card";
-import { statusLabel } from "@/lib/tasks";
+import { EmployeeTaskReport } from "@/components/reporting/employee-task-report";
+import { computeTaskStats, TASK_STAT_COLUMNS, type TaskLite } from "@/lib/reporting";
 import {
   localDateISO,
   isoDaysAgo,
@@ -12,7 +13,7 @@ import {
   formatDuration,
   hourInTZ,
 } from "@/lib/time";
-import type { ActivityLog, EodReport, TaskActivity } from "@/lib/types";
+import type { ActivityLog, EodReport } from "@/lib/types";
 
 const WINDOW_DAYS = 45;
 const TZ = "Asia/Kolkata";
@@ -46,22 +47,6 @@ function fmtHourRange(h: number): string {
     return `${h12} ${period}`;
   };
   return `${label(h)} – ${label(h + 1)}`;
-}
-
-function activityLabel(a: TaskActivity): string {
-  const title = a.task_title ? `“${a.task_title}”` : "a task";
-  switch (a.action) {
-    case "created":
-      return `Created ${title}`;
-    case "status_changed":
-      return a.to_status ? `Moved ${title} to ${statusLabel(a.to_status)}` : `Updated ${title}`;
-    case "assigned":
-      return `Reassigned ${title}`;
-    case "archived":
-      return `Archived ${title}`;
-    default:
-      return `Updated ${title}`;
-  }
 }
 
 function fmtDay(iso: string): string {
@@ -111,30 +96,52 @@ export default async function EmployeeReviewPage({
   };
   const name = p.full_name || p.email;
 
-  const [{ data: membs }, { data: depts }, { data: activity }, { data: reports }, { data: taskActs }] =
-    await Promise.all([
-      supabase.from("profile_departments").select("department_id").eq("profile_id", id),
-      supabase.from("departments").select("id, name"),
-      supabase
-        .from("activity_logs")
-        .select("*")
-        .eq("employee_id", id)
-        .gte("date", since)
-        .order("date", { ascending: false }),
-      supabase
-        .from("eod_reports")
-        .select("*")
-        .eq("employee_id", id)
-        .order("report_date", { ascending: false })
-        .limit(60),
-      supabase
-        .from("task_activity")
-        .select("*")
-        .eq("actor_id", id)
-        .gte("created_at", sinceTs)
-        .order("created_at", { ascending: false })
-        .limit(300),
-    ]);
+  const [
+    { data: membs },
+    { data: depts },
+    { data: activity },
+    { data: reports },
+    { data: taskActs },
+    { data: openRows },
+    { data: doneRows },
+  ] = await Promise.all([
+    supabase.from("profile_departments").select("department_id").eq("profile_id", id),
+    supabase.from("departments").select("id, name"),
+    supabase
+      .from("activity_logs")
+      .select("*")
+      .eq("employee_id", id)
+      .gte("date", since)
+      .order("date", { ascending: false }),
+    supabase
+      .from("eod_reports")
+      .select("*")
+      .eq("employee_id", id)
+      .order("report_date", { ascending: false })
+      .limit(60),
+    // Just the timestamps — powers the "most active hour" histogram, not a list.
+    supabase
+      .from("task_activity")
+      .select("created_at")
+      .eq("actor_id", id)
+      .gte("created_at", sinceTs)
+      .limit(500),
+    // Current open work (any age) — the pending list + overdue signal.
+    supabase
+      .from("tasks")
+      .select(TASK_STAT_COLUMNS)
+      .eq("assigned_to", id)
+      .neq("status", "done")
+      .eq("archived", false),
+    // Completed within the window — the done list + throughput + deadline outcomes.
+    supabase
+      .from("tasks")
+      .select(TASK_STAT_COLUMNS)
+      .eq("assigned_to", id)
+      .eq("status", "done")
+      .gte("completed_at", sinceTs)
+      .order("completed_at", { ascending: false }),
+  ]);
 
   const targetDeptIds = ((membs ?? []) as { department_id: string }[]).map(
     (m) => m.department_id,
@@ -156,9 +163,20 @@ export default async function EmployeeReviewPage({
 
   const activityRows = (activity ?? []) as ActivityLog[];
   const eodReports = (reports ?? []) as EodReport[];
-  const history = (taskActs ?? []) as TaskActivity[];
+  const acts = (taskActs ?? []) as { created_at: string }[];
 
-  // --- Stats -------------------------------------------------------------
+  // --- Task performance (from the tasks table, not the activity log) -----
+  const openTasks = (openRows ?? []) as TaskLite[];
+  const doneTasks = (doneRows ?? []) as TaskLite[];
+  const taskStats = computeTaskStats(openTasks, doneTasks, TZ);
+  // Open tasks, overdue/soonest first (nulls last) for the pending list.
+  const openSorted = [...openTasks].sort((a, b) => {
+    const da = a.deadline ?? "9999-12-31";
+    const db = b.deadline ?? "9999-12-31";
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+
+  // --- Attendance stats --------------------------------------------------
   const daysSeen = activityRows.length;
   const submittedDays = activityRows.filter((a) => a.eod_submitted_at).length;
   const eodRate = daysSeen ? Math.round((submittedDays / daysSeen) * 100) : 0;
@@ -171,13 +189,10 @@ export default async function EmployeeReviewPage({
       ? fmtClock12(Math.round(arrivalMinutes.reduce((s, m) => s + m, 0) / arrivalMinutes.length))
       : "—";
 
-  const completedEvents = history.filter(
-    (a) => a.action === "status_changed" && a.to_status === "done",
-  ).length;
-  const avgCompleted = daysSeen ? (completedEvents / daysSeen).toFixed(1) : "0";
+  const avgCompleted = daysSeen ? (taskStats.completed / daysSeen).toFixed(1) : "0";
 
   const hourHistogram = new Map<number, number>();
-  for (const a of history) {
+  for (const a of acts) {
     const h = hourInTZ(a.created_at, TZ);
     if (h !== null) hourHistogram.set(h, (hourHistogram.get(h) ?? 0) + 1);
   }
@@ -218,10 +233,19 @@ export default async function EmployeeReviewPage({
       {/* Stats */}
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Avg arrival" value={avgArrival} hint={`over ${daysSeen} active days`} />
-        <Stat label="Avg completed / day" value={avgCompleted} hint={`${completedEvents} in ${WINDOW_DAYS} days`} />
+        <Stat label="Avg completed / day" value={avgCompleted} hint={`${taskStats.completed} in ${WINDOW_DAYS} days`} />
         <Stat label="EOD submission" value={`${eodRate}%`} hint={`${submittedDays}/${daysSeen} days`} />
         <Stat label="Most active" value={mostActive} hint="by task activity" />
       </div>
+
+      {/* Task performance — completed, open, and deadline reliability */}
+      <EmployeeTaskReport
+        stats={taskStats}
+        open={openSorted}
+        completed={doneTasks}
+        windowDays={WINDOW_DAYS}
+        tz={TZ}
+      />
 
       {/* Activity log */}
       <section className="mb-8">
@@ -277,32 +301,6 @@ export default async function EmployeeReviewPage({
               </tbody>
             </table>
           </div>
-        </div>
-      </section>
-
-      {/* Task history */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-base font-semibold tracking-tight">Task history</h2>
-        <div className="rounded-2xl border bg-card shadow-sm">
-          <ul className="divide-y">
-            {history.slice(0, 60).map((a) => (
-              <li key={a.id} className="flex items-baseline gap-3 px-5 py-2.5 text-sm">
-                <span className="w-36 shrink-0 text-xs tabular-nums text-muted-foreground">
-                  {new Date(a.created_at).toLocaleDateString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                  })}{" "}
-                  {formatClockTZ(a.created_at)}
-                </span>
-                <span className="text-foreground/80">{activityLabel(a)}</span>
-              </li>
-            ))}
-            {history.length === 0 && (
-              <li className="px-5 py-8 text-center text-sm text-muted-foreground">
-                No task activity in the last {WINDOW_DAYS} days.
-              </li>
-            )}
-          </ul>
         </div>
       </section>
 

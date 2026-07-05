@@ -483,6 +483,27 @@ assignee's default, then the department colour (for unassigned notes). The pool
 is the same `NOTE_COLORS` palette used by the manual picker, so defaults and
 manual choices always look consistent.
 
+## 21. Reporting reads task *state*, not the activity log
+
+**Decision:** Compute the reporting analytics (completed, open, overdue,
+deadline met/missed, throughput) from the current rows of the `tasks` table, and
+present them as structured views — not from the append-only `task_activity` log
+rendered as a flat timeline.
+
+**Why:** The activity log answers "what happened, in order"; a manager's
+question is "how is this person doing?" A chronological dump of "Moved X to Done"
+lines is noisy and easy to game — bouncing a task in and out of a column writes
+several rows but changes nothing real. Reading the tasks' current state instead
+counts each task **once** (the same principle as the EOD counts, decision 16),
+so the numbers are stable and honest. A **deadline miss** is defined as a task
+completed after its deadline **or** still open past its deadline, measured only
+over deadline-bearing tasks that have actually come due — undated or
+not-yet-due work isn't counted for or against anyone. Open work is shown in full
+regardless of age (nothing outstanding should silently drop off); completed work
+is windowed so the lists stay useful. The math lives in one shared helper
+(`lib/reporting.ts`) used by both the per-person review and the roster, so the
+roster and the drill-down can never disagree.
+
 ---
 
 ## Summary

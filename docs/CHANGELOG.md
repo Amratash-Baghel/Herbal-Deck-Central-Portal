@@ -5,6 +5,36 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-07-05
+
+Reporting overhaul: the Employee Review's flat, meaningless task log is replaced
+with real task-performance analytics, and the roster becomes a scannable
+comparison of load and reliability.
+
+### Added
+
+- **Task-performance analytics on the Employee Review.** In place of the old
+  chronological activity dump (a wall of "Moved X to Done" lines), each person
+  now shows: **Completed / Open / On-time rate / Avg time-to-complete** headline
+  stats, a **deadline-reliability scorecard** (a met-vs-missed bar with an
+  on-time %), a clean **Completed tasks** list (each with how long it took and an
+  on-time / late badge), and a clean **Open tasks** list sorted overdue-first
+  with deadline pills. All derived from the current state of the `tasks` table,
+  so each task counts once.
+- **Deadline-miss tracking.** A person's "miss rate" counts tasks completed
+  after their deadline **plus** open tasks already past due, over the
+  deadline-bearing tasks with a known outcome — so "how often they miss
+  deadlines" is an honest number, not skewed by work that isn't due yet.
+- **Roster signals.** The Employee Reviews list now shows each person's **open**
+  load (with an overdue badge), **on-time rate**, and **completed** count, and
+  sorts people with overdue work to the top so problem cases surface first.
+
+### Notes
+
+- No migration — the analytics read existing task columns
+  (`deadline` / `completed_at` / `started_at` / `status`) under the same RLS,
+  so nothing new to run in Supabase. New shared helper: `lib/reporting.ts`.
+
 ## [0.10.2] — 2026-07-05
 
 Fixes the EOD "Started" count and tightens what a finalised report remembers

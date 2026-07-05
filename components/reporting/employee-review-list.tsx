@@ -9,6 +9,14 @@ export interface ReviewListRow {
   name: string;
   email: string;
   departmentNames: string[];
+  /** Currently open (not done) tasks. */
+  open: number;
+  /** Open tasks already past their deadline. */
+  overdue: number;
+  /** On-time completion rate 0–100, or null if no deadlines have come due. */
+  onTimeRate: number | null;
+  /** Completed within the roster window. */
+  completed: number;
 }
 
 function initials(name: string): string {
@@ -20,15 +28,55 @@ function initials(name: string): string {
     .join("");
 }
 
-/** Searchable roster; each person links to their full review. */
-export function EmployeeReviewList({ rows }: { rows: ReviewListRow[] }) {
+/** A small labelled figure in the per-person signal cluster. */
+function Metric({
+  value,
+  label,
+  tone,
+}: {
+  value: string;
+  label: string;
+  tone?: "danger" | "good";
+}) {
+  const valueTone =
+    tone === "danger"
+      ? "text-red-600 dark:text-red-400"
+      : tone === "good"
+        ? "text-emerald-600 dark:text-emerald-400"
+        : "text-foreground";
+  return (
+    <div className="w-14 text-center">
+      <p className={`text-sm font-semibold tabular-nums ${valueTone}`}>{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+/**
+ * Searchable roster with per-person task signals (open load, overdue, on-time
+ * rate, recent throughput). People with overdue work sort to the top so the
+ * cases that need attention surface first. Each row links to the full review.
+ */
+export function EmployeeReviewList({
+  rows,
+  windowDays,
+}: {
+  rows: ReviewListRow[];
+  windowDays: number;
+}) {
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
-      `${r.name} ${r.email} ${r.departmentNames.join(" ")}`.toLowerCase().includes(q),
+    const base = q
+      ? rows.filter((r) =>
+          `${r.name} ${r.email} ${r.departmentNames.join(" ")}`.toLowerCase().includes(q),
+        )
+      : rows;
+    // Surface problems first: most overdue, then most open, then alphabetical.
+    return [...base].sort(
+      (a, b) =>
+        b.overdue - a.overdue || b.open - a.open || a.name.localeCompare(b.name),
     );
   }, [rows, query]);
 
@@ -44,6 +92,9 @@ export function EmployeeReviewList({ rows }: { rows: ReviewListRow[] }) {
             className="w-full rounded-xl border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Open &amp; overdue are live; on-time and done cover the last {windowDays} days.
+        </p>
       </div>
       <ul className="divide-y">
         {filtered.map((r) => (
@@ -56,12 +107,40 @@ export function EmployeeReviewList({ rows }: { rows: ReviewListRow[] }) {
                 {initials(r.name)}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{r.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-sm font-medium">{r.name}</p>
+                  {r.overdue > 0 && (
+                    <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                      {r.overdue} overdue
+                    </span>
+                  )}
+                </div>
                 <p className="truncate text-xs text-muted-foreground">
                   {r.departmentNames.join(", ") || "No department"}
                 </p>
               </div>
-              <span className="text-xs font-medium text-primary">View review →</span>
+
+              <div className="hidden shrink-0 items-center gap-1 sm:flex">
+                <Metric
+                  value={String(r.open)}
+                  label="Open"
+                  tone={r.overdue > 0 ? "danger" : undefined}
+                />
+                <Metric
+                  value={r.onTimeRate === null ? "—" : `${r.onTimeRate}%`}
+                  label="On time"
+                  tone={
+                    r.onTimeRate === null
+                      ? undefined
+                      : r.onTimeRate >= 80
+                        ? "good"
+                        : r.onTimeRate < 50
+                          ? "danger"
+                          : undefined
+                  }
+                />
+                <Metric value={String(r.completed)} label="Done" />
+              </div>
             </Link>
           </li>
         ))}
