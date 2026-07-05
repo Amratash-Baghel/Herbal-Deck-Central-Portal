@@ -5,7 +5,15 @@ import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { notifyUsers } from "@/lib/notifications";
 import { localDateISO } from "@/lib/time";
+import { sanitizeRichText } from "@/lib/rich-text";
+import { NOTE_COLORS } from "@/lib/tasks";
 import type { Task, TaskStatus } from "@/lib/types";
+
+const NOTE_COLOR_KEYS = new Set(NOTE_COLORS.map((c) => c.key));
+/** Validate a note-colour key (or null) so only known colours are stored. */
+function cleanColor(color: string | null | undefined): string | null {
+  return color && NOTE_COLOR_KEYS.has(color) ? color : null;
+}
 
 /**
  * Server Actions for Tasks & Reporting.
@@ -80,6 +88,7 @@ export interface CreateTaskInput {
   departmentId?: string;
   assignedTo?: string | null;
   deadline?: string | null;
+  color?: string | null;
 }
 
 /**
@@ -141,11 +150,12 @@ export async function createTask(input: CreateTaskInput): Promise<TaskResult> {
     .from("tasks")
     .insert({
       title,
-      description: input.description?.trim() || null,
+      description: sanitizeRichText(input.description) || null,
       department_id: departmentId,
       created_by: access.profile.id,
       assigned_to: assignedTo,
       deadline: input.deadline || null,
+      color: cleanColor(input.color),
       status: "todo",
     })
     .select("*")
@@ -209,6 +219,7 @@ export interface UpdateTaskInput {
   assignedTo?: string | null;
   departmentId?: string;
   deadline?: string | null;
+  color?: string | null;
 }
 
 /** Edit a task's details (creator / assignee / manager, enforced by RLS). */
@@ -236,7 +247,10 @@ export async function updateTask(
     patch.title = t;
   }
   if (input.description !== undefined) {
-    patch.description = input.description?.trim() || null;
+    patch.description = sanitizeRichText(input.description) || null;
+  }
+  if (input.color !== undefined) {
+    patch.color = cleanColor(input.color);
   }
   if (input.assignedTo !== undefined) {
     const changing =

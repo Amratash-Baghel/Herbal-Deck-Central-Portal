@@ -26,6 +26,7 @@ export interface EmployeeRow {
 function roleLabel(role: Role): string {
   if (role === "team_lead") return "Team Lead";
   if (role === "admin") return "Admin";
+  if (role === "hr_management") return "HR & Management";
   return "Employee";
 }
 
@@ -127,7 +128,7 @@ export function EmployeeList({
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         e.role === "admin"
                           ? "bg-primary text-primary-foreground"
-                          : e.role === "team_lead"
+                          : e.role === "hr_management" || e.role === "team_lead"
                             ? "bg-accent text-primary"
                             : "bg-muted text-muted-foreground"
                       }`}
@@ -182,6 +183,7 @@ export function EmployeeList({
                         >
                           <option value="employee">Employee</option>
                           <option value="team_lead">Team Lead</option>
+                          <option value="hr_management">HR &amp; Management</option>
                           <option value="admin">Admin</option>
                         </select>
                       </form>

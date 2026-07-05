@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { statusLabel, deptNoteColor } from "@/lib/tasks";
+import { statusLabel, noteColor } from "@/lib/tasks";
 import { localDateISO, daysUntil } from "@/lib/time";
 import type { Task, TaskStatus } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
@@ -56,6 +56,10 @@ export function TaskList({
   const nameOf = useMemo(() => {
     const m = new Map(people.map((p) => [p.id, p.name]));
     return (id: string | null) => (id ? m.get(id) ?? "Someone" : null);
+  }, [people]);
+  const colorOf = useMemo(() => {
+    const m = new Map(people.map((p) => [p.id, p.color ?? null]));
+    return (id: string | null) => (id ? m.get(id) ?? null : null);
   }, [people]);
   const deptOf = useMemo(() => {
     const m = new Map(departments.map((d) => [d.id, d]));
@@ -145,17 +149,25 @@ export function TaskList({
         {filtered.map((t) => {
           const d = deptOf(t.department_id);
           const days = daysUntil(t.deadline);
+          const assigneeColor = colorOf(t.assigned_to);
           return (
             <li
               key={t.id}
-              className={`flex items-start gap-3 rounded-xl border-l-4 bg-card px-4 py-3 ${deptNoteColor(d?.slug)}`}
+              style={assigneeColor ? { borderLeftColor: assigneeColor } : undefined}
+              className={`flex items-start gap-3 rounded-xl border-l-4 px-4 py-3 ${noteColor(t.color, d?.slug)}`}
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-foreground">{t.title}</span>
                   <StatusBadge status={t.status} />
                 </div>
-                <p className="mt-1 text-xs text-foreground/70">
+                <p className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-foreground/70">
+                  {assigneeColor && (
+                    <span
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: assigneeColor }}
+                    />
+                  )}
                   {nameOf(t.assigned_to) ?? "Unassigned"} · {d?.name ?? "—"} · by{" "}
                   {nameOf(t.created_by)}
                   {days !== null && (

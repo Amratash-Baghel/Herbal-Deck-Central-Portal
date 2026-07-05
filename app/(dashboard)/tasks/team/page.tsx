@@ -7,8 +7,12 @@ import { localDateISO } from "@/lib/time";
 import { TASK_LIST_COLUMNS, type Task } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
 
-type ProfileRow = { id: string; full_name: string | null; email: string };
-const toPerson = (p: ProfileRow): Person => ({ id: p.id, name: p.full_name || p.email });
+type ProfileRow = { id: string; full_name: string | null; email: string; color: string | null };
+const toPerson = (p: ProfileRow): Person => ({
+  id: p.id,
+  name: p.full_name || p.email,
+  color: p.color,
+});
 
 /**
  * Team view — visibility is role-scoped (and enforced by RLS underneath):
@@ -27,7 +31,7 @@ export default async function TeamTasksPage() {
     supabase.from("departments").select("id, name, slug").order("name"),
     supabase
       .from("profiles")
-      .select("id, full_name, email")
+      .select("id, full_name, email, color")
       .is("deactivated_at", null)
       .order("full_name", { nullsFirst: false }),
   ]);

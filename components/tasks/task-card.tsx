@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { deptNoteColor, adjacentStatus } from "@/lib/tasks";
+import type { ReactNode } from "react";
+import { noteColor, adjacentStatus } from "@/lib/tasks";
 import { daysUntil, formatDuration, timeAgo } from "@/lib/time";
 import { ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from "@/components/icons";
+import { PopoverMenu } from "@/components/popover-menu";
+import { RichText } from "@/components/tasks/rich-text";
 import type { Task, TaskStatus } from "@/lib/types";
 import type { Person } from "@/components/tasks/types";
 
@@ -14,6 +16,24 @@ function initials(name: string): string {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join("");
+}
+
+/** Initials bubble ringed with the assignee's personal colour (if any). */
+function AssigneeDot({
+  color,
+  children,
+}: {
+  color?: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground/10 text-[8px] font-bold"
+      style={color ? { boxShadow: `0 0 0 1.5px ${color}` } : undefined}
+    >
+      {children}
+    </span>
+  );
 }
 
 /** A small, stable tilt (deg) derived from the id so the board looks organic. */
@@ -80,6 +100,7 @@ export function TaskCard({
   deptSlug,
   editable,
   assignable,
+  assigneeColor,
   onOpen,
   onMove,
   onAssign,
@@ -91,6 +112,7 @@ export function TaskCard({
   deptSlug: string | null;
   editable: boolean;
   assignable?: Person[];
+  assigneeColor?: string | null;
   onOpen: () => void;
   onMove?: (status: TaskStatus) => void;
   onAssign?: (assigneeId: string | null) => void;
@@ -98,7 +120,6 @@ export function TaskCard({
   const prev = adjacentStatus(task.status, "prev");
   const next = adjacentStatus(task.status, "next");
   const tilt = tiltOf(task.id);
-  const [assignOpen, setAssignOpen] = useState(false);
 
   return (
     <div
@@ -108,7 +129,8 @@ export function TaskCard({
         e.dataTransfer.effectAllowed = "move";
       }}
       style={{ transform: `rotate(${tilt}deg)` }}
-      className={`group rounded-xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:rotate-0 hover:shadow-md ${deptNoteColor(
+      className={`group rounded-xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:rotate-0 hover:shadow-md ${noteColor(
+        task.color,
         deptSlug,
       )} ${editable ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
@@ -119,81 +141,67 @@ export function TaskCard({
       >
         <p className="text-sm font-semibold leading-snug">{task.title}</p>
         {task.description && (
-          <p className="mt-1 line-clamp-2 text-xs text-foreground/70">
-            {task.description}
-          </p>
+          <RichText
+            html={task.description}
+            className="mt-1 line-clamp-2 text-xs text-foreground/70"
+          />
         )}
       </button>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-foreground/80">
         {editable && onAssign && assignable ? (
-          <div
-            className="relative"
-            draggable={false}
-            onDragStart={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setAssignOpen((v) => !v);
-              }}
-              className="inline-flex items-center gap-1 rounded-md border border-foreground/15 bg-foreground/5 px-1.5 py-0.5 text-[11px] font-medium transition hover:bg-foreground/10"
-            >
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground/10 text-[8px] font-bold">
-                {assigneeName ? initials(assigneeName) : "+"}
-              </span>
-              {assigneeName ?? "Assign"}
-            </button>
-            {assignOpen && (
+          <PopoverMenu
+            ariaLabel="Assign to"
+            width={192}
+            buttonClassName="inline-flex items-center gap-1 rounded-md border border-foreground/15 bg-foreground/5 px-1.5 py-0.5 text-[11px] font-medium transition hover:bg-foreground/10"
+            button={
               <>
+                <AssigneeDot color={assigneeColor}>
+                  {assigneeName ? initials(assigneeName) : "+"}
+                </AssigneeDot>
+                {assigneeName ?? "Assign"}
+              </>
+            }
+          >
+            {(close) => (
+              <div className="max-h-56 overflow-y-auto py-1">
                 <button
                   type="button"
-                  aria-hidden="true"
-                  tabIndex={-1}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setAssignOpen(false);
+                  onClick={() => {
+                    onAssign(null);
+                    close();
                   }}
-                  className="fixed inset-0 z-40 cursor-default"
-                />
-                <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-48 overflow-y-auto rounded-xl border bg-card py-1 text-foreground shadow-lg">
+                  className="block w-full px-3 py-1.5 text-left text-xs text-muted-foreground transition hover:bg-accent"
+                >
+                  Unassigned
+                </button>
+                {assignable.map((p) => (
                   <button
+                    key={p.id}
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAssign(null);
-                      setAssignOpen(false);
+                    onClick={() => {
+                      onAssign(p.id);
+                      close();
                     }}
-                    className="block w-full px-3 py-1.5 text-left text-xs text-muted-foreground transition hover:bg-accent"
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition hover:bg-accent ${
+                      p.id === task.assigned_to ? "font-semibold text-primary" : ""
+                    }`}
                   >
-                    Unassigned
+                    {p.color && (
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: p.color }}
+                      />
+                    )}
+                    {p.name}
                   </button>
-                  {assignable.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onAssign(p.id);
-                        setAssignOpen(false);
-                      }}
-                      className={`block w-full px-3 py-1.5 text-left text-xs transition hover:bg-accent ${
-                        p.id === task.assigned_to ? "font-semibold text-primary" : ""
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                </div>
-              </>
+                ))}
+              </div>
             )}
-          </div>
+          </PopoverMenu>
         ) : assigneeName ? (
           <span className="inline-flex items-center gap-1 text-[11px] font-medium">
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground/10 text-[8px] font-bold">
-              {initials(assigneeName)}
-            </span>
+            <AssigneeDot color={assigneeColor}>{initials(assigneeName)}</AssigneeDot>
             {assigneeName}
           </span>
         ) : (

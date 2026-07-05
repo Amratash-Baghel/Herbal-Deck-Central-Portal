@@ -59,6 +59,11 @@ export function TaskBoard({
     return (id: string) => m.get(id);
   }, [allDepartments]);
 
+  const colorOf = useMemo(() => {
+    const m = new Map(people.map((p) => [p.id, p.color ?? null]));
+    return (id: string | null) => (id ? m.get(id) ?? null : null);
+  }, [people]);
+
   const noDept = departments.length === 0;
 
   function replaceTask(updated: Task) {
@@ -216,6 +221,7 @@ export function TaskBoard({
                       deptSlug={dept?.slug ?? null}
                       editable
                       assignable={assignable}
+                      assigneeColor={colorOf(task.assigned_to)}
                       onOpen={() => setOpenId(task.id)}
                       onMove={canMove ? (s) => void handleMove(task.id, s) : undefined}
                       onAssign={

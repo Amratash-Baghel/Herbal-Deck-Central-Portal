@@ -139,7 +139,9 @@ export const getUserAccess = cache(async (): Promise<UserAccess | null> => {
 
   const isAdmin = profile.role === "admin";
   const isTeamLead = profile.role === "team_lead";
-  const isHrManagement = departmentSlugs.includes("hr-management");
+  // HR & Management authority comes from the ROLE or from department membership.
+  const isHrManagement =
+    profile.role === "hr_management" || departmentSlugs.includes("hr-management");
   const canManage = isAdmin || isHrManagement;
 
   return {

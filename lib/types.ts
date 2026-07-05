@@ -10,7 +10,7 @@
  * Account-level roles. "admin" = owner-level (founder, CTO). "team_lead" is a
  * department-scoped middle tier (see decisions.md). "employee" is the default.
  */
-export type Role = "admin" | "team_lead" | "employee";
+export type Role = "admin" | "hr_management" | "team_lead" | "employee";
 
 /**
  * A user profile row from `public.profiles`. One profile exists per
@@ -25,6 +25,8 @@ export interface Profile {
   post: string | null;
   /** Storage path of the profile picture in the `avatars` bucket (or null). */
   avatar_path: string | null;
+  /** Default accent colour (hex), unique within their department. */
+  color: string | null;
   created_at: string;
   /** Set when the employee has been deactivated (soft-removed); null if active. */
   deactivated_at: string | null;
@@ -192,6 +194,8 @@ export interface Task {
   department_id: string;
   deadline: string | null;
   archived: boolean;
+  /** Chosen sticky-note colour key (see NOTE_COLORS); null = department colour. */
+  color: string | null;
   /** When the task first entered "In Progress" (null if it never did). */
   started_at: string | null;
   completed_at: string | null;
@@ -205,7 +209,7 @@ export interface Task {
  * this instead of `select("*")`.
  */
 export const TASK_LIST_COLUMNS =
-  "id, title, description, status, created_by, assigned_to, department_id, deadline, archived, started_at, completed_at, created_at";
+  "id, title, description, status, created_by, assigned_to, department_id, deadline, archived, color, started_at, completed_at, created_at";
 
 /**
  * An append-only activity row from `public.task_activity` — the task history

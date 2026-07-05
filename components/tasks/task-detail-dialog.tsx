@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { CloseIcon, TrashIcon } from "@/components/icons";
 import { createClient } from "@/lib/supabase/client";
-import { statusLabel } from "@/lib/tasks";
+import { statusLabel, NOTE_COLORS } from "@/lib/tasks";
 import { formatDuration, formatClockTZ } from "@/lib/time";
+import { RichTextEditor } from "@/components/tasks/rich-text-editor";
+import { RichText } from "@/components/tasks/rich-text";
 import type { UpdateTaskInput, TaskResult } from "@/app/(dashboard)/tasks/actions";
 import type { Task, TaskActivity } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
@@ -143,6 +145,7 @@ export function TaskDetailDialog({
   const [assignedTo, setAssignedTo] = useState(task.assigned_to ?? "");
   const [departmentId, setDepartmentId] = useState(task.department_id);
   const [deadline, setDeadline] = useState(task.deadline ?? "");
+  const [color, setColor] = useState<string | null>(task.color ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -156,6 +159,7 @@ export function TaskDetailDialog({
       assignedTo: assignedTo || null,
       departmentId,
       deadline: deadline || null,
+      color,
     });
     setBusy(false);
     if (res.ok) onClose();
@@ -201,18 +205,50 @@ export function TaskDetailDialog({
           </div>
 
           <div className="space-y-1.5">
-            <label className={labelClass} htmlFor="t-desc">
-              Description
-            </label>
-            <textarea
-              id="t-desc"
-              value={description}
-              disabled={!editable}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={editable ? "Add detail…" : "—"}
-              className={`${inputClass} min-h-20 resize-y`}
-            />
+            <label className={labelClass}>Description</label>
+            {editable ? (
+              <RichTextEditor
+                initialValue={description}
+                onChange={setDescription}
+                placeholder="Add detail — bold, lists, and more…"
+              />
+            ) : task.description ? (
+              <RichText html={task.description} className="text-sm text-foreground/80" />
+            ) : (
+              <p className="text-sm text-muted-foreground">—</p>
+            )}
           </div>
+
+          {editable && (
+            <div className="space-y-1.5">
+              <label className={labelClass}>Note colour</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setColor(null)}
+                  title="Department default"
+                  className={`h-6 w-6 rounded-full border-2 bg-muted text-[9px] ${
+                    color === null ? "border-primary" : "border-transparent"
+                  }`}
+                >
+                  —
+                </button>
+                {NOTE_COLORS.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setColor(c.key)}
+                    title={c.label}
+                    aria-label={c.label}
+                    style={{ backgroundColor: c.swatch }}
+                    className={`h-6 w-6 rounded-full border-2 ${
+                      color === c.key ? "border-primary" : "border-transparent"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

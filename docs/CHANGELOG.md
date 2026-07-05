@@ -5,6 +5,49 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-07-04
+
+Dropdown overlay fix, HR & Management as a role, and sticky-note colours + rich
+text.
+
+### Fixed
+
+- **Sticky-note dropdown bled through / clicked into the card behind it.** The
+  cards are tilted with `transform: rotate()`, which creates a stacking context
+  that trapped the assignee menu's `z-index` — so it painted under the cards
+  below and clicks landed on them. Dropdowns now render through a **portal to
+  `<body>`** (`components/popover-menu.tsx`) with a full-viewport backdrop, so
+  they sit above everything, close on outside-click / Escape / scroll, and never
+  merge with content beneath them.
+
+### Added
+
+- **HR & Management is now an assignable account role** (alongside admin, team
+  lead, employee), grantable from Employee Management regardless of department.
+  Authority is granted by the role **or** the existing department membership —
+  every current department-based check keeps working. (`is_hr_management()` now
+  checks both.)
+- **Rich-text task descriptions** — a small formatting toolbar (bold, italic,
+  underline, strikethrough, bullet + numbered lists) on the description, stored
+  as a strictly-sanitised HTML subset (allowlist, no attributes) and rendered
+  safely everywhere the task appears.
+- **Sticky-note colour picker** — the creator/assigner can set a note's
+  background colour; it persists and shows the same to **everyone** (My Board,
+  Team, Manage), overriding the department default.
+- **Per-employee default colours** — every employee gets an accent colour that
+  is **unique within their department**, shown as a dot / left-border beside
+  their name in the Team and Manage views so you can tell whose task is whose at
+  a glance. Used for a task's accent when no custom colour is chosen. Multi-
+  department people use their primary department's palette.
+- **"Completed Tasks" button** on each EOD report — next to "View activity", a
+  clean scannable list of just the titles completed that day.
+
+### Migrations (run in order)
+
+- `0017_hr_management_role.sql` — the `hr_management` enum value (run on its own).
+- `0018_task_colors_and_hr_role.sql` — `is_hr_management()` honours the role;
+  `tasks.color`; `profiles.color` + a department-unique backfill.
+
 ## [0.9.1] — 2026-07-04
 
 More trial fixes: correct counts, team-lead assignment, report privacy, and

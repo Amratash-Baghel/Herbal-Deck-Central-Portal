@@ -53,31 +53,38 @@ export function EodReportCard({
   employeeName?: string;
   defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [view, setView] = useState<null | "activity" | "completed">(
+    defaultOpen ? "activity" : null,
+  );
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<TaskActivity[]>([]);
 
   const s = report.auto_summary ?? ZERO;
+  const completed = items.filter(
+    (a) => a.action === "status_changed" && a.to_status === "done",
+  );
 
-  async function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && !loaded && !loading) {
-      setLoading(true);
-      const supabase = createClient();
-      const { startISO, endISO } = dayRangeUTC(report.report_date);
-      const { data } = await supabase
-        .from("task_activity")
-        .select("*")
-        .eq("actor_id", report.employee_id)
-        .gte("created_at", startISO)
-        .lt("created_at", endISO)
-        .order("created_at", { ascending: true });
-      setItems((data ?? []) as TaskActivity[]);
-      setLoaded(true);
-      setLoading(false);
-    }
+  async function ensureLoaded() {
+    if (loaded || loading) return;
+    setLoading(true);
+    const supabase = createClient();
+    const { startISO, endISO } = dayRangeUTC(report.report_date);
+    const { data } = await supabase
+      .from("task_activity")
+      .select("*")
+      .eq("actor_id", report.employee_id)
+      .gte("created_at", startISO)
+      .lt("created_at", endISO)
+      .order("created_at", { ascending: true });
+    setItems((data ?? []) as TaskActivity[]);
+    setLoaded(true);
+    setLoading(false);
+  }
+
+  function show(v: "activity" | "completed") {
+    setView((cur) => (cur === v ? null : v));
+    void ensureLoaded();
   }
 
   return (
@@ -107,19 +114,26 @@ export function EodReportCard({
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={toggle}
-        className="mt-2 text-xs font-medium text-primary transition hover:underline"
-      >
-        {open ? "Hide activity" : "View activity"}
-      </button>
+      <div className="mt-2 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={() => show("activity")}
+          className="text-xs font-medium text-primary transition hover:underline"
+        >
+          {view === "activity" ? "Hide activity" : "View activity"}
+        </button>
+        <button
+          type="button"
+          onClick={() => show("completed")}
+          className="text-xs font-medium text-primary transition hover:underline"
+        >
+          {view === "completed" ? "Hide completed" : "Completed tasks"}
+        </button>
+      </div>
 
-      {open && (
+      {view === "activity" && (
         <div className="mt-2 border-t pt-2">
-          {loading && (
-            <p className="py-2 text-xs text-muted-foreground">Loading…</p>
-          )}
+          {loading && <p className="py-2 text-xs text-muted-foreground">Loading…</p>}
           {loaded && items.length === 0 && (
             <p className="py-2 text-xs text-muted-foreground">
               No task activity logged for this day.
@@ -132,6 +146,25 @@ export function EodReportCard({
                   {formatClockTZ(a.created_at)}
                 </span>
                 <span className="text-foreground/80">{activityLabel(a)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {view === "completed" && (
+        <div className="mt-2 border-t pt-2">
+          {loading && <p className="py-2 text-xs text-muted-foreground">Loading…</p>}
+          {loaded && completed.length === 0 && (
+            <p className="py-2 text-xs text-muted-foreground">
+              No tasks completed this day.
+            </p>
+          )}
+          <ul className="space-y-1">
+            {completed.map((a) => (
+              <li key={a.id} className="flex items-baseline gap-2 text-xs text-foreground/80">
+                <span className="text-primary">✓</span>
+                {a.task_title ?? "Untitled task"}
               </li>
             ))}
           </ul>

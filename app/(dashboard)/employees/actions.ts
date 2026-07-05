@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUserManager } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { EMPLOYEE_COLOR_PALETTE } from "@/lib/tasks";
 import type { Role } from "@/lib/types";
 
 export interface MutationState {
@@ -46,7 +47,7 @@ export async function inviteUser(
   if (password.length < 8) {
     return { error: "Temporary password must be at least 8 characters.", success: null };
   }
-  if (role !== "admin" && role !== "employee" && role !== "team_lead") {
+  if (!["admin", "employee", "team_lead", "hr_management"].includes(role)) {
     return { error: "Invalid role.", success: null };
   }
 
@@ -81,6 +82,38 @@ export async function inviteUser(
         success: null,
       };
     }
+  }
+
+  // Assign a default accent colour, unique within the new employee's primary
+  // department (fall back to cycling the palette if all are taken).
+  if (newUserId) {
+    let color = EMPLOYEE_COLOR_PALETTE[0];
+    const primaryDept = departmentIds[0];
+    if (primaryDept) {
+      const { data: peerRows } = await admin
+        .from("profile_departments")
+        .select("profile_id")
+        .eq("department_id", primaryDept);
+      const peerIds = (peerRows ?? [])
+        .map((r) => r.profile_id as string)
+        .filter((id) => id !== newUserId);
+      let used = new Set<string>();
+      if (peerIds.length > 0) {
+        const { data: colorRows } = await admin
+          .from("profiles")
+          .select("color")
+          .in("id", peerIds);
+        used = new Set(
+          (colorRows ?? [])
+            .map((r) => r.color as string | null)
+            .filter((c): c is string => Boolean(c)),
+        );
+      }
+      color =
+        EMPLOYEE_COLOR_PALETTE.find((c) => !used.has(c)) ??
+        EMPLOYEE_COLOR_PALETTE[peerIds.length % EMPLOYEE_COLOR_PALETTE.length];
+    }
+    await admin.from("profiles").update({ color }).eq("id", newUserId);
   }
 
   revalidatePath("/employees");
@@ -146,7 +179,7 @@ export async function setUserRole(formData: FormData): Promise<void> {
   const userId = String(formData.get("user_id") ?? "");
   const role = String(formData.get("role") ?? "") as Role;
   if (!userId || userId === access.profile.id) return;
-  if (role !== "admin" && role !== "employee" && role !== "team_lead") return;
+  if (!["admin", "employee", "team_lead", "hr_management"].includes(role)) return;
 
   const admin = createAdminClient();
   await admin.from("profiles").update({ role }).eq("id", userId);

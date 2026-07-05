@@ -446,6 +446,38 @@ manager), `can_assign_to(target)` used in `tasks_insert` / `tasks_update` checks
 and the `tasks_enforce_rules` trigger. The app's server actions and the Team
 view branch on `getUserAccess()` (`isTeamLead` / `canManageUsers`) to match.
 
+## 19. HR & Management is both a role and a department-based permission
+
+**Decision:** Keep the existing "HR & Management = member of the HR & Management
+department" rule **and** add `hr_management` as an assignable account role.
+Either one grants the same authority (`is_hr_management()` returns true for
+both).
+
+**Why:** The department-based model came first and everything already depends on
+it (RLS policies, `can_manage_users()`, `can_manage_billing()`, the reporting
+scope). Ripping it out to move to a role would be a risky, wide-reaching change
+for no functional gain. But departments are about *what team you're on*, and HR
+authority isn't always tied to a team — sometimes you just want to grant one
+person HR powers directly. Adding the role as a **second, additive** source of
+the same permission gives that flexibility with zero backward-compatibility risk:
+`is_hr_management()` simply ORs the two checks, so every existing policy keeps
+working untouched.
+
+## 20. Employees get a department-unique default colour
+
+**Decision:** Assign each employee an accent colour that no one else in their
+department shares, shown as a dot / border beside their name (and as a task's
+accent when no custom colour is set).
+
+**Why:** On the Team and Manage boards you're scanning a wall of tasks and the
+question is "whose is this?". Names require reading; a consistent colour is
+recognisable at a glance. Uniqueness *within a department* is what matters —
+that's the group you compare within — so colours only need to be distinct there,
+which a small palette easily covers. People in multiple departments get one
+stable colour (their primary department's) so their identity doesn't flicker
+between views. Manual task colours (a separate, deliberate choice) always win
+over the default.
+
 ---
 
 ## Summary
@@ -471,3 +503,6 @@ view branch on `getUserAccess()` (`isTeamLead` / `canManageUsers`) to match.
 | Deleted tasks   | Drop from counts, keep in EOD | "Now" vs "what happened" are different questions |
 | Team Lead role  | Department-scoped, not portal-wide | Authority follows responsibility; reuses dept model |
 | Task visibility | Role-scoped, RLS-enforced | Tasks are personal work; boundary must hold at DB layer |
+| HR & Management | Role OR department | Additive; flexibility with zero backward-compat risk |
+| Employee colours| Department-unique default | Tell whose task is whose at a glance |
+| Dropdowns       | Portal to body + backdrop | Escape the tilted card's stacking context |
