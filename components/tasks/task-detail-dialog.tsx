@@ -149,6 +149,10 @@ export function TaskDetailDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // A completed task is locked from further editing — everything except its
+  // note colour, which can still be changed so the board stays organised.
+  const doneLocked = editable && task.status === "done";
+
   async function save() {
     if (busy) return;
     setBusy(true);
@@ -191,6 +195,12 @@ export function TaskDetailDialog({
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          {doneLocked && (
+            <p className="rounded-xl border border-dashed px-3 py-2 text-xs text-muted-foreground">
+              This task is completed — only its note colour can still be changed.
+            </p>
+          )}
+
           <div className="space-y-1.5">
             <label className={labelClass} htmlFor="t-title">
               Title
@@ -198,7 +208,7 @@ export function TaskDetailDialog({
             <input
               id="t-title"
               value={title}
-              disabled={!editable}
+              disabled={!editable || doneLocked}
               onChange={(e) => setTitle(e.target.value)}
               className={inputClass}
             />
@@ -206,7 +216,7 @@ export function TaskDetailDialog({
 
           <div className="space-y-1.5">
             <label className={labelClass}>Description</label>
-            {editable ? (
+            {editable && !doneLocked ? (
               <RichTextEditor
                 initialValue={description}
                 onChange={setDescription}
@@ -263,7 +273,7 @@ export function TaskDetailDialog({
               <select
                 id="t-assignee"
                 value={assignedTo}
-                disabled={!editable || !canReassign}
+                disabled={!editable || !canReassign || doneLocked}
                 onChange={(e) => setAssignedTo(e.target.value)}
                 className={inputClass}
               >
@@ -287,7 +297,7 @@ export function TaskDetailDialog({
               <select
                 id="t-dept"
                 value={departmentId}
-                disabled={!editable}
+                disabled={!editable || doneLocked}
                 onChange={(e) => setDepartmentId(e.target.value)}
                 className={inputClass}
               >
@@ -308,7 +318,7 @@ export function TaskDetailDialog({
               id="t-deadline"
               type="date"
               value={deadline}
-              disabled={!editable}
+              disabled={!editable || doneLocked}
               onChange={(e) => setDeadline(e.target.value)}
               className={inputClass}
             />

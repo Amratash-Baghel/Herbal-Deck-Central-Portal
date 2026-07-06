@@ -5,6 +5,16 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] — 2026-07-06
+
+### Changed
+
+- **Completed tasks are now locked except for their colour.** Once a task is in
+  Done, its title, description, assignee, department, and deadline can no longer
+  be edited — only the note colour, so the board can still be re-organised. The
+  edit dialog shows a "completed — only colour can change" note and disables the
+  locked fields. (`components/tasks/task-detail-dialog.tsx`)
+
 ## [0.11.0] — 2026-07-05
 
 Reporting overhaul: the Employee Review's flat, meaningless task log is replaced
