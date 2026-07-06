@@ -5,6 +5,40 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] — 2026-07-06
+
+Chat file sharing — a hybrid of direct upload for small files and Google Drive /
+Dropbox links for large ones.
+
+### Added
+
+- **Direct file upload in chat (≤ 3 MB).** A paperclip button in the composer
+  uploads images and documents (JPG, PNG, PDF, DOC, DOCX, XLSX) straight to a new
+  **private** `chat-attachments` storage bucket, with a live progress bar.
+  Uploaded files render inline: images as clickable thumbnails (open full size),
+  documents as a file card with type badge, name, and size (click to open /
+  download). Files are stored under their conversation's id and are readable only
+  by that conversation's participants — enforced by RLS, so even the signed URLs
+  can only be minted by members. Works identically in DMs and groups.
+- **Large-file fallback.** Attaching a file over 3 MB is rejected with a clear
+  prompt to share it via Google Drive or Dropbox instead, plus one-click buttons
+  to open Drive / Dropbox in a new tab.
+- **Rich Drive / Dropbox link cards.** A pasted Google Drive or Dropbox share
+  link is auto-detected and rendered as a preview card (brand icon, filename when
+  derivable, an "Open in Drive/Dropbox" button) instead of a bare hyperlink.
+  Google Drive **file** links attempt a thumbnail (public files) and fall back to
+  the brand icon; folders and Dropbox links show the brand icon. Theme-aware.
+- File messages behave like any other message for realtime, unread counts, and
+  notifications — the conversation preview shows "📎 Attachment" for a file-only
+  message.
+
+### Migration
+
+- `0021_chat_attachments.sql` — adds `messages.attachments` (JSON), creates the
+  private `chat-attachments` bucket (3 MB + mime allowlist enforced at the
+  storage layer), participant-only object RLS, and a last-message-preview
+  fallback for file-only messages.
+
 ## [0.11.1] — 2026-07-06
 
 ### Changed

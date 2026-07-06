@@ -4,6 +4,7 @@ import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUsers } from "@/lib/notifications";
+import { sanitizeAttachments, type Attachment } from "@/lib/chat-attachments";
 import type { Message } from "@/lib/types";
 
 /**
@@ -42,14 +43,24 @@ export async function sendMessage(
   conversationId: string,
   rawBody: string,
   mentionIds: string[] = [],
+  rawAttachments: Attachment[] = [],
 ): Promise<SendResult> {
   const access = await getUserAccess();
   if (!access) return { ok: false, error: "You are not signed in." };
 
   const body = (rawBody ?? "").trim();
-  if (!body) return { ok: false, error: "Message is empty." };
   if (body.length > MAX_BODY) return { ok: false, error: "Message is too long." };
   if (!conversationId) return { ok: false, error: "No conversation selected." };
+
+  // Recompute mime/kind from the (allowed) extension and confirm each file lives
+  // under this conversation's folder — a client can't spoof either.
+  const attachments = sanitizeAttachments(conversationId, rawAttachments);
+  if (attachments === null) {
+    return { ok: false, error: "One of the attachments looks invalid." };
+  }
+  if (!body && attachments.length === 0) {
+    return { ok: false, error: "Message is empty." };
+  }
 
   const supabase = await createClient();
   const me = access.profile.id;
@@ -80,6 +91,7 @@ export async function sendMessage(
       sender_id: me,
       body,
       mentions,
+      attachments,
     })
     .select("*")
     .single();
@@ -90,7 +102,13 @@ export async function sendMessage(
 
   // Notifications (best-effort; never fail the send).
   const sender = displayName(access.profile);
-  const preview = body.length > 140 ? `${body.slice(0, 140)}…` : body;
+  const attachLabel =
+    attachments.length > 0
+      ? `📎 ${attachments.length === 1 ? attachments[0].name : `${attachments.length} files`}`
+      : "";
+  const previewText = body || attachLabel;
+  const preview =
+    previewText.length > 140 ? `${previewText.slice(0, 140)}…` : previewText;
   const link = `/chat?c=${conversationId}`;
 
   if (convo.type === "dm") {

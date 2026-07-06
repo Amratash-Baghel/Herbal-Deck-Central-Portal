@@ -504,6 +504,45 @@ is windowed so the lists stay useful. The math lives in one shared helper
 (`lib/reporting.ts`) used by both the per-person review and the roster, so the
 roster and the drill-down can never disagree.
 
+## 22. Chat files — 3 MB direct upload, links for anything larger
+
+**Decision:** Let chat carry files two ways. Files up to **3 MB** upload
+directly to a private Supabase Storage bucket and render inline; anything larger
+is shared as a Google Drive / Dropbox link, which we detect and render as a rich
+preview card. A file over 3 MB is refused at the composer with a nudge to use a
+link instead.
+
+**Why:**
+
+- **It fits the free tier.** Supabase's free plan gives 1 GB of storage. A small
+  cap keeps the portal comfortably inside that while still covering the common
+  cases — a screenshot, a signed PDF, an invoice, a spreadsheet. Big media
+  (videos, design files, large decks) already live in Drive/Dropbox for most
+  teams, so linking them is what people do anyway.
+- **The limit is a config value, not a rewrite.** The 3 MB ceiling is enforced
+  in three aligned places — the bucket's `file_size_limit`, the client check,
+  and the server-side sanitiser. Once paid storage is in place, raising it is a
+  one-number change (plus a matching bucket update); the upload, rendering, and
+  RLS machinery don't change.
+- **Privacy comes from the same rule as messages.** Files are stored under their
+  conversation's id (`<conversation_id>/<uuid>.<ext>`), and object RLS reuses
+  `is_conversation_participant()` — the identical membership check that guards
+  the messages themselves. Because the bucket is private, even minting a signed
+  URL requires membership, so a leaked path is useless to a non-participant.
+- **Trust the extension, not the browser.** The server recomputes each file's
+  mime and kind from its (allowlisted) extension and confirms it sits under the
+  right conversation folder, so a client can't spoof the type or smuggle a file
+  into another thread.
+- **Links deserve better than blue text.** Rendering Drive/Dropbox shares as
+  cards (with a thumbnail where the file is a public image) makes the "link for
+  big files" path feel first-class rather than a fallback — without needing OAuth
+  or storing anything, since detection is purely client-side from the message text.
+
+**The catch we accept:** Drive filenames aren't readable without OAuth, so a
+Drive file card shows a generic "Google Drive file" label (Dropbox often exposes
+the name in the URL, so those do show it). That's a deliberate trade — real
+metadata would mean an OAuth integration we don't need yet.
+
 ---
 
 ## Summary

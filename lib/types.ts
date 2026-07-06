@@ -145,6 +145,16 @@ export interface ConversationParticipant {
   joined_at: string;
 }
 
+/** A file shared in a chat message (stored in the `chat-attachments` bucket). */
+export interface MessageAttachment {
+  /** Path within the bucket: "<conversation_id>/<uuid>.<ext>". */
+  path: string;
+  name: string;
+  mime: string;
+  size: number;
+  kind: "image" | "document";
+}
+
 /** A message row from `public.messages`. */
 export interface Message {
   id: string;
@@ -153,6 +163,8 @@ export interface Message {
   body: string;
   /** Profile ids that were @-mentioned (pinged) in the body. */
   mentions: string[];
+  /** Files uploaded with the message (may be empty). */
+  attachments: MessageAttachment[];
   created_at: string;
 }
 

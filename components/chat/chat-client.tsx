@@ -11,9 +11,12 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useNotifications } from "@/components/notifications/notifications-provider";
 import { MessageComposer } from "@/components/chat/message-composer";
+import { MessageAttachments } from "@/components/chat/message-attachments";
+import { LinkPreviewCards } from "@/components/chat/link-preview";
 import { NewConversationDialog } from "@/components/chat/new-conversation-dialog";
 import { GroupSettingsDialog } from "@/components/chat/group-settings-dialog";
 import { sendMessage } from "@/app/(dashboard)/chat/actions";
+import { detectShareLinks, type Attachment } from "@/lib/chat-attachments";
 import { PlusIcon, GroupIcon, SettingsIcon, ChatIcon } from "@/components/icons";
 import { timeAgo, formatClock, dayLabel } from "@/lib/time";
 import type { Message } from "@/lib/types";
@@ -297,15 +300,20 @@ export function ChatClient({
   }, [setActiveConversation]);
 
   const handleSend = useCallback(
-    async (body: string, mentionIds: string[]) => {
+    async (body: string, mentionIds: string[], attachments: Attachment[]) => {
       const id = selectedIdRef.current;
       if (!id) return { ok: false, error: "No conversation selected." };
-      const res = await sendMessage(id, body, mentionIds);
+      const res = await sendMessage(id, body, mentionIds, attachments);
       if (res.ok && res.message) {
         const msg = res.message;
         setMessages((prev) =>
           prev.some((x) => x.id === msg.id) ? prev : [...prev, msg],
         );
+        const preview =
+          body.slice(0, 140) ||
+          (attachments.length > 0
+            ? `📎 ${attachments.length === 1 ? attachments[0].name : `${attachments.length} files`}`
+            : "");
         setConversations((prev) => {
           const idx = prev.findIndex((c) => c.id === id);
           if (idx === -1) return prev;
@@ -313,7 +321,7 @@ export function ChatClient({
           const updated: ConversationSummary = {
             ...c,
             lastMessageAt: msg.created_at,
-            lastMessagePreview: body.slice(0, 140),
+            lastMessagePreview: preview,
             unread: 0,
           };
           return [updated, ...prev.filter((_, i) => i !== idx)];
@@ -491,6 +499,9 @@ export function ChatClient({
                     !mine &&
                     (!prev || prev.sender_id !== m.sender_id || showDay);
                   const mentionNames = m.mentions.map(nameOf);
+                  const hasBody = m.body.trim().length > 0;
+                  const links = detectShareLinks(m.body);
+                  const attachments = m.attachments ?? [];
                   return (
                     <Fragment key={m.id}>
                       {showDay && (
@@ -501,31 +512,42 @@ export function ChatClient({
                         </div>
                       )}
                       <div
-                        className={`flex flex-col ${mine ? "items-end" : "items-start"}`}
+                        className={`flex flex-col gap-0.5 ${mine ? "items-end" : "items-start"}`}
                       >
                         {showSender && (
                           <span className="mb-0.5 ml-1 text-[11px] font-medium text-muted-foreground">
                             {nameOf(m.sender_id)}
                           </span>
                         )}
-                        <div
-                          className={`max-w-[78%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm ${
-                            mine
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted text-foreground"
-                          }`}
-                        >
-                          {renderBody(m.body, mentionNames)}
-                          <span
-                            className={`ml-2 inline-block translate-y-0.5 text-[10px] ${
+                        {hasBody && (
+                          <div
+                            className={`max-w-[78%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm ${
                               mine
-                                ? "text-primary-foreground/70"
-                                : "text-muted-foreground"
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-foreground"
                             }`}
                           >
+                            {renderBody(m.body, mentionNames)}
+                            <span
+                              className={`ml-2 inline-block translate-y-0.5 text-[10px] ${
+                                mine
+                                  ? "text-primary-foreground/70"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {formatClock(m.created_at)}
+                            </span>
+                          </div>
+                        )}
+                        {attachments.length > 0 && (
+                          <MessageAttachments supabase={supabase} attachments={attachments} />
+                        )}
+                        {links.length > 0 && <LinkPreviewCards links={links} />}
+                        {!hasBody && (
+                          <span className="ml-1 text-[10px] text-muted-foreground">
                             {formatClock(m.created_at)}
                           </span>
-                        </div>
+                        )}
                       </div>
                     </Fragment>
                   );
@@ -534,6 +556,7 @@ export function ChatClient({
               </div>
 
               <MessageComposer
+                conversationId={selectedConv.id}
                 participants={composerParticipants}
                 onSend={handleSend}
               />
