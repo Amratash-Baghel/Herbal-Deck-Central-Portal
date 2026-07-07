@@ -25,6 +25,11 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   const today = localDateISO();
 
+  // Sunday is the only non-working day — no EOD is expected, so no reminders.
+  if (new Date(`${today}T00:00:00Z`).getUTCDay() === 0) {
+    return NextResponse.json({ notified: 0, skipped: "sunday" });
+  }
+
   const [{ data: profiles }, { data: submitted }] = await Promise.all([
     admin.from("profiles").select("id").is("deactivated_at", null),
     admin.from("eod_reports").select("employee_id").eq("report_date", today),
@@ -58,7 +63,7 @@ export async function GET(request: NextRequest) {
       recipientId,
       type: "eod_reminder" as const,
       title: "You haven't submitted your EOD yet",
-      body: "Submit within 30 minutes or your attendance for today will not be counted.",
+      body: "Submit within 30 minutes or your attendance for today will be marked incomplete.",
       link: "/tasks/reports",
     })),
   );

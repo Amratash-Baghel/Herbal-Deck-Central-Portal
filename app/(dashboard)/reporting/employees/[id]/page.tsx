@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { EodReportCard } from "@/components/reporting/eod-report-card";
 import { EmployeeTaskReport } from "@/components/reporting/employee-task-report";
 import { computeTaskStats, TASK_STAT_COLUMNS, type TaskLite } from "@/lib/reporting";
+import { buildAttendance, summarize, monthBounds, dateRange } from "@/lib/attendance";
 import {
   localDateISO,
   isoDaysAgo,
@@ -199,6 +200,22 @@ export default async function EmployeeReviewPage({
   const topHour = [...hourHistogram.entries()].sort((a, b) => b[1] - a[1])[0];
   const mostActive = topHour ? fmtHourRange(topHour[0]) : "—";
 
+  // --- Attendance this month (Mon–Sat; Sundays excluded) -----------------
+  const monthNow = localDateISO(TZ);
+  const [ayr, amo] = monthNow.split("-").map(Number);
+  const { start: monthStart } = monthBounds(ayr, amo - 1);
+  const monthAttendance = buildAttendance(
+    dateRange(monthStart, monthNow),
+    monthNow,
+    activityRows.map((a) => ({
+      date: a.date,
+      first_seen_at: a.first_seen_at,
+      last_seen_at: a.last_seen_at,
+      eod_submitted_at: a.eod_submitted_at,
+    })),
+  );
+  const att = summarize(monthAttendance);
+
   return (
     <>
       <div className="mb-2">
@@ -237,6 +254,25 @@ export default async function EmployeeReviewPage({
         <Stat label="EOD submission" value={`${eodRate}%`} hint={`${submittedDays}/${daysSeen} days`} />
         <Stat label="Most active" value={mostActive} hint="by task activity" />
       </div>
+
+      {/* Attendance this month */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-base font-semibold tracking-tight">Attendance this month</h2>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Stat
+            label="On-time %"
+            value={att.onTimePct === null ? "—" : `${att.onTimePct}%`}
+            hint={`${att.onTime} of ${att.evaluated} days`}
+          />
+          <Stat
+            label="Late %"
+            value={att.latePct === null ? "—" : `${att.latePct}%`}
+            hint={`${att.late} late arrival${att.late === 1 ? "" : "s"}`}
+          />
+          <Stat label="Absent" value={String(att.absent)} hint="working days missed" />
+          <Stat label="Incomplete EOD" value={String(att.incomplete)} hint="active, no EOD" />
+        </div>
+      </section>
 
       {/* Task performance — completed, open, and deadline reliability */}
       <EmployeeTaskReport

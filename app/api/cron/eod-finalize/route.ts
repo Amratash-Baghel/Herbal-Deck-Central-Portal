@@ -34,9 +34,14 @@ export async function GET(request: NextRequest) {
   const today = localDateISO();
   const tomorrow = localDateISO("Asia/Kolkata", new Date(Date.now() + 86_400_000));
 
+  // Sunday is a non-working day: never flag attendance as incomplete on Sundays.
+  const isSunday = new Date(`${today}T00:00:00Z`).getUTCDay() === 0;
+
   const [{ data: incomplete }, { data: archived }, { data: dueSoon }, { data: overdue }] =
     await Promise.all([
-      admin.rpc("finalize_incomplete_attendance", { d: today }),
+      isSunday
+        ? Promise.resolve({ data: 0 })
+        : admin.rpc("finalize_incomplete_attendance", { d: today }),
       admin.rpc("archive_stale_done_tasks"),
       admin
         .from("tasks")

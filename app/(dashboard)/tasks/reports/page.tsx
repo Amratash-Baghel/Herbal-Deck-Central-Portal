@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { EodNoteForm } from "@/components/tasks/eod-note-form";
 import { EodReportCard } from "@/components/reporting/eod-report-card";
+import { AttendanceView } from "@/components/reporting/attendance-view";
 import { localDateISO } from "@/lib/time";
 import { time } from "@/lib/perf";
 import type { EodReport, EodSummary } from "@/lib/types";
@@ -123,6 +124,17 @@ export default async function ReportsPage() {
         )}
 
         <EodNoteForm initialNote={existingNote} alreadySubmitted={submittedToday} />
+      </section>
+
+      {/* Your daywise attendance for the month */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-base font-semibold tracking-tight">Your attendance</h2>
+        <AttendanceView
+          people={[{ id: me, name: "You" }]}
+          selfId={me}
+          canPickOthers={false}
+          todayISO={today}
+        />
       </section>
 
       {/* Team today — team leads + managers only */}

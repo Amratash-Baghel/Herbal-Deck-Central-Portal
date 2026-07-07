@@ -543,6 +543,42 @@ Drive file card shows a generic "Google Drive file" label (Dropbox often exposes
 the name in the URL, so those do show it). That's a deliberate trade — real
 metadata would mean an OAuth integration we don't need yet.
 
+## 23. Attendance is derived, not a separate clock-in system
+
+**Decision:** Compute daywise attendance from the data the portal already
+captures — `activity_logs` (passive arrival + last-seen) and the EOD submission —
+rather than adding a clock-in/clock-out feature. A working day is Monday–Saturday,
+10 AM–6 PM IST; arriving by 10 AM is on time; Sunday is never a working day.
+
+**Why:**
+
+- **No new behaviour to police.** Employees already generate an arrival stamp the
+  moment they use the portal, and the EOD submission is the natural "clock-out".
+  Deriving attendance from those means zero extra steps for staff and nothing new
+  to forge — the arrival stamp is written by a `SECURITY DEFINER` function keyed
+  to the session (decision established with `activity_logs`).
+- **One RLS boundary, three audiences.** The attendance views read `activity_logs`
+  directly, so the existing row-level policy (self / shared-department /
+  manager-all) already gives employees their own history, team leads their
+  department, and admins/HR everyone — no bespoke access code, and the database
+  stays the authority.
+- **Sundays and "today" are never false flags.** Sunday is excluded from Absent /
+  Incomplete entirely (it's off), and the current day stays "in progress" until
+  its EOD lands — so attendance never shows a red Absent for a day that isn't over.
+  The same Sunday rule is applied to the reminder and finalize crons, so no one is
+  nagged or flagged on their day off.
+- **Absent vs Incomplete is a real distinction.** "Absent" (no activity at all)
+  and "Incomplete" (worked but never submitted the EOD) are different management
+  signals, so they're separate statuses rather than one "missing" bucket.
+
+**The follow-on fix:** the EOD-submitted notification was moved to a database
+trigger (decision recorded in 0.8.0) precisely so it couldn't fail on a missing
+service-role key — but the trigger's recipient list predated the `hr_management`
+*role*, so role-based HR silently received nothing. The lesson repeated here:
+when authority can be granted two ways (role **or** department), every place that
+resolves "who is management" must check both — so the notification trigger now
+mirrors `is_hr_management()` rather than re-deriving a narrower rule.
+
 ---
 
 ## Summary

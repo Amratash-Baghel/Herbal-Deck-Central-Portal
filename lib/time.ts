@@ -73,6 +73,22 @@ export function dayRangeUTC(
   return { startISO: start.toISOString(), endISO: end.toISOString() };
 }
 
+/** Minutes past midnight (0–1439) of an instant in a timezone (default IST). */
+export function minutesInTZ(iso: string, tz = "Asia/Kolkata"): number | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const h = Number(parts.find((p) => p.type === "hour")?.value);
+  const m = Number(parts.find((p) => p.type === "minute")?.value);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return (h % 24) * 60 + m;
+}
+
 /** The hour-of-day (0–23) of an instant in a given timezone (default IST). */
 export function hourInTZ(iso: string, tz = "Asia/Kolkata"): number | null {
   const d = new Date(iso);

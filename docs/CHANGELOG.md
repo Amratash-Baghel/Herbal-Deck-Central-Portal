@@ -5,6 +5,47 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] — 2026-07-07
+
+Daywise attendance in Reporting, plus a fix to the EOD-submitted notification and
+Sunday-aware EOD reminders.
+
+### Added
+
+- **Daywise attendance.** A new **Attendance** tab in Reporting shows, per
+  employee per working day: arrival, EOD/departure time, total active duration,
+  and a status — **On time** (arrived by 10 AM), **Late**, **Absent** (no
+  activity), or **Incomplete** (active but no EOD). Pick any employee (and filter
+  by department) and page month-by-month; a monthly summary strip shows on-time %,
+  late %, absent, and incomplete counts. **Working days are Mon–Sat; Sundays show
+  as "Off" and are never flagged.** Today stays "in progress" (no premature Absent
+  before the day ends).
+  - **Visibility:** admins/HR see everyone, team leads their department(s),
+    employees their own — all enforced by the existing `activity_logs` RLS.
+    Employees, who don't have the Reporting section, get their own **"Your
+    attendance"** calendar on the EOD Reports page.
+- **Attendance stats on the Employee Review** — on-time %, late %, absent days,
+  and incomplete-EOD days for the current month.
+
+### Fixed
+
+- **EOD-submitted notification didn't reach role-based HR.** The trigger
+  (migration 0014) notified `admin` and the HR & Management **department**, but
+  not anyone granted HR authority via the **`hr_management` role** (added in
+  0017/0018) — so if HR was assigned by role, they got nothing on an EOD
+  submission. The recipient filter now mirrors `is_hr_management()` exactly
+  (admin OR the role OR the department).
+- **EOD reminder / finalize now respect Sundays.** The 17:30 IST reminder is
+  skipped on Sundays (non-working day), and the 18:00 IST finalize no longer
+  flags Sunday attendance as incomplete. Reminder wording updated to
+  "…your attendance for today will be marked incomplete."
+
+### Migration
+
+- `0022_eod_notify_fix.sql` — recreates `notify_eod_submitted()` to include
+  role-based HR and re-asserts the trigger. (Attendance needs **no** migration —
+  it reads existing `activity_logs` under current RLS.)
+
 ## [0.12.0] — 2026-07-06
 
 Chat file sharing — a hybrid of direct upload for small files and Google Drive /

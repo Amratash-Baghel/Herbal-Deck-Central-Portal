@@ -9,6 +9,7 @@ export function ReportingTabs() {
 
   const tabs = [
     { href: "/reporting", label: "Team Overview", exact: true },
+    { href: "/reporting/attendance", label: "Attendance" },
     { href: "/reporting/eod", label: "EOD Reports" },
     { href: "/reporting/employees", label: "Employee Reviews" },
   ];
