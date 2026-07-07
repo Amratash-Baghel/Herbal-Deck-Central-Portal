@@ -27,6 +27,8 @@ export interface Profile {
   avatar_path: string | null;
   /** Default accent colour (hex), unique within their department. */
   color: string | null;
+  /** Optional date of birth (YYYY-MM-DD) — drives the calendar birthday markers. */
+  date_of_birth: string | null;
   /**
    * Default sticky-note colour key (see NOTE_COLORS), unique within their
    * department — the note background when a task of theirs has no custom colour.
@@ -279,5 +281,25 @@ export interface ActivityLog {
   eod_submitted_at: string | null;
   /** True when they were active but never submitted an EOD by end of day. */
   incomplete: boolean;
+  created_at: string;
+}
+
+/** The visibility tier of a calendar event. */
+export type CalendarEventType = "personal" | "department" | "common" | "targeted";
+
+/** An event row from `public.calendar_events`. */
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  event_type: CalendarEventType;
+  /** YYYY-MM-DD (IST). */
+  event_date: string;
+  /** HH:MM[:SS] or null. */
+  event_time: string | null;
+  created_by: string;
+  /** Department ids the event targets (for department / targeted); else null. */
+  department_ids: string[] | null;
+  visible_to_all: boolean;
   created_at: string;
 }

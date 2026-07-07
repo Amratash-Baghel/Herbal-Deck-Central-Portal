@@ -6,6 +6,7 @@ import {
   UsersIcon,
   TasksIcon,
   ReportingIcon,
+  CalendarIcon,
 } from "@/components/icons";
 
 export interface NavItem {
@@ -35,6 +36,7 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: DashboardIcon },
   { label: "Tasks", href: "/tasks", icon: TasksIcon },
+  { label: "Calendar", href: "/calendar", icon: CalendarIcon },
   { label: "Billing", href: "/billing", icon: BillingIcon },
   { label: "Chat", href: "/chat", icon: ChatIcon },
   { label: "Reporting", href: "/reporting", icon: ReportingIcon, reportViewerOnly: true },

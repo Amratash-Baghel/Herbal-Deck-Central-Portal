@@ -45,11 +45,12 @@ Current modules:
 | Dashboard          | ✅ Live        | Tool launcher; data-driven card grid             |
 | Billing & Invoices  | ✅ Live        | Generate (8 templates) · Post · Clear · Analytics |
 | Employee Management | ✅ Live        | Add, assign departments, remove (soft) — admin / HR |
-| Chat               | ✅ Live        | Real-time DMs & groups, @mentions (links for files) |
-| Notifications      | ✅ Live        | Realtime bell + pop-ups; invoice-posted alerts    |
+| Chat               | ✅ Live        | Real-time DMs & groups, @mentions, file upload (≤3 MB) + Drive/Dropbox links |
+| Notifications      | ✅ Live        | Realtime bell + pop-ups; invoice-posted / EOD alerts |
 | Tasks              | ✅ Live        | Personal kanban + team/admin views + auto EOD reports |
-| Reporting          | ✅ Live        | Passive activity log, team overview, EOD viewer, per-employee reviews — admin / HR / team lead |
-| Profiles           | ✅ Live        | Per-employee profile + avatar upload; change-password moved here |
+| Reporting          | ✅ Live        | Activity log, team overview, EOD viewer, per-employee reviews, daywise attendance — admin / HR / team lead |
+| Calendar           | ✅ Live        | Month view; personal / department / office-wide / targeted events, birthdays, attendance markers |
+| Profiles           | ✅ Live        | Per-employee profile + avatar + date of birth; change-password moved here |
 
 ## Technology stack
 

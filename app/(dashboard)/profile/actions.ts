@@ -16,7 +16,7 @@ export interface NameState {
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
-/** Update the signed-in user's own display name. */
+/** Update the signed-in user's own display name and (optional) date of birth. */
 export async function updateName(
   _prev: NameState,
   formData: FormData,
@@ -28,16 +28,26 @@ export async function updateName(
   if (!name) return { error: "Enter your name.", success: null };
   if (name.length > 100) return { error: "That name is too long.", success: null };
 
+  // Optional date of birth — drives the calendar birthday marker.
+  const dobRaw = String(formData.get("date_of_birth") ?? "").trim();
+  let dateOfBirth: string | null = null;
+  if (dobRaw) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dobRaw)) {
+      return { error: "Enter a valid date of birth.", success: null };
+    }
+    dateOfBirth = dobRaw;
+  }
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("profiles")
-    .update({ full_name: name })
+    .update({ full_name: name, date_of_birth: dateOfBirth })
     .eq("id", profile.id);
   if (error) return { error: error.message, success: null };
 
   revalidatePath("/profile");
   revalidatePath("/", "layout"); // refresh the sidebar name
-  return { error: null, success: "Name updated." };
+  return { error: null, success: "Profile updated." };
 }
 
 /**

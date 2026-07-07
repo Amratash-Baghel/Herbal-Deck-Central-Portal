@@ -40,6 +40,10 @@ app/
     chat/                 # Chat module
       page.tsx            #   loads directory + conversations (server), then client
       actions.ts          #   send / startDM / createGroup / rename / add / remove / leave
+    calendar/             # Calendar module
+      page.tsx            #   month view (server loads visible events + birthdays)
+      [date]/page.tsx     #   a day's report (team attendance or own day, role-scoped)
+      actions.ts          #   create / delete event (RLS enforces who can create what)
     tasks/                # Tasks & Reporting module
       layout.tsx          #   sub-nav tabs (My Board / Team / Reports / Manage)
       page.tsx            #   My Board (personal kanban)

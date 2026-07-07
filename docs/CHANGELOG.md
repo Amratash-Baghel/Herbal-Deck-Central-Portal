@@ -5,6 +5,37 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] — 2026-07-07
+
+A full **Calendar** module — events with role-scoped visibility, birthdays, and
+attendance markers.
+
+### Added
+
+- **Calendar** (`/calendar`, everyone) — a month view in the sidebar showing the
+  events each user is allowed to see, plus year-recurring **birthdays** (a cake
+  marker, from `profiles.date_of_birth`) and the signed-in user's own
+  **attendance flags** (late / incomplete / absent dots). Page months with a
+  server round-trip; click a day for its detail.
+- **Four event tiers, enforced by RLS:**
+  - **Personal** — any employee, visible only to themselves (reminders, appointments).
+  - **Department** — team leads, visible to their own department(s).
+  - **Office-wide** — admins / HR & Management, visible to everyone (holidays, all-hands).
+  - **Targeted** — admins / HR, a department multi-select, visible only to those departments.
+  The "Add event" form only offers the types the creator's role allows, and the
+  database independently re-checks on insert (`can_create_calendar_event`).
+- **Day report** (`/calendar/[date]`) — clicking a past/today date opens that
+  day: everyone sees the day's events; **admins / HR / team leads** additionally
+  see **team attendance** for the day (scoped to what they may see) with a
+  summary; a **regular employee** sees their **own** attendance + EOD report.
+- **Date of birth on the profile** — an optional self-service field on
+  `/profile`; feeds the calendar birthday markers.
+
+### Migration
+
+- `0023_calendar.sql` — `profiles.date_of_birth`; the `calendar_events` table;
+  `can_create_calendar_event()`; and RLS for the four visibility tiers.
+
 ## [0.13.0] — 2026-07-07
 
 Daywise attendance in Reporting, plus a fix to the EOD-submitted notification and

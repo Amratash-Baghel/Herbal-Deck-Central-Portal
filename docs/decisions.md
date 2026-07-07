@@ -579,6 +579,41 @@ when authority can be granted two ways (role **or** department), every place tha
 resolves "who is management" must check both — so the notification trigger now
 mirrors `is_hr_management()` rather than re-deriving a narrower rule.
 
+## 24. Calendar visibility is enforced in the database, not the UI
+
+**Decision:** The calendar's four event tiers (personal / department / office-wide
+/ targeted) are enforced by Row Level Security on `calendar_events`, with a
+single `can_create_calendar_event()` helper deciding who may create which type.
+The client only *offers* the types a role is allowed to pick; it is never the
+gate.
+
+**Why:**
+
+- **The same rule, two questions.** A calendar has two access questions — "who
+  can *see* this event?" and "who can *create* this kind?" Both are answered at
+  the data layer: the SELECT policy resolves visibility (own, a targeted
+  department you belong to, or office-wide), and the INSERT/UPDATE policy calls
+  `can_create_calendar_event()` so a crafted request can't post an office-wide
+  holiday as a regular employee. The dropdown that hides disallowed types is a
+  convenience, not the boundary.
+- **Reuse the authority helpers.** Creation rights lean on the existing
+  `can_manage_users()` / `is_team_lead()` / `my_department_ids()` helpers rather
+  than inventing new role logic — so "who is a manager" stays defined in one
+  place (and picks up role-based HR for free, unlike the bug in decision 23).
+- **Birthdays are derived, not stored.** A birthday isn't an event anyone
+  authors — it's a fact already on the profile. So birthdays are computed from
+  `profiles.date_of_birth` (year-recurring, visible to all, since the directory
+  is already readable) rather than materialised as rows, which keeps them always
+  correct and needs no upkeep.
+- **`event_date` / `event_time`, not `date` / `time`.** The columns avoid the
+  type-named identifiers so queries never need quoting and can't collide with a
+  future function or cast.
+
+**The interaction we chose:** clicking a day opens a detail dialog (its events, a
+quick add, and — for today or a past day — a link to that day's report) rather
+than jumping straight to a report. It's one component that serves viewing,
+creating, and navigating, and it works for future days too (which have no report).
+
 ---
 
 ## Summary

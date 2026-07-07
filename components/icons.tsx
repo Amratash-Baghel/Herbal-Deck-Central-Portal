@@ -318,3 +318,23 @@ export function DropboxIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function CakeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 21h16M4 21v-7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7" />
+      <path d="M4 15c1.5 0 1.5 1.2 3 1.2S8.5 15 10 15s1.5 1.2 3 1.2 1.5-1.2 3-1.2 1.5 1.2 3 1.2" />
+      <path d="M8 12V9M12 12V9M16 12V9" />
+      <path d="M8 6.5c0-.8.8-1.2.8-2C8.8 3.7 8 3 8 3s-.8.7-.8 1.5c0 .8.8 1.2.8 2ZM12 6.5c0-.8.8-1.2.8-2C12.8 3.7 12 3 12 3s-.8.7-.8 1.5c0 .8.8 1.2.8 2ZM16 6.5c0-.8.8-1.2.8-2C16.8 3.7 16 3 16 3s-.8.7-.8 1.5c0 .8.8 1.2.8 2Z" />
+    </svg>
+  );
+}
+
+export function CalendarPlusIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <path d="M3 9h18M8 2v4M16 2v4M12 13v4M10 15h4" />
+    </svg>
+  );
+}
