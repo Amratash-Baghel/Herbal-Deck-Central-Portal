@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/materialize-schedules",
+      "schedule": "45 18 * * *"
+    },
+    {
       "path": "/api/cron/eod-reminder",
       "schedule": "0 12 * * *"
     },

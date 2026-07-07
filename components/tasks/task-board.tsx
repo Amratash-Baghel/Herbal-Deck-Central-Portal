@@ -9,10 +9,12 @@ import {
   updateTask,
   archiveTask,
   deleteTask,
+  bulkMoveTasks,
+  bulkArchiveTasks,
   type UpdateTaskInput,
 } from "@/app/(dashboard)/tasks/actions";
-import { STATUS_COLUMNS } from "@/lib/tasks";
-import { PlusIcon } from "@/components/icons";
+import { STATUS_COLUMNS, statusLabel } from "@/lib/tasks";
+import { PlusIcon, CheckIcon, TrashIcon } from "@/components/icons";
 import type { Task, TaskStatus } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
 
@@ -48,6 +50,9 @@ export function TaskBoard({
   const [adding, setAdding] = useState(false);
   const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const nameOf = useMemo(() => {
     const m = new Map(people.map((p) => [p.id, p.name]));
@@ -125,6 +130,53 @@ export function TaskBoard({
     await deleteTask(taskId);
   }
 
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelect() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
+
+  async function handleBulkMove(status: TaskStatus) {
+    const ids = [...selected];
+    if (ids.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    setActionError(null);
+    const res = await bulkMoveTasks(ids, status);
+    setBulkBusy(false);
+    if (res.ok && res.tasks) {
+      const map = new Map(res.tasks.map((t) => [t.id, t]));
+      setTasks((prev) => prev.map((t) => map.get(t.id) ?? t));
+      if (res.skipped) setActionError(`${res.skipped} task(s) couldn't be moved.`);
+      exitSelect();
+    } else {
+      setActionError(res.error ?? "Could not move the tasks.");
+    }
+  }
+
+  async function handleBulkArchive() {
+    const ids = [...selected];
+    if (ids.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    setActionError(null);
+    const res = await bulkArchiveTasks(ids);
+    setBulkBusy(false);
+    if (res.ok) {
+      setTasks((prev) => prev.filter((t) => !selected.has(t.id)));
+      if (res.skipped) setActionError(`${res.skipped} task(s) couldn't be archived.`);
+      exitSelect();
+    } else {
+      setActionError(res.error ?? "Could not archive the tasks.");
+    }
+  }
+
   const openTask = tasks.find((t) => t.id === openId) ?? null;
 
   return (
@@ -144,6 +196,51 @@ export function TaskBoard({
           {actionError}
         </p>
       )}
+
+      {/* Multi-select toolbar */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {!selectMode ? (
+          <button
+            type="button"
+            onClick={() => setSelectMode(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition hover:bg-accent"
+          >
+            <CheckIcon className="h-4 w-4" />
+            Select
+          </button>
+        ) : (
+          <>
+            <span className="text-sm font-medium">{selected.size} selected</span>
+            {STATUS_COLUMNS.map((col) => (
+              <button
+                key={col.value}
+                type="button"
+                disabled={selected.size === 0 || bulkBusy}
+                onClick={() => void handleBulkMove(col.value)}
+                className="rounded-lg border px-2.5 py-1.5 text-xs font-medium transition hover:bg-accent disabled:opacity-40"
+              >
+                Move to {statusLabel(col.value)}
+              </button>
+            ))}
+            <button
+              type="button"
+              disabled={selected.size === 0 || bulkBusy}
+              onClick={() => void handleBulkArchive()}
+              className="inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition hover:bg-accent disabled:opacity-40"
+            >
+              <TrashIcon className="h-3.5 w-3.5" />
+              Archive
+            </button>
+            <button
+              type="button"
+              onClick={exitSelect}
+              className="ml-auto rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition hover:opacity-90"
+            >
+              Done
+            </button>
+          </>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {STATUS_COLUMNS.map((col) => {
@@ -222,10 +319,19 @@ export function TaskBoard({
                       editable
                       assignable={assignable}
                       assigneeNoteColor={noteColorOf(task.assigned_to)}
+                      selectable={selectMode}
+                      selected={selected.has(task.id)}
+                      onToggleSelect={() => toggleSelect(task.id)}
                       onOpen={() => setOpenId(task.id)}
-                      onMove={canMove ? (s) => void handleMove(task.id, s) : undefined}
+                      onMove={
+                        !selectMode && canMove
+                          ? (s) => void handleMove(task.id, s)
+                          : undefined
+                      }
                       onAssign={
-                        canReassign ? (id) => void handleAssign(task.id, id) : undefined
+                        !selectMode && canReassign
+                          ? (id) => void handleAssign(task.id, id)
+                          : undefined
                       }
                     />
                   );

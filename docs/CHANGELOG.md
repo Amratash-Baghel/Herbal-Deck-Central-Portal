@@ -5,6 +5,39 @@ All notable changes to the Herbal Deck Portal are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] — 2026-07-07
+
+Bulk actions on the board, and a recurring **task scheduler**.
+
+### Added
+
+- **Multi-select on My Board.** A **Select** button turns on checkboxes; pick
+  several sticky notes and **move them together** to a column or **archive** them
+  in one go. Each task is still permission-checked individually (tasks you can't
+  move are skipped rather than failing the batch).
+- **Task Scheduler** (`Tasks → Scheduler`, everyone) — schedule tasks that
+  appear on the assignee's To Do board automatically:
+  - **Repeat:** Daily (Mon–Sat), Weekly (pick the weekdays), Once (a date), or a
+    Date range (every working day between two dates).
+  - **Assign to:** yourself; a person; a whole department; or everyone —
+    limited by role. **Employees** schedule for themselves, **team leads** for
+    people/departments they lead, **admins / HR** for anyone or the whole company.
+    Enforced by RLS (`can_schedule_task`), not just the UI.
+  - Schedules can be **paused/resumed** and deleted. A due task **materialises**
+    onto the board when the owner opens it (and via a morning cron), and is
+    idempotent — the same day never creates a duplicate.
+
+### Migration
+
+- `0024_task_scheduler.sql` — `task_schedules` table + `can_schedule_task()`;
+  `tasks.schedule_id` / `schedule_date` with a unique index; and
+  `materialize_scheduled_tasks()` / `materialize_my_scheduled_tasks()`.
+
+### Cron
+
+- New `/api/cron/materialize-schedules` (00:15 IST) creates the day's scheduled
+  tasks company-wide. Same `CRON_SECRET` protection as the EOD crons.
+
 ## [0.14.0] — 2026-07-07
 
 A full **Calendar** module — events with role-scoped visibility, birthdays, and

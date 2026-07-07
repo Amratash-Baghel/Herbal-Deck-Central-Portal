@@ -33,6 +33,13 @@ export default async function TasksPage() {
   const supabase = await createClient();
   const me = profile.id;
 
+  // Bring any scheduled tasks due today onto the board before we read it, so a
+  // recurring task shows up the moment its owner opens their board (idempotent).
+  await supabase.rpc("materialize_my_scheduled_tasks").then(
+    () => {},
+    () => {},
+  );
+
   const [{ data: pdRows }, { data: allDepts }, { data: profs }, { data: taskRows }] =
     await time("tasks:board-queries", () =>
       Promise.all([

@@ -93,6 +93,9 @@ export function TaskCard({
   editable,
   assignable,
   assigneeNoteColor,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
   onOpen,
   onMove,
   onAssign,
@@ -106,6 +109,10 @@ export function TaskCard({
   assignable?: Person[];
   /** The assignee's default note-colour key — the note's fallback background. */
   assigneeNoteColor?: string | null;
+  /** When true, the card is in multi-select mode: clicking toggles selection. */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onOpen: () => void;
   onMove?: (status: TaskStatus) => void;
   onAssign?: (assigneeId: string | null) => void;
@@ -116,22 +123,33 @@ export function TaskCard({
 
   return (
     <div
-      draggable={editable && !!onMove}
+      draggable={editable && !!onMove && !selectable}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", task.id);
         e.dataTransfer.effectAllowed = "move";
       }}
       style={{ transform: `rotate(${tilt}deg)` }}
-      className={`group rounded-xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:rotate-0 hover:shadow-md ${noteColor(
+      className={`group relative rounded-xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:rotate-0 hover:shadow-md ${noteColor(
         task.color,
         assigneeNoteColor,
         deptSlug,
-      )} ${editable ? "cursor-grab active:cursor-grabbing" : ""}`}
+      )} ${editable && !selectable ? "cursor-grab active:cursor-grabbing" : ""} ${
+        selected ? "ring-2 ring-primary" : ""
+      }`}
     >
+      {selectable && (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          aria-label={`Select ${task.title}`}
+          className="absolute right-2 top-2 h-4 w-4 accent-primary"
+        />
+      )}
       <button
         type="button"
-        onClick={onOpen}
-        className="block w-full text-left text-foreground"
+        onClick={selectable ? onToggleSelect : onOpen}
+        className={`block w-full text-left text-foreground ${selectable ? "pr-6" : ""}`}
       >
         <p className="text-sm font-semibold leading-snug">{task.title}</p>
         {task.description && (

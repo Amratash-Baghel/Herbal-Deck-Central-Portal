@@ -13,6 +13,7 @@ export function TasksTabs({ canManage }: { canManage: boolean }) {
   const tabs = [
     { href: "/tasks", label: "My Board", exact: true },
     { href: "/tasks/team", label: "Team" },
+    { href: "/tasks/scheduler", label: "Scheduler" },
     { href: "/tasks/reports", label: "Reports" },
     ...(canManage ? [{ href: "/tasks/manage", label: "Manage" }] : []),
   ];

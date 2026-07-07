@@ -614,6 +614,41 @@ quick add, and — for today or a past day — a link to that day's report) rath
 than jumping straight to a report. It's one component that serves viewing,
 creating, and navigating, and it works for future days too (which have no report).
 
+## 25. Scheduled tasks are materialised, not virtual
+
+**Decision:** A task schedule is a template; on each day it fires, a **real
+`tasks` row** is created on the assignee's board (linked back by `schedule_id` +
+`schedule_date`). We do *not* render schedules as phantom cards computed on the
+fly. Creation happens both **on board-load** (for the person opening it) and via
+a **daily cron** (company-wide), guarded by a unique
+`(schedule_id, assigned_to, schedule_date)` index.
+
+**Why:**
+
+- **A scheduled task is just a task.** Once materialised it moves through To Do →
+  In Progress → Done, counts in EOD/reporting, can be edited or archived, and
+  carries deadlines — all the existing machinery works unchanged because it *is*
+  a normal row. A virtual card would have to special-case every one of those.
+- **Idempotency over bookkeeping.** Rather than track "did we already create
+  today's instance?" in application code, the unique index makes re-running
+  harmless. That's why both triggers (load and cron) can fire freely: the second
+  one is a no-op. On-load creation means a task shows up the instant its owner
+  opens the board even if the cron hasn't run (or the plan's cron is flaky);
+  the cron is a completeness backstop for team/manage views before login.
+- **Permission is checked once, at creation.** `can_schedule_task()` gates *who
+  can schedule for whom* when the schedule is saved (employee→self,
+  team lead→their people/department, admin/HR→anyone/everyone). Materialisation
+  then runs `SECURITY DEFINER` and bypasses the per-task INSERT policy — the
+  authority question was already answered, so the daily fan-out doesn't need the
+  creator to still be online or re-authorised.
+- **Working-week aware.** Daily and range schedules skip Sundays (the same
+  non-working-day rule as attendance); weekly honours exactly the chosen days.
+
+**Bulk actions, same principle:** multi-select move/archive checks each task
+individually (the move trigger still enforces assignee/manager rights) and skips
+what the user can't touch, rather than letting one disallowed task fail the whole
+batch — the UI stays forgiving while the database stays strict.
+
 ---
 
 ## Summary

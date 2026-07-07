@@ -326,6 +326,80 @@ export async function archiveTask(taskId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
+export interface BulkResult {
+  ok: boolean;
+  error?: string;
+  /** The tasks that were successfully updated (for optimistic UI reconciliation). */
+  tasks?: Task[];
+  /** How many were skipped because the caller couldn't act on them. */
+  skipped?: number;
+}
+
+/**
+ * Move several tasks to a column at once. Each task is checked individually
+ * (the move trigger enforces assignee/manager rights), so tasks the caller can't
+ * move are skipped rather than failing the whole batch.
+ */
+export async function bulkMoveTasks(
+  taskIds: string[],
+  status: TaskStatus,
+): Promise<BulkResult> {
+  const access = await getUserAccess();
+  if (!access) return { ok: false, error: "You are not signed in." };
+  const ids = [...new Set(taskIds)].filter(Boolean);
+  if (ids.length === 0) return { ok: false, error: "Nothing selected." };
+
+  const supabase = await createClient();
+  const { data: current } = await supabase
+    .from("tasks")
+    .select("id, assigned_to")
+    .in("id", ids);
+
+  const movable = (current ?? []).filter(
+    (t) =>
+      access.canManageUsers ||
+      t.assigned_to === null ||
+      t.assigned_to === access.profile.id,
+  );
+
+  const updated: Task[] = [];
+  for (const t of movable) {
+    const { data } = await supabase
+      .from("tasks")
+      .update({ status })
+      .eq("id", t.id)
+      .select("*")
+      .single();
+    if (data) updated.push(data as Task);
+  }
+
+  revalidatePath("/tasks");
+  return { ok: true, tasks: updated, skipped: ids.length - updated.length };
+}
+
+/**
+ * Archive several tasks at once. RLS confines the update to tasks the caller may
+ * edit (creator / assignee / manager / department lead), so unauthorised rows
+ * are silently left alone.
+ */
+export async function bulkArchiveTasks(taskIds: string[]): Promise<BulkResult> {
+  const access = await getUserAccess();
+  if (!access) return { ok: false, error: "You are not signed in." };
+  const ids = [...new Set(taskIds)].filter(Boolean);
+  if (ids.length === 0) return { ok: false, error: "Nothing selected." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .update({ archived: true })
+    .in("id", ids)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/tasks");
+  return { ok: true, skipped: ids.length - (data?.length ?? 0) };
+}
+
 /** Delete a task — only its creator, never anyone else's (enforced by RLS too). */
 export async function deleteTask(taskId: string): Promise<ActionResult> {
   const access = await getUserAccess();

@@ -284,6 +284,30 @@ export interface ActivityLog {
   created_at: string;
 }
 
+/** How often a task schedule fires. */
+export type ScheduleRecurrence = "daily" | "weekly" | "once" | "range";
+/** Who a task schedule targets. */
+export type ScheduleTarget = "person" | "department" | "everyone";
+
+/** A recurring/scheduled task template from `public.task_schedules`. */
+export interface TaskSchedule {
+  id: string;
+  title: string;
+  description: string | null;
+  department_id: string;
+  created_by: string;
+  target_type: ScheduleTarget;
+  target_person: string | null;
+  target_department: string | null;
+  recurrence: ScheduleRecurrence;
+  /** 0=Sun … 6=Sat, for weekly recurrence. */
+  weekdays: number[];
+  start_date: string;
+  end_date: string | null;
+  active: boolean;
+  created_at: string;
+}
+
 /** The visibility tier of a calendar event. */
 export type CalendarEventType = "personal" | "department" | "common" | "targeted";
 
