@@ -16,14 +16,20 @@ import type {
 import type { DeptRef, Person } from "@/components/tasks/types";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+const DAY_PRESETS: { label: string; days: number[] }[] = [
+  { label: "Every day", days: [0, 1, 2, 3, 4, 5, 6] },
+  { label: "Mon–Sat", days: [1, 2, 3, 4, 5, 6] },
+  { label: "Weekdays", days: [1, 2, 3, 4, 5] },
+];
 const inputClass =
   "w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring";
 const labelClass = "text-xs font-medium text-muted-foreground";
 
 const RECURRENCE_LABEL: Record<ScheduleRecurrence, string> = {
   daily: "Daily (Mon–Sat)",
-  weekly: "Weekly",
-  once: "Once",
+  weekly: "Repeat on days…",
+  once: "Once (a single date)",
   range: "Date range",
 };
 
@@ -39,8 +45,10 @@ function recurrenceSummary(s: TaskSchedule): string {
     case "daily":
       return `Every working day (Mon–Sat)${until}`;
     case "weekly": {
-      const days = [...s.weekdays].sort().map((d) => WEEKDAYS[d]).join(", ");
-      return `Weekly on ${days || "—"}${until}`;
+      const sorted = [...s.weekdays].sort((a, b) => a - b);
+      if (sorted.length === 7) return `Every day${until}`;
+      const days = sorted.map((d) => WEEKDAYS[d]).join(", ");
+      return `On ${days || "—"}${until}`;
     }
     case "once":
       return `Once on ${s.start_date}`;
@@ -380,25 +388,46 @@ function ScheduleForm({
           </div>
 
           {recurrence === "weekly" && (
-            <div className="space-y-1.5">
-              <label className={labelClass}>On days</label>
-              <div className="flex flex-wrap gap-1.5">
-                {WEEKDAYS.map((w, i) => {
+            <div className="space-y-2">
+              <label className={labelClass}>Repeat on</label>
+              {/* Alarm-style day toggles (Sun … Sat) */}
+              <div className="flex justify-between gap-1.5">
+                {DAY_LETTERS.map((letter, i) => {
                   const on = weekdays.has(i);
                   return (
                     <button
-                      key={w}
+                      key={i}
                       type="button"
                       onClick={() => toggleWeekday(i)}
-                      className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
-                        on ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent"
+                      aria-pressed={on}
+                      title={WEEKDAYS[i]}
+                      className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold transition ${
+                        on
+                          ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-accent"
                       }`}
                     >
-                      {w}
+                      {letter}
                     </button>
                   );
                 })}
               </div>
+              {/* Quick presets */}
+              <div className="flex flex-wrap gap-1.5">
+                {DAY_PRESETS.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => setWeekdays(new Set(p.days))}
+                    className="rounded-full border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition hover:bg-accent"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                The task appears on the board every selected day.
+              </p>
             </div>
           )}
 
