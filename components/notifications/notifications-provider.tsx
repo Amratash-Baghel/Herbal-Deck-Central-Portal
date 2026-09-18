@@ -18,6 +18,12 @@ import {
   showDesktopNotification,
   type DesktopPermission,
 } from "@/lib/desktop-notifications";
+import {
+  playNotificationChime,
+  primeNotificationSound,
+  setSoundMuted,
+  soundMuted,
+} from "@/lib/notification-sound";
 import type { Notification } from "@/lib/types";
 
 interface NotificationsContextValue {
@@ -39,6 +45,9 @@ interface NotificationsContextValue {
   desktopPermission: DesktopPermission;
   /** Prompt for that permission. Call from a click — Safari requires a gesture. */
   enableDesktopNotifications: () => void;
+  /** Whether the arrival chime is silenced on this browser. */
+  soundMuted: boolean;
+  toggleSound: () => void;
 }
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
@@ -103,6 +112,30 @@ export function NotificationsProvider({
 
   const enableDesktopNotifications = useCallback(() => {
     void requestDesktopPermission().then(setPermission);
+  }, []);
+
+  const [muted, setMuted] = useState(soundMuted);
+
+  const toggleSound = useCallback(() => {
+    setMuted((prev) => {
+      const next = !prev;
+      setSoundMuted(next);
+      // Unmuting is itself a click, so it doubles as the gesture that unlocks
+      // audio — and the preview confirms the chime is actually audible.
+      if (!next) playNotificationChime();
+      return next;
+    });
+  }, []);
+
+  // An AudioContext is born suspended until the page sees a gesture.
+  useEffect(() => {
+    const prime = () => primeNotificationSound();
+    window.addEventListener("pointerdown", prime, { once: true });
+    window.addEventListener("keydown", prime, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", prime);
+      window.removeEventListener("keydown", prime);
+    };
   }, []);
 
   const markRead = useCallback(
@@ -200,8 +233,9 @@ export function NotificationsProvider({
         prev.some((p) => p.id === n.id) ? prev : [n, ...prev],
       );
       setToasts((prev) => [n, ...prev].slice(0, 4));
+      playNotificationChime();
 
-      // The in-app toast is invisible from another tab, so hand the alert to
+      // The in-app banner is invisible from another tab, so hand the alert to
       // the OS instead.
       if (!focused) {
         showDesktopNotification(n, () => {
@@ -248,6 +282,8 @@ export function NotificationsProvider({
         setActiveConversation,
         desktopPermission: permission,
         enableDesktopNotifications,
+        soundMuted: muted,
+        toggleSound,
       }}
     >
       {children}
