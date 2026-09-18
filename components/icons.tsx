@@ -140,6 +140,24 @@ export function BellIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function SpeakerIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M11 5 6.5 9H3v6h3.5L11 19V5Z" />
+      <path d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10" />
+    </svg>
+  );
+}
+
+export function SpeakerOffIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M11 5 6.5 9H3v6h3.5L11 19V5Z" />
+      <path d="m16 10 4 4M20 10l-4 4" />
+    </svg>
+  );
+}
+
 export function ReportingIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>

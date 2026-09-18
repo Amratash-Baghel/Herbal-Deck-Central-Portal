@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useNotifications } from "@/components/notifications/notifications-provider";
 import { NotificationTypeIcon } from "@/components/notifications/notification-icon";
-import { BellIcon } from "@/components/icons";
+import { BellIcon, SpeakerIcon, SpeakerOffIcon } from "@/components/icons";
 import { timeAgo } from "@/lib/time";
 import type { Notification } from "@/lib/types";
 
@@ -23,6 +23,8 @@ export function NotificationBell() {
     markAllRead,
     desktopPermission,
     enableDesktopNotifications,
+    soundMuted,
+    toggleSound,
   } = useNotifications();
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -86,15 +88,31 @@ export function NotificationBell() {
             <div className="fixed left-3 right-3 top-16 z-[101] w-auto rounded-2xl border bg-card shadow-lg md:left-[17rem] md:right-auto md:top-4 md:w-96">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <p className="text-sm font-semibold tracking-tight">Notifications</p>
-              {unreadCount > 0 && (
+              <div className="flex items-center gap-3">
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllRead}
+                    className="text-xs font-medium text-primary transition hover:underline"
+                  >
+                    Mark all read
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={markAllRead}
-                  className="text-xs font-medium text-primary transition hover:underline"
+                  onClick={toggleSound}
+                  aria-pressed={!soundMuted}
+                  aria-label={soundMuted ? "Unmute alert sound" : "Mute alert sound"}
+                  title={soundMuted ? "Alert sound off" : "Alert sound on"}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-foreground"
                 >
-                  Mark all read
+                  {soundMuted ? (
+                    <SpeakerOffIcon className="h-4 w-4" />
+                  ) : (
+                    <SpeakerIcon className="h-4 w-4" />
+                  )}
                 </button>
-              )}
+              </div>
             </div>
 
             {desktopPermission === "default" && (
