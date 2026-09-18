@@ -45,15 +45,30 @@ export default async function TeamTasksPage() {
     .from("tasks")
     .select(TASK_LIST_COLUMNS)
     .eq("archived", false);
+  // The same scope again for the History filter: completed work the nightly
+  // cron archived off the boards after a week. Bounded — it only ever grows.
+  let historyQuery = supabase
+    .from("tasks")
+    .select(TASK_LIST_COLUMNS)
+    .eq("archived", true)
+    .eq("status", "done");
   if (access.canManageUsers) {
     // all tasks
   } else if (access.isTeamLead && myDeptIds.length > 0) {
     query = query.in("department_id", myDeptIds);
+    historyQuery = historyQuery.in("department_id", myDeptIds);
   } else {
     query = query.or(`created_by.eq.${me},assigned_to.eq.${me}`);
+    historyQuery = historyQuery.or(`created_by.eq.${me},assigned_to.eq.${me}`);
   }
-  const { data } = await query.order("created_at", { ascending: false });
-  const tasks = (data ?? []) as Task[];
+  const [{ data }, { data: historyData }] = await Promise.all([
+    query.order("created_at", { ascending: false }),
+    historyQuery.order("completed_at", { ascending: false }).limit(200),
+  ]);
+  const tasks = [
+    ...((data ?? []) as Task[]),
+    ...((historyData ?? []) as Task[]),
+  ];
 
   const description = access.canManageUsers
     ? "Every task across all departments."
@@ -76,6 +91,7 @@ export default async function TeamTasksPage() {
         filters={{
           person: access.canManageUsers || access.isTeamLead,
           department: filterDepartments.length > 1,
+          status: true,
         }}
       />
     </>

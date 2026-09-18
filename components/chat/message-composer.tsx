@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   SendIcon,
@@ -15,6 +15,7 @@ import {
   checkFile,
   uploadChatAttachment,
   humanFileSize,
+  extOf,
   ATTACHMENT_ACCEPT,
   type Attachment,
   type AttachmentKind,
@@ -66,7 +67,12 @@ export function MessageComposer({
   const [error, setError] = useState<string | null>(null);
 
   const [pending, setPending] = useState<Pending[]>([]);
-  const [largeFile, setLargeFile] = useState<string | null>(null);
+  /** A file we wouldn't accept — either too big or a type we don't store. */
+  const [rejected, setRejected] = useState<{
+    name: string;
+    reason: "too_large" | "bad_type";
+  } | null>(null);
+  const [dropping, setDropping] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -107,8 +113,9 @@ export function MessageComposer({
   async function startUpload(file: File) {
     const check = checkFile(file);
     if (!check.ok) {
-      if (check.reason === "too_large") setLargeFile(file.name);
-      else setError(check.error);
+      // Both rejections have the same remedy — share it as a link — so both
+      // raise the prompt rather than leaving an unsupported type at a dead end.
+      setRejected({ name: file.name, reason: check.reason });
       return;
     }
     setError(null);
@@ -150,11 +157,59 @@ export function MessageComposer({
     }
   }
 
-  function onPickFiles(files: FileList | null) {
+  function onPickFiles(files: FileList | File[] | null) {
     if (!files) return;
     for (const file of Array.from(files)) void startUpload(file);
     if (fileRef.current) fileRef.current.value = "";
   }
+
+  // Keeps the window listeners below on the latest handler without tearing the
+  // subscription down every render.
+  const pickRef = useRef(onPickFiles);
+  useEffect(() => {
+    pickRef.current = onPickFiles;
+  });
+
+  // Drag a file anywhere over the chat to attach it. Without preventDefault the
+  // browser navigates to the dropped file, losing whatever was typed.
+  useEffect(() => {
+    const hasFiles = (e: DragEvent) =>
+      Array.from(e.dataTransfer?.types ?? []).includes("Files");
+
+    const over = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      setDropping(true);
+    };
+    const leave = (e: DragEvent) => {
+      // relatedTarget is null only when the cursor leaves the window entirely.
+      if (e.relatedTarget === null) setDropping(false);
+    };
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      setDropping(false);
+      pickRef.current(e.dataTransfer?.files ?? null);
+    };
+
+    window.addEventListener("dragover", over);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("drop", drop);
+    };
+  }, []);
+
+  // Grow with the content instead of scrolling a one-line window, so what
+  // you've written stays visible. Runs on send-reset and mention-insert too.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
 
   function removePending(id: string) {
     const target = pending.find((p) => p.id === id);
@@ -191,7 +246,7 @@ export function MessageComposer({
       setPicked(new Map());
       setMentionQuery(null);
       setPending([]);
-      setLargeFile(null);
+      setRejected(null);
     } else {
       setError(res.error ?? "Could not send.");
     }
@@ -199,6 +254,12 @@ export function MessageComposer({
 
   return (
     <div className="relative border-t p-3">
+      {dropping && (
+        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/90 text-sm font-medium text-primary">
+          Drop to attach
+        </div>
+      )}
+
       {suggestions.length > 0 && (
         <ul className="absolute bottom-[calc(100%-0.25rem)] left-3 z-10 w-64 overflow-hidden rounded-xl border bg-card shadow-lg">
           {suggestions.map((p) => (
@@ -219,13 +280,17 @@ export function MessageComposer({
         </ul>
       )}
 
-      {/* Large-file fallback: point the user at Drive / Dropbox */}
-      {largeFile && (
+      {/* Anything we can't store — too big, or a type we don't keep (video,
+          iPhone HEIC photos) — gets the same remedy: share it as a link. */}
+      {rejected && (
         <div className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs dark:border-amber-900 dark:bg-amber-950/40">
           <p className="text-amber-800 dark:text-amber-200">
-            <span className="font-medium">“{largeFile}”</span> is larger than 3MB.
+            <span className="font-medium">“{rejected.name}”</span>{" "}
+            {rejected.reason === "too_large"
+              ? "is larger than 3MB."
+              : "isn’t a file type we can attach (we keep JPG, PNG, PDF, DOC, DOCX and XLSX)."}{" "}
             Please upload it to Google Drive or Dropbox and paste the share link
-            instead.
+            here instead — it&apos;ll appear as a preview card.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <a
@@ -248,7 +313,7 @@ export function MessageComposer({
             </a>
             <button
               type="button"
-              onClick={() => setLargeFile(null)}
+              onClick={() => setRejected(null)}
               className="ml-auto text-muted-foreground transition hover:text-foreground"
             >
               Dismiss
@@ -350,8 +415,28 @@ export function MessageComposer({
               void send();
             }
           }}
+          onPaste={(e) => {
+            const files = Array.from(e.clipboardData.files);
+            if (files.length === 0) return;
+            e.preventDefault();
+            // A pasted screenshot arrives as a bare blob in some browsers;
+            // checkFile keys off the extension, so give it one.
+            onPickFiles(
+              files.map((f) =>
+                extOf(f.name)
+                  ? f
+                  : new File(
+                      [f],
+                      `pasted-${Date.now()}.${
+                        f.type === "image/jpeg" ? "jpg" : "png"
+                      }`,
+                      { type: f.type },
+                    ),
+              ),
+            );
+          }}
           placeholder="Write a message…  (@ to mention, Enter to send)"
-          className="max-h-40 min-h-[2.75rem] flex-1 resize-y rounded-xl border bg-background px-3 py-2.5 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+          className="max-h-40 min-h-[2.75rem] flex-1 resize-none overflow-y-auto rounded-xl border bg-background px-3 py-2.5 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
         />
         <button
           type="button"

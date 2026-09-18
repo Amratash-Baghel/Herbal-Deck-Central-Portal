@@ -95,6 +95,7 @@ export function TaskCard({
   assigneeNoteColor,
   selectable = false,
   selected = false,
+  faded = false,
   onToggleSelect,
   onOpen,
   onMove,
@@ -112,6 +113,8 @@ export function TaskCard({
   /** When true, the card is in multi-select mode: clicking toggles selection. */
   selectable?: boolean;
   selected?: boolean;
+  /** Completed on an earlier day — dimmed so it recedes behind live work. */
+  faded?: boolean;
   onToggleSelect?: () => void;
   onOpen: () => void;
   onMove?: (status: TaskStatus) => void;
@@ -135,7 +138,7 @@ export function TaskCard({
         deptSlug,
       )} ${editable && !selectable ? "cursor-grab active:cursor-grabbing" : ""} ${
         selected ? "ring-2 ring-primary" : ""
-      }`}
+      } ${faded ? "opacity-70 saturate-50 hover:opacity-100 hover:saturate-100" : ""}`}
     >
       {selectable && (
         <input

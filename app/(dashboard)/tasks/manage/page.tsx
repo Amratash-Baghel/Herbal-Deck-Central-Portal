@@ -45,6 +45,7 @@ export default async function ManageTasksPage() {
 
   const [
     { data: tasksData },
+    { data: historyData },
     { data: doneEvents },
     { data: overview },
     { data: profs },
@@ -52,6 +53,15 @@ export default async function ManageTasksPage() {
   ] = await time("tasks/manage:all-queries", () =>
     Promise.all([
       supabase.from("tasks").select(TASK_LIST_COLUMNS).eq("archived", false),
+      // The History filter: completed work archived off the boards after a
+      // week by the nightly cron. Bounded — it only ever grows.
+      supabase
+        .from("tasks")
+        .select(TASK_LIST_COLUMNS)
+        .eq("archived", true)
+        .eq("status", "done")
+        .order("completed_at", { ascending: false })
+        .limit(200),
       supabase
         .from("task_activity")
         .select("actor_id, created_at")
@@ -68,7 +78,10 @@ export default async function ManageTasksPage() {
     ]),
   );
 
-  const tasks = (tasksData ?? []) as Task[];
+  const tasks = [
+    ...((tasksData ?? []) as Task[]),
+    ...((historyData ?? []) as Task[]),
+  ];
   const people = ((profs ?? []) as ProfileRow[]).map(toPerson);
   const departments = (depts ?? []) as DeptRef[];
   const nameOf = new Map(people.map((p) => [p.id, p.name]));
