@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { TaskBoard } from "@/components/tasks/task-board";
 import type { Person, DeptRef } from "@/components/tasks/types";
 import { time } from "@/lib/perf";
+import { localDateISO } from "@/lib/time";
 import { TASK_LIST_COLUMNS, type Task } from "@/lib/types";
 
 type ProfileRow = {
@@ -40,8 +41,13 @@ export default async function TasksPage() {
     () => {},
   );
 
-  const [{ data: pdRows }, { data: allDepts }, { data: profs }, { data: taskRows }] =
-    await time("tasks:board-queries", () =>
+  const [
+    { data: pdRows },
+    { data: allDepts },
+    { data: profs },
+    { data: taskRows },
+    { data: historyRows },
+  ] = await time("tasks:board-queries", () =>
       Promise.all([
         supabase.from("profile_departments").select("department_id").eq("profile_id", me),
         supabase.from("departments").select("id, name, slug").order("name"),
@@ -56,6 +62,16 @@ export default async function TasksPage() {
           .or(`created_by.eq.${me},assigned_to.eq.${me}`)
           .eq("archived", false)
           .order("created_at", { ascending: false }),
+        // The History column: completed tasks the nightly cron archived off the
+        // board after a week. Bounded — this only ever grows.
+        supabase
+          .from("tasks")
+          .select(TASK_LIST_COLUMNS)
+          .or(`created_by.eq.${me},assigned_to.eq.${me}`)
+          .eq("archived", true)
+          .eq("status", "done")
+          .order("completed_at", { ascending: false })
+          .limit(50),
       ]),
     );
 
@@ -95,6 +111,8 @@ export default async function TasksPage() {
         canManage={canManage}
         canAssignOthers={access.canManageUsers || access.isTeamLead}
         initialTasks={(taskRows ?? []) as Task[]}
+        initialHistory={(historyRows ?? []) as Task[]}
+        todayISO={localDateISO()}
         people={people}
         assignable={assignable}
         departments={myDepartments}

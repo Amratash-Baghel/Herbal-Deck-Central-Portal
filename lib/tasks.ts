@@ -1,3 +1,4 @@
+import { localDateISO } from "@/lib/time";
 import type { TaskStatus } from "@/lib/types";
 
 /** The three kanban columns, in order. */
@@ -6,6 +7,19 @@ export const STATUS_COLUMNS: { value: TaskStatus; label: string }[] = [
   { value: "in_progress", label: "In Progress" },
   { value: "done", label: "Done" },
 ];
+
+/**
+ * True once the day a task was completed has passed, so yesterday's finished
+ * work recedes behind today's. Deliberately a calendar-day boundary rather than
+ * a rolling 24 hours: two notes finished the same day should always look alike.
+ */
+export function isAgedDone(
+  task: { status: TaskStatus; completed_at: string | null },
+  todayISO: string,
+): boolean {
+  if (task.status !== "done" || !task.completed_at) return false;
+  return localDateISO("Asia/Kolkata", new Date(task.completed_at)) < todayISO;
+}
 
 export function statusLabel(status: TaskStatus): string {
   return STATUS_COLUMNS.find((c) => c.value === status)?.label ?? status;

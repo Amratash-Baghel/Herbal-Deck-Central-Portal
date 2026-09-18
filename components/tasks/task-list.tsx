@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { statusLabel, noteColor } from "@/lib/tasks";
+import { statusLabel, noteColor, isAgedDone } from "@/lib/tasks";
 import { localDateISO, daysUntil } from "@/lib/time";
 import type { Task, TaskStatus } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
@@ -66,15 +66,20 @@ export function TaskList({
     return (id: string) => m.get(id);
   }, [departments]);
 
+  // "History" isn't a status — it's the completed work the nightly cron
+  // archived off the boards after a week, hidden from the other views.
+  const historyView = status === "history";
+
   const filtered = useMemo(() => {
     return tasks
+      .filter((t) => (historyView ? t.archived : !t.archived))
       .filter((t) => (person ? t.assigned_to === person : true))
       .filter((t) => (dept ? t.department_id === dept : true))
-      .filter((t) => (status ? t.status === status : true))
+      .filter((t) => (status && !historyView ? t.status === status : true))
       .filter((t) => (from ? t.created_at.slice(0, 10) >= from : true))
       .filter((t) => (to ? t.created_at.slice(0, 10) <= to : true))
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-  }, [tasks, person, dept, status, from, to]);
+  }, [tasks, person, dept, status, from, to, historyView]);
 
   const summary = useMemo(() => {
     let todo = 0;
@@ -123,6 +128,7 @@ export function TaskList({
             <option value="todo">To Do</option>
             <option value="in_progress">In Progress</option>
             <option value="done">Done</option>
+            <option value="history">History (archived)</option>
           </select>
         )}
         {filters.dateRange && (
@@ -152,7 +158,9 @@ export function TaskList({
           return (
             <li
               key={t.id}
-              className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${noteColor(t.color, noteColorOf(t.assigned_to), d?.slug)}`}
+              className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${noteColor(t.color, noteColorOf(t.assigned_to), d?.slug)} ${
+                isAgedDone(t, todayISO) ? "opacity-70 saturate-50" : ""
+              }`}
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">

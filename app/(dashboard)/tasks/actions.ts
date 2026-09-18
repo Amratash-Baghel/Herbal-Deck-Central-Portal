@@ -326,6 +326,49 @@ export async function archiveTask(taskId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
+/**
+ * Bring an archived task back onto the board. Completed tasks are archived off
+ * the board after a week by the nightly cron; this is how one comes back when
+ * it turns out it wasn't finished. Same rule as moving: managers, the assignee,
+ * or an unassigned task.
+ */
+export async function restoreTask(
+  taskId: string,
+  status: TaskStatus,
+): Promise<TaskResult> {
+  const access = await getUserAccess();
+  if (!access) return { ok: false, error: "You are not signed in." };
+
+  const supabase = await createClient();
+  const { data: current } = await supabase
+    .from("tasks")
+    .select("assigned_to")
+    .eq("id", taskId)
+    .single();
+  if (!current) return { ok: false, error: "Task not found." };
+
+  const canRestore =
+    access.canManageUsers ||
+    current.assigned_to === null ||
+    current.assigned_to === access.profile.id;
+  if (!canRestore) {
+    return { ok: false, error: "Only the assignee can restore this task." };
+  }
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .update({ archived: false, status })
+    .eq("id", taskId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "Could not restore the task." };
+  }
+  revalidatePath("/tasks");
+  return { ok: true, task: data as Task };
+}
+
 export interface BulkResult {
   ok: boolean;
   error?: string;

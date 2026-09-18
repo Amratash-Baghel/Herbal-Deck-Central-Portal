@@ -9,11 +9,12 @@ import {
   updateTask,
   archiveTask,
   deleteTask,
+  restoreTask,
   bulkMoveTasks,
   bulkArchiveTasks,
   type UpdateTaskInput,
 } from "@/app/(dashboard)/tasks/actions";
-import { STATUS_COLUMNS, statusLabel } from "@/lib/tasks";
+import { STATUS_COLUMNS, statusLabel, isAgedDone } from "@/lib/tasks";
 import { PlusIcon, CheckIcon, TrashIcon } from "@/components/icons";
 import type { Task, TaskStatus } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
@@ -29,6 +30,8 @@ export function TaskBoard({
   canManage,
   canAssignOthers,
   initialTasks,
+  initialHistory,
+  todayISO,
   people,
   assignable,
   departments,
@@ -39,12 +42,17 @@ export function TaskBoard({
   /** Can assign tasks to other people (admins/HR anyone; team leads their dept). */
   canAssignOthers: boolean;
   initialTasks: Task[];
+  /** Completed tasks the nightly cron archived off the board after a week. */
+  initialHistory: Task[];
+  /** Today in the business timezone, for deciding which notes read as aged. */
+  todayISO: string;
   people: Person[];
   assignable: Person[];
   departments: DeptRef[];
   allDepartments: DeptRef[];
 }) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [history, setHistory] = useState<Task[]>(initialHistory);
   const [openId, setOpenId] = useState<string | null>(null);
   const [quickTitle, setQuickTitle] = useState("");
   const [adding, setAdding] = useState(false);
@@ -124,6 +132,20 @@ export function TaskBoard({
     await archiveTask(taskId);
   }
 
+  async function handleRestore(taskId: string, status: TaskStatus) {
+    const task = history.find((t) => t.id === taskId);
+    if (!task) return;
+    setActionError(null);
+    setHistory((prev) => prev.filter((t) => t.id !== taskId));
+    const res = await restoreTask(taskId, status);
+    if (res.ok && res.task) {
+      setTasks((prev) => [res.task as Task, ...prev]);
+    } else {
+      setHistory((prev) => [task, ...prev]);
+      setActionError(res.error ?? "Could not restore the task.");
+    }
+  }
+
   async function handleDelete(taskId: string) {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setOpenId(null);
@@ -177,7 +199,11 @@ export function TaskBoard({
     }
   }
 
-  const openTask = tasks.find((t) => t.id === openId) ?? null;
+  const openTask =
+    tasks.find((t) => t.id === openId) ??
+    history.find((t) => t.id === openId) ??
+    null;
+  const openIsHistory = openTask !== null && !tasks.includes(openTask);
 
   return (
     <>
@@ -242,7 +268,7 @@ export function TaskBoard({
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {STATUS_COLUMNS.map((col) => {
           const items = tasks
             .filter((t) => t.status === col.value)
@@ -321,6 +347,7 @@ export function TaskBoard({
                       assigneeNoteColor={noteColorOf(task.assigned_to)}
                       selectable={selectMode}
                       selected={selected.has(task.id)}
+                      faded={isAgedDone(task, todayISO)}
                       onToggleSelect={() => toggleSelect(task.id)}
                       onOpen={() => setOpenId(task.id)}
                       onMove={
@@ -345,13 +372,76 @@ export function TaskBoard({
             </div>
           );
         })}
+
+        {/* History — completed work the nightly job archived off the board after
+            a week. Not a status, so it sits outside STATUS_COLUMNS and takes no
+            drops; a note comes back only via an explicit restore. */}
+        <div className="flex flex-col rounded-2xl border border-dashed bg-muted/20 p-3">
+          <div className="mb-3 flex items-center justify-between px-1">
+            <h2 className="text-sm font-semibold tracking-tight text-muted-foreground">
+              History
+            </h2>
+            <span className="rounded-full bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              {history.length}
+            </span>
+          </div>
+
+          <div className="flex flex-1 flex-col gap-3">
+            {history.length === 0 && (
+              <p className="px-1 py-6 text-center text-xs text-muted-foreground">
+                Tasks finished more than a week ago land here.
+              </p>
+            )}
+            {history.map((task) => {
+              const dept = deptOf(task.department_id);
+              const canRestore =
+                canManage ||
+                canAssignOthers ||
+                task.assigned_to === me.id ||
+                task.assigned_to === null;
+              return (
+                <div key={task.id} className="flex flex-col gap-1">
+                  <TaskCard
+                    task={task}
+                    creatorName={nameOf(task.created_by) ?? "Someone"}
+                    assigneeName={nameOf(task.assigned_to)}
+                    deptName={dept?.name ?? "—"}
+                    deptSlug={dept?.slug ?? null}
+                    editable={false}
+                    assigneeNoteColor={noteColorOf(task.assigned_to)}
+                    faded
+                    onOpen={() => setOpenId(task.id)}
+                  />
+                  {canRestore && (
+                    <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
+                      <span>Restore to</span>
+                      {STATUS_COLUMNS.filter((c) => c.value !== "done").map(
+                        (c) => (
+                          <button
+                            key={c.value}
+                            type="button"
+                            onClick={() => void handleRestore(task.id, c.value)}
+                            className="rounded-md border px-1.5 py-0.5 font-medium transition hover:bg-accent hover:text-foreground"
+                          >
+                            {c.label}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {openTask && (
         <TaskDetailDialog
           task={openTask}
-          editable
+          editable={!openIsHistory}
           canReassign={
+            !openIsHistory &&
             (canAssignOthers || openTask.assigned_to === null) &&
             openTask.status !== "done"
           }
