@@ -17,6 +17,7 @@ import { NewConversationDialog } from "@/components/chat/new-conversation-dialog
 import { GroupSettingsDialog } from "@/components/chat/group-settings-dialog";
 import { sendMessage } from "@/app/(dashboard)/chat/actions";
 import { detectShareLinks, type Attachment } from "@/lib/chat-attachments";
+import { portalIsFocused } from "@/lib/desktop-notifications";
 import { PlusIcon, GroupIcon, SettingsIcon, ChatIcon } from "@/components/icons";
 import { timeAgo, formatClock, dayLabel } from "@/lib/time";
 import type { Message } from "@/lib/types";
@@ -210,10 +211,17 @@ export function ChatClient({
   const handleIncoming = useCallback(
     (m: Message) => {
       const selected = selectedIdRef.current === m.conversation_id;
+      // Having the thread open only counts as reading it while the portal is
+      // actually on screen — in a background tab the message is still unseen,
+      // and marking it read here would silence the alert for it.
+      const seen = selected && portalIsFocused();
+
       if (selected) {
         setMessages((prev) =>
           prev.some((x) => x.id === m.id) ? prev : [...prev, m],
         );
+      }
+      if (seen) {
         markConversationRead(m.conversation_id);
         supabase.rpc("mark_conversation_read", { conv_id: m.conversation_id }).then(
           () => {},
@@ -223,7 +231,7 @@ export function ChatClient({
 
       if (!convsRef.current.some((c) => c.id === m.conversation_id)) {
         void refreshConversation(m.conversation_id, {
-          bumpUnread: !selected && m.sender_id !== meId,
+          bumpUnread: !seen && m.sender_id !== meId,
         });
         return;
       }
@@ -232,7 +240,7 @@ export function ChatClient({
         const idx = prev.findIndex((c) => c.id === m.conversation_id);
         if (idx === -1) return prev;
         const c = prev[idx];
-        const unread = selected
+        const unread = seen
           ? 0
           : m.sender_id !== meId
             ? c.unread + 1
@@ -298,6 +306,29 @@ export function ChatClient({
   useEffect(() => {
     return () => setActiveConversation(null);
   }, [setActiveConversation]);
+
+  // Coming back to the tab with a thread open is when it actually gets read —
+  // messages that arrived while the portal was hidden are cleared here.
+  useEffect(() => {
+    const onReturn = () => {
+      const id = selectedIdRef.current;
+      if (!id || !portalIsFocused()) return;
+      markConversationRead(id);
+      supabase.rpc("mark_conversation_read", { conv_id: id }).then(
+        () => {},
+        () => {},
+      );
+      setConversations((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, unread: 0 } : c)),
+      );
+    };
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("focus", onReturn);
+    };
+  }, [supabase, markConversationRead]);
 
   const handleSend = useCallback(
     async (body: string, mentionIds: string[], attachments: Attachment[]) => {
