@@ -16,7 +16,14 @@ import type { Notification } from "@/lib/types";
  * positioned to sit beside the sidebar on desktop and as a sheet on mobile.
  */
 export function NotificationBell() {
-  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    markRead,
+    markAllRead,
+    desktopPermission,
+    enableDesktopNotifications,
+  } = useNotifications();
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -89,6 +96,27 @@ export function NotificationBell() {
                 </button>
               )}
             </div>
+
+            {desktopPermission === "default" && (
+              <button
+                type="button"
+                onClick={enableDesktopNotifications}
+                className="block w-full border-b px-4 py-3 text-left transition hover:bg-accent"
+              >
+                <span className="block text-sm font-medium text-primary">
+                  Turn on desktop notifications
+                </span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Get alerted when the portal is minimised or in another tab.
+                </span>
+              </button>
+            )}
+            {desktopPermission === "denied" && (
+              <p className="border-b px-4 py-3 text-xs text-muted-foreground">
+                Desktop notifications are blocked for this site. Re-enable them in
+                your browser&apos;s site settings to be alerted in other tabs.
+              </p>
+            )}
 
             <ul className="max-h-[60vh] divide-y overflow-y-auto md:max-h-[28rem]">
               {recent.length === 0 && (

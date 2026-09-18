@@ -8,7 +8,16 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useTitleBadge } from "@/components/notifications/use-title-badge";
+import {
+  desktopPermission,
+  portalIsFocused,
+  requestDesktopPermission,
+  showDesktopNotification,
+  type DesktopPermission,
+} from "@/lib/desktop-notifications";
 import type { Notification } from "@/lib/types";
 
 interface NotificationsContextValue {
@@ -26,6 +35,10 @@ interface NotificationsContextValue {
    * the user is already looking at. Set by the chat client.
    */
   setActiveConversation: (conversationId: string | null) => void;
+  /** Browser permission for OS-level popups when the portal isn't focused. */
+  desktopPermission: DesktopPermission;
+  /** Prompt for that permission. Call from a click — Safari requires a gesture. */
+  enableDesktopNotifications: () => void;
 }
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
@@ -68,11 +81,29 @@ export function NotificationsProvider({
   const [notifications, setNotifications] = useState<Notification[]>(initial);
   const [toasts, setToasts] = useState<Notification[]>([]);
   const activeConvRef = useRef<string | null>(null);
+  const router = useRouter();
+  const routerRef = useRef(router);
+
+  // Reads "unsupported" on the server, where there is no Notification API.
+  // Safe against hydration: the only permission-dependent UI lives in the
+  // bell's panel, which is closed until the user opens it.
+  const [permission, setPermission] =
+    useState<DesktopPermission>(desktopPermission);
 
   const unreadCount = notifications.reduce(
     (n, item) => (item.read_at ? n : n + 1),
     0,
   );
+
+  useTitleBadge(unreadCount);
+
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
+
+  const enableDesktopNotifications = useCallback(() => {
+    void requestDesktopPermission().then(setPermission);
+  }, []);
 
   const markRead = useCallback(
     (id: string) => {
@@ -150,10 +181,13 @@ export function NotificationsProvider({
 
     const handleInsert = (n: Notification) => {
       const conv = conversationOf(n);
+      const focused = portalIsFocused();
 
       // If the user is already viewing the conversation, quietly mark it read
-      // instead of interrupting them with a popup.
-      if (conv && conv === activeConvRef.current) {
+      // instead of interrupting them with a popup. Only when the portal is
+      // actually focused, though — a thread left open in a background tab is
+      // just as unseen as any other, and must still raise an alert.
+      if (conv && conv === activeConvRef.current && focused) {
         const read = { ...n, read_at: new Date().toISOString() };
         setNotifications((prev) =>
           prev.some((p) => p.id === n.id) ? prev : [read, ...prev],
@@ -166,6 +200,14 @@ export function NotificationsProvider({
         prev.some((p) => p.id === n.id) ? prev : [n, ...prev],
       );
       setToasts((prev) => [n, ...prev].slice(0, 4));
+
+      // The in-app toast is invisible from another tab, so hand the alert to
+      // the OS instead.
+      if (!focused) {
+        showDesktopNotification(n, () => {
+          if (n.link) routerRef.current.push(n.link);
+        });
+      }
     };
 
     (async () => {
@@ -204,6 +246,8 @@ export function NotificationsProvider({
         markConversationRead,
         dismissToast,
         setActiveConversation,
+        desktopPermission: permission,
+        enableDesktopNotifications,
       }}
     >
       {children}
