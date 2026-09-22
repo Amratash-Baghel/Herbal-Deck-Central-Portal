@@ -18,11 +18,12 @@ const TZ = "Asia/Kolkata";
 /**
  * The day spine.
  *
- * Every section hangs off a rail as a beat of the working day, in the order the
- * day is actually worked: you arrived, close out, what is still on your plate,
- * who is waiting on a reply. Each beat's node on the rail fills in once that
- * beat is clear, so the rail reads as a status column rather than a border —
- * glance at it and you know how much of the day is still open.
+ * The three things you act on hang off a rail as beats of the working day, in
+ * the order the day is actually worked: you arrived, close out, what is still
+ * on your plate. Each beat's node fills in once that beat is clear, so the rail
+ * reads as a status column rather than a border — glance at it and you know how
+ * much of the day is still open. What you only read (unread chat, whose reports
+ * are in) sits beside the spine on a wide display and under it on a narrow one.
  *
  * The page resolves only two things itself (did I file today, when did I first
  * show up) so the spine paints immediately; the heavier reads stream in
@@ -65,7 +66,7 @@ export default async function DashboardPage() {
   }).format(now);
 
   return (
-    <div className="max-w-2xl">
+    <div className="mx-auto w-full max-w-[72rem]">
       <Beat done>
         <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <div>
@@ -80,28 +81,49 @@ export default async function DashboardPage() {
         </header>
       </Beat>
 
-      <Suspense fallback={<BeatSkeleton className="h-44" />}>
-        <CloseOut me={me} today={today} report={report} />
-      </Suspense>
+      {/* Once the display is wide enough for two readable columns, the things
+          you act on stay on the spine and the things you only glance at move
+          beside it — the width gets filled with information rather than by
+          stretching rows until their button is a hand's width from their
+          title. The aside track is fit-content, so it takes no space at all
+          for someone with no unread and no reports to read. */}
+      <div className="xl:grid xl:grid-cols-[minmax(0,38rem)_fit-content(20rem)] xl:gap-x-10 2xl:grid-cols-[minmax(0,42rem)_fit-content(24rem)] 2xl:gap-x-12">
+        <div>
+          <Suspense fallback={<BeatSkeleton className="h-44" />}>
+            <CloseOut me={me} today={today} report={report} />
+          </Suspense>
 
-      <Suspense fallback={<BeatSkeleton className="h-56" />}>
-        <Plate
-          me={me}
-          meName={access.profile.full_name || access.profile.email}
-          myNoteColor={access.profile.note_color}
-          canAssignOthers={access.canManageUsers || access.isTeamLead}
-        />
-      </Suspense>
+          <Suspense fallback={<BeatSkeleton className="h-56" />}>
+            <Plate
+              me={me}
+              meName={access.profile.full_name || access.profile.email}
+              myNoteColor={access.profile.note_color}
+              canAssignOthers={access.canManageUsers || access.isTeamLead}
+            />
+          </Suspense>
+        </div>
 
-      <Suspense fallback={null}>
-        <Unread me={me} />
-      </Suspense>
+        {/* Stacked under the spine on a narrow screen, so it keeps the rail's
+            indent there and drops it once it is a column of its own. */}
+        <aside className="space-y-10 pb-10 pl-[30px] md:pl-[38px] xl:pt-1 xl:pb-0 xl:pl-0">
+          <Suspense fallback={null}>
+            <Unread me={me} />
+          </Suspense>
 
-      {access.canViewReports && (
-        <Suspense fallback={<BeatSkeleton className="h-28" />}>
-          <Team today={today} />
-        </Suspense>
-      )}
+          {access.canViewReports && (
+            <Suspense
+              fallback={
+                <div
+                  className="h-28 w-full animate-pulse rounded-2xl bg-muted xl:w-[20rem] 2xl:w-[24rem]"
+                  aria-hidden="true"
+                />
+              }
+            >
+              <Team today={today} />
+            </Suspense>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }
@@ -110,9 +132,8 @@ export default async function DashboardPage() {
 
 /**
  * One beat hung off the day rail. `done` fills the node and the line below it,
- * so the rail is a column of answers rather than decoration. Beats render
- * inside their own section so a section that has nothing to say (no unread, no
- * team) takes its piece of rail with it when it returns null.
+ * so the rail is a column of answers rather than decoration. Only the beats you
+ * act on get one — the rail tracks your day, not everything on the page.
  */
 function Beat({ done = false, children }: { done?: boolean; children: React.ReactNode }) {
   return (
@@ -442,37 +463,35 @@ async function Unread({ me }: { me: string }) {
   const total = convs.reduce((n, c) => n + c.unread, 0);
 
   return (
-    <Beat>
-      <section>
-        <Heading title="Waiting on you" count={total} href="/chat" action="Open chat" />
-        <ul className="mt-3 overflow-hidden rounded-2xl border bg-card shadow-sm">
-          {convs.slice(0, 3).map((c) => (
-            <li key={c.id} className="border-t first:border-t-0">
-              <Link
-                href={`/chat?c=${c.id}`}
-                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              >
-                <Avatar
-                  name={c.label}
-                  path={c.avatarPath}
-                  className="h-9 w-9 rounded-full"
-                  fallbackClassName="bg-accent text-primary text-[11px] font-semibold"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px] leading-5">{c.label}</span>
-                  {c.preview && (
-                    <span className="block truncate text-xs text-muted-foreground">{c.preview}</span>
-                  )}
-                </span>
-                <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium tabular-nums text-primary-foreground">
-                  {c.unread}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </Beat>
+    <section>
+      <Heading title="Waiting on you" count={total} href="/chat" action="Open chat" />
+      <ul className="mt-3 overflow-hidden rounded-2xl border bg-card shadow-sm">
+        {convs.slice(0, 3).map((c) => (
+          <li key={c.id} className="border-t first:border-t-0">
+            <Link
+              href={`/chat?c=${c.id}`}
+              className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            >
+              <Avatar
+                name={c.label}
+                path={c.avatarPath}
+                className="h-9 w-9 rounded-full"
+                fallbackClassName="bg-accent text-primary text-[11px] font-semibold"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] leading-5">{c.label}</span>
+                {c.preview && (
+                  <span className="block truncate text-xs text-muted-foreground">{c.preview}</span>
+                )}
+              </span>
+              <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium tabular-nums text-primary-foreground">
+                {c.unread}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -505,40 +524,38 @@ async function Team({ today }: { today: string }) {
   const pct = Math.round((done.size / people.length) * 100);
 
   return (
-    <Beat done={done.size === people.length}>
-      <section>
-        <Heading
-          title="Reports in"
-          count={`${done.size} of ${people.length}`}
-          href="/tasks/reports"
-          action="Read today's reports"
-        />
-        <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-        </div>
-        <ul className="mt-3 flex flex-wrap gap-1.5">
-          {shown.map((p) => {
-            const name = p.full_name || p.email;
-            const filed = done.has(p.id);
-            return (
-              <li key={p.id} title={filed ? `${name} — filed` : `${name} — nothing yet`}>
-                <Avatar
-                  name={name}
-                  path={p.avatar_path}
-                  className={`h-8 w-8 rounded-full ${filed ? "" : "opacity-30 grayscale"}`}
-                  fallbackClassName="bg-accent text-primary text-[10px] font-semibold"
-                />
-              </li>
-            );
-          })}
-          {sorted.length > shown.length && (
-            <li className="flex h-8 items-center px-1 text-xs tabular-nums text-muted-foreground">
-              +{sorted.length - shown.length}
+    <section>
+      <Heading
+        title="Reports in"
+        count={`${done.size} of ${people.length}`}
+        href="/tasks/reports"
+        action="Read today's reports"
+      />
+      <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <ul className="mt-3 flex flex-wrap gap-1.5">
+        {shown.map((p) => {
+          const name = p.full_name || p.email;
+          const filed = done.has(p.id);
+          return (
+            <li key={p.id} title={filed ? `${name} — filed` : `${name} — nothing yet`}>
+              <Avatar
+                name={name}
+                path={p.avatar_path}
+                className={`h-8 w-8 rounded-full ${filed ? "" : "opacity-30 grayscale"}`}
+                fallbackClassName="bg-accent text-primary text-[10px] font-semibold"
+              />
             </li>
-          )}
-        </ul>
-      </section>
-    </Beat>
+          );
+        })}
+        {sorted.length > shown.length && (
+          <li className="flex h-8 items-center px-1 text-xs tabular-nums text-muted-foreground">
+            +{sorted.length - shown.length}
+          </li>
+        )}
+      </ul>
+    </section>
   );
 }
 
