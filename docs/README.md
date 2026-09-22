@@ -219,6 +219,8 @@ automatically.
 - [`decisions.md`](./decisions.md) — the reasoning behind Next.js, Supabase,
   Vercel, invite-only auth, and Row Level Security.
 - [`CHANGELOG.md`](./CHANGELOG.md) — release history.
+- [`modules/design-stack.md`](./modules/design-stack.md) — the UI/UX design
+  skills and the automated design-review CI gate.
 
 ## About this project
 
