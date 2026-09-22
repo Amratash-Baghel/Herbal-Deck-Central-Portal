@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
 import {
@@ -15,9 +15,56 @@ import {
   type UpdateTaskInput,
 } from "@/app/(dashboard)/tasks/actions";
 import { STATUS_COLUMNS, statusLabel, isAgedDone } from "@/lib/tasks";
-import { PlusIcon, CheckIcon, TrashIcon } from "@/components/icons";
+import {
+  PlusIcon,
+  CheckIcon,
+  TrashIcon,
+  ChevronDownIcon,
+} from "@/components/icons";
 import type { Task, TaskStatus } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
+
+/**
+ * Whether the History panel is open — a per-browser preference, read the same
+ * way the theme is (an external store via useSyncExternalStore) so the server
+ * and the first client render agree. localStorage is the store; `fallback`
+ * stands in when storage throws (private window, blocked site data) so the
+ * panel still toggles for the visit, it just isn't remembered.
+ */
+const HISTORY_OPEN_KEY = "hd.tasks.history-open";
+const HISTORY_OPEN_EVENT = "taskhistorytoggle";
+
+let historyOpenFallback = false;
+
+function subscribeHistoryOpen(callback: () => void) {
+  window.addEventListener(HISTORY_OPEN_EVENT, callback);
+  return () => window.removeEventListener(HISTORY_OPEN_EVENT, callback);
+}
+
+function getHistoryOpen(): boolean {
+  try {
+    const stored = localStorage.getItem(HISTORY_OPEN_KEY);
+    if (stored !== null) return stored === "1";
+  } catch {
+    // Storage blocked — fall through to the in-memory value.
+  }
+  return historyOpenFallback;
+}
+
+/** Closed on the server, so the board ships at full width before hydration. */
+function getHistoryOpenOnServer(): boolean {
+  return false;
+}
+
+function setHistoryOpen(open: boolean) {
+  historyOpenFallback = open;
+  try {
+    localStorage.setItem(HISTORY_OPEN_KEY, open ? "1" : "0");
+  } catch {
+    // Storage blocked — the panel still opens, it just won't be remembered.
+  }
+  window.dispatchEvent(new Event(HISTORY_OPEN_EVENT));
+}
 
 /**
  * "My Board" — a personal kanban of the tasks you created or were assigned.
@@ -63,6 +110,12 @@ export function TaskBoard({
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  /** History is collapsed by default, so the board keeps its full width. */
+  const historyOpen = useSyncExternalStore(
+    subscribeHistoryOpen,
+    getHistoryOpen,
+    getHistoryOpenOnServer,
+  );
 
   const nameOf = useMemo(() => {
     const m = new Map(people.map((p) => [p.id, p.name]));
@@ -286,7 +339,7 @@ export function TaskBoard({
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {STATUS_COLUMNS.map((col) => {
           const items = tasks
             .filter((t) => t.status === col.value)
@@ -399,66 +452,98 @@ export function TaskBoard({
             </div>
           );
         })}
+      </div>
 
-        {/* History — completed work the nightly job archived off the board after
-            a week. Not a status, so it sits outside STATUS_COLUMNS and takes no
-            drops; a note comes back only via an explicit restore. */}
-        <div className="flex flex-col rounded-2xl border border-dashed bg-muted/20 p-3">
-          <div className="mb-3 flex items-center justify-between px-1">
-            <h2 className="text-sm font-semibold tracking-tight text-muted-foreground">
-              History
-            </h2>
-            <span className="rounded-full bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+      {/* History — completed work the nightly job archived off the board after a
+          week. Not a status, so it sits outside STATUS_COLUMNS and takes no
+          drops; a note comes back only via an explicit restore. It sits under
+          the board rather than in it, so collapsed it costs a strip of height
+          and no width at all. */}
+      <div className="mt-4">
+        <h2>
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(!historyOpen)}
+            aria-expanded={historyOpen}
+            aria-controls="task-history-panel"
+            className={`flex min-h-11 w-full items-center gap-2.5 border border-dashed bg-muted/30 px-4 py-2.5 text-left text-muted-foreground transition hover:bg-accent hover:text-foreground ${
+              historyOpen
+                ? "rounded-t-2xl border-b-transparent"
+                : "rounded-2xl"
+            }`}
+          >
+            <ChevronDownIcon
+              className={`h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none ${
+                historyOpen ? "rotate-180" : ""
+              }`}
+            />
+            <span className="text-sm font-semibold tracking-tight">History</span>
+            <span className="rounded-full bg-background px-2 py-0.5 text-xs font-medium">
               {history.length}
             </span>
-          </div>
+            <span className="ml-auto hidden text-xs sm:inline">
+              Finished more than a week ago
+            </span>
+          </button>
+        </h2>
 
-          <div className="flex flex-1 flex-col gap-3">
-            {history.length === 0 && (
-              <p className="px-1 py-6 text-center text-xs text-muted-foreground">
-                Tasks finished more than a week ago land here.
-              </p>
-            )}
-            {history.map((task) => {
-              const dept = deptOf(task.department_id);
-              const canRestore =
-                canManage ||
-                canAssignOthers ||
-                task.assigned_to === me.id ||
-                task.assigned_to === null;
-              return (
-                <div key={task.id} className="flex flex-col gap-1">
-                  <TaskCard
-                    task={task}
-                    creatorName={nameOf(task.created_by) ?? "Someone"}
-                    assigneeName={nameOf(task.assigned_to)}
-                    deptName={dept?.name ?? "—"}
-                    deptSlug={dept?.slug ?? null}
-                    editable={false}
-                    assigneeNoteColor={noteColorOf(task.assigned_to)}
-                    faded
-                    onOpen={() => setOpenId(task.id)}
-                  />
-                  {canRestore && (
-                    <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
-                      <span>Restore to</span>
-                      {STATUS_COLUMNS.filter((c) => c.value !== "done").map(
-                        (c) => (
-                          <button
-                            key={c.value}
-                            type="button"
-                            onClick={() => void handleRestore(task.id, c.value)}
-                            className="rounded-md border px-1.5 py-0.5 font-medium transition hover:bg-accent hover:text-foreground"
-                          >
-                            {c.label}
-                          </button>
-                        ),
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        {/* 0fr → 1fr animates to the content's own height without measuring it.
+            `inert` keeps the collapsed cards off the tab order and away from
+            screen readers — they're still in the DOM, just not reachable. */}
+        <div
+          id="task-history-panel"
+          className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+            historyOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          }`}
+        >
+          <div className="min-h-0 overflow-hidden" inert={!historyOpen}>
+            <div className="grid gap-3 rounded-b-2xl border border-t-0 border-dashed bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-4">
+              {history.length === 0 && (
+                <p className="col-span-full px-1 py-4 text-center text-xs text-muted-foreground">
+                  Tasks finished more than a week ago land here.
+                </p>
+              )}
+              {history.map((task) => {
+                const dept = deptOf(task.department_id);
+                const canRestore =
+                  canManage ||
+                  canAssignOthers ||
+                  task.assigned_to === me.id ||
+                  task.assigned_to === null;
+                return (
+                  <div key={task.id} className="flex flex-col gap-1">
+                    <TaskCard
+                      task={task}
+                      creatorName={nameOf(task.created_by) ?? "Someone"}
+                      assigneeName={nameOf(task.assigned_to)}
+                      deptName={dept?.name ?? "—"}
+                      deptSlug={dept?.slug ?? null}
+                      editable={false}
+                      assigneeNoteColor={noteColorOf(task.assigned_to)}
+                      faded
+                      onOpen={() => setOpenId(task.id)}
+                    />
+                    {canRestore && (
+                      <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
+                        <span>Restore to</span>
+                        {STATUS_COLUMNS.filter((c) => c.value !== "done").map(
+                          (c) => (
+                            <button
+                              key={c.value}
+                              type="button"
+                              onClick={() => void handleRestore(task.id, c.value)}
+                              className="rounded-md border px-1.5 py-0.5 font-medium transition hover:bg-accent hover:text-foreground"
+                            >
+                              {c.label}
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
