@@ -1,0 +1,102 @@
+name: Design Review
+
+# Runs the heuristic design audit against the PR's live Vercel preview deployment. The full
+# taste/interaction review is the /design-review subagent inside Claude Code; this CI gate
+# catches the mechanical defects (overflow, focus, contrast, unsized media, missing meta)
+# automatically on every PR that touches UI code.
+
+on:
+  pull_request:
+    paths:
+      - "**/*.tsx"
+      - "**/*.css"
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps + Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # Vercel's GitHub integration deploys a preview for every PR at a stable URL, posted
+      # in a PR comment from vercel[bot] and mirrored as a "Vercel" commit status. Poll both
+      # until the deployment is ready, rather than building a second copy of the app in CI.
+      - name: Wait for Vercel preview
+        id: vercel
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const sha = context.payload.pull_request.head.sha;
+            const timeoutMs = 8 * 60 * 1000;
+            const pollMs = 15 * 1000;
+            const deadline = Date.now() + timeoutMs;
+
+            let previewUrl = null;
+            let ready = false;
+
+            while (Date.now() < deadline && !(ready && previewUrl)) {
+              if (!ready) {
+                const { data: statuses } = await github.rest.repos.listCommitStatusesForRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: sha,
+                });
+                const vercel = statuses.find((s) => s.context === "Vercel");
+                if (vercel?.state === "success") ready = true;
+                else if (vercel?.state === "error" || vercel?.state === "failure") {
+                  core.setFailed("Vercel deployment failed — see the Vercel check on this PR.");
+                  return;
+                }
+              }
+
+              if (!previewUrl) {
+                const { data: comments } = await github.rest.issues.listComments({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                });
+                const vercelComment = comments.find((c) => c.user?.login === "vercel[bot]");
+                const match = vercelComment?.body.match(/\[Preview\]\((https:\/\/[^)]+)\)/);
+                if (match) previewUrl = match[1];
+              }
+
+              if (!(ready && previewUrl)) await new Promise((r) => setTimeout(r, pollMs));
+            }
+
+            if (!(ready && previewUrl)) {
+              core.setFailed("Timed out waiting for the Vercel preview to become ready.");
+              return;
+            }
+            core.setOutput("url", previewUrl);
+
+      - name: Run design audit
+        id: audit
+        run: |
+          set +e
+          node scripts/design-audit.mjs --url "${{ steps.vercel.outputs.url }}" --out audit-output
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upload audit report + screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: design-audit
+          path: audit-output/
+
+      - name: Fail on high-severity findings
+        if: steps.audit.outputs.exit_code != '0'
+        run: exit 1
