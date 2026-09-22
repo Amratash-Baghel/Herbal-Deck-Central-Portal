@@ -60,8 +60,12 @@ export default async function DashboardLayout({
           canManageUsers={access.canManageUsers}
           canViewReports={access.canViewReports}
         />
-        <div className="md:pl-64">
-          <main className="mx-auto w-full max-w-6xl px-5 py-8 md:px-10 md:py-12">
+        {/* A flex column so a page can opt into filling the viewport (chat does
+            this with flex-1) instead of guessing the chrome's height. The width
+            cap scales with the display: comfortable for reading on a laptop,
+            but not leaving half an external monitor empty. */}
+        <div className="flex min-h-screen flex-col md:pl-64">
+          <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-5 py-8 md:px-10 md:py-12 tall:max-w-4xl wide:max-w-[min(94vw,calc(100vh*1.7))] ultrawide:max-w-[min(92vw,calc(100vh*2))]">
             {children}
           </main>
         </div>

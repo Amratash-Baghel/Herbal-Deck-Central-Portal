@@ -14,6 +14,25 @@
  * either. Each theme still fully overrides the semantic tokens below. */
 @custom-variant dark (&:where(.dark, .dark *, .midnight, .midnight *));
 
+/* ---------------------------------------------------------------------------
+ * Shape variants — the display's aspect ratio, not just its width.
+ * ---------------------------------------------------------------------------
+ * Width breakpoints alone can't tell a 1280×800 laptop (16:10) from a
+ * 1280×1024 monitor (5:4): same breakpoint, very different shape. These let a
+ * layout ask what shape the screen is, so it can spend whichever dimension is
+ * actually abundant.
+ *
+ *   tall       ≤ 5:4   portrait and squarish panels — height to spare
+ *   wide       ≥ 3:2   typical laptops and 16:9 monitors — width to spare
+ *   ultrawide  ≥ 2:1   21:9 and wider — a lot of width to spare
+ *
+ * Ratio alone doesn't give magnitude (a 1366×768 laptop and a 3840×2160 TV are
+ * both 16:9), so sizes below pair these with a vw/px clamp.
+ * ------------------------------------------------------------------------- */
+@custom-variant tall (@media (max-aspect-ratio: 5/4));
+@custom-variant wide (@media (min-aspect-ratio: 3/2));
+@custom-variant ultrawide (@media (min-aspect-ratio: 2/1));
+
 :root {
   /* Surfaces */
   --background: #ffffff;        /* clean white page background        */
