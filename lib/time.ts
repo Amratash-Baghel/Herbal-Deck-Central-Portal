@@ -113,6 +113,21 @@ export function formatClockTZ(iso: string, tz = "Asia/Kolkata"): string {
   });
 }
 
+/**
+ * 24-hour clock in a timezone, e.g. "17:39" (default IST). Always five
+ * characters, so a column of these lines up as a column.
+ */
+export function formatHM(iso: string, tz = "Asia/Kolkata"): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
 /** Clock time, e.g. "3:42 PM". */
 export function formatClock(iso: string): string {
   const d = new Date(iso);

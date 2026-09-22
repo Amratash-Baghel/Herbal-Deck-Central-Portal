@@ -82,6 +82,83 @@ async function notifyAssignee(
   ]);
 }
 
+/**
+ * The department a new task belongs to: an explicit one the caller actually
+ * belongs to, else their first. Mirrors the department check in the tasks
+ * INSERT policy so a bad pick fails here with a readable message.
+ */
+async function resolveDepartment(
+  access: NonNullable<Awaited<ReturnType<typeof getUserAccess>>>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  explicit?: string,
+): Promise<{ id: string } | { error: string }> {
+  if (explicit && !access.isAdmin) {
+    const { data: membership } = await supabase
+      .from("profile_departments")
+      .select("department_id")
+      .eq("profile_id", access.profile.id)
+      .eq("department_id", explicit)
+      .maybeSingle();
+    if (!membership) return { error: "Pick a department you belong to." };
+  }
+  if (explicit) return { id: explicit };
+
+  const { data: first } = await supabase
+    .from("profile_departments")
+    .select("department_id")
+    .eq("profile_id", access.profile.id)
+    .limit(1)
+    .maybeSingle();
+  const id = first?.department_id as string | undefined;
+  return id
+    ? { id }
+    : { error: "You're not in a department yet — ask an admin to add you." };
+}
+
+/**
+ * Log something already finished — the line people actually write at 5:30pm.
+ *
+ * One insert instead of create → in progress → done, which is what everyone was
+ * clicking through three times per line. `completed_at` is set here on purpose:
+ * the `tasks_touch` trigger only fires BEFORE UPDATE, and `eod_summary` counts
+ * completions by `completed_at`, so an insert that left it null would file an
+ * end-of-day report reading zero. `started_at` stays null — a line written
+ * after the fact was never "started" in the app.
+ */
+export async function logDone(title: string): Promise<TaskResult> {
+  const access = await getUserAccess();
+  if (!access) return { ok: false, error: "You are not signed in." };
+
+  const trimmed = title.trim();
+  if (!trimmed) return { ok: false, error: "Write what you finished." };
+  if (trimmed.length > 200) return { ok: false, error: "Keep it under 200 characters." };
+
+  const supabase = await createClient();
+  const dept = await resolveDepartment(access, supabase);
+  if ("error" in dept) return { ok: false, error: dept.error };
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .insert({
+      title: trimmed,
+      department_id: dept.id,
+      created_by: access.profile.id,
+      assigned_to: access.profile.id,
+      status: "done",
+      completed_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "Could not save that line." };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/tasks");
+  return { ok: true, task: data as Task };
+}
+
 export interface CreateTaskInput {
   title: string;
   description?: string;
@@ -105,34 +182,9 @@ export async function createTask(input: CreateTaskInput): Promise<TaskResult> {
 
   const supabase = await createClient();
 
-  // Resolve the department: an explicit (validated) one, else the user's first.
-  let departmentId = input.departmentId;
-  if (departmentId && !access.isAdmin) {
-    const { data: membership } = await supabase
-      .from("profile_departments")
-      .select("department_id")
-      .eq("profile_id", access.profile.id)
-      .eq("department_id", departmentId)
-      .maybeSingle();
-    if (!membership) {
-      return { ok: false, error: "Pick a department you belong to." };
-    }
-  }
-  if (!departmentId) {
-    const { data: firstDept } = await supabase
-      .from("profile_departments")
-      .select("department_id")
-      .eq("profile_id", access.profile.id)
-      .limit(1)
-      .maybeSingle();
-    departmentId = firstDept?.department_id as string | undefined;
-  }
-  if (!departmentId) {
-    return {
-      ok: false,
-      error: "You're not in a department yet — ask an admin to add you.",
-    };
-  }
+  const dept = await resolveDepartment(access, supabase, input.departmentId);
+  if ("error" in dept) return { ok: false, error: dept.error };
+  const departmentId = dept.id;
 
   const assignedTo =
     input.assignedTo === undefined ? access.profile.id : input.assignedTo;
