@@ -515,5 +515,6 @@ export async function saveEodNote(note: string): Promise<ActionResult> {
 
   revalidatePath("/tasks/reports");
   revalidatePath("/reporting");
+  revalidatePath("/dashboard");
   return { ok: true };
 }

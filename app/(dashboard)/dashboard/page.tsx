@@ -1,68 +1,486 @@
-import { getUserAccess } from "@/lib/auth";
+import { Suspense } from "react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PageHeader } from "@/components/page-header";
-import { ToolCard, type Tool } from "@/components/tool-card";
-import { BillingIcon, ChatIcon, TasksIcon, ReportingIcon } from "@/components/icons";
+
+import { Avatar } from "@/components/avatar";
+import { QuickAdd } from "@/components/dashboard/quick-add";
+import { TaskRow } from "@/components/dashboard/task-row";
+import { EodNoteForm } from "@/components/tasks/eod-note-form";
+import { getUserAccess } from "@/lib/auth";
+import { time } from "@/lib/perf";
+import { createClient } from "@/lib/supabase/server";
+import { noteColor } from "@/lib/tasks";
+import { daysUntil, formatClockTZ, localDateISO } from "@/lib/time";
+import type { Conversation, EodReport, EodSummary, Task } from "@/lib/types";
+
+const TZ = "Asia/Kolkata";
 
 /**
- * Dashboard tools. Add a module by appending to this list and creating its
- * page + nav entry. The grid scales automatically. `managerOnly` cards are
- * shown only to admins + HR & Management.
+ * The day spine.
+ *
+ * The rail down the left is dashed while the day is open and solid once the
+ * end-of-day report is filed — the one bold move on the page. Everything else
+ * hangs off it in the order the day is actually worked: close out, what is
+ * still on your plate, who is waiting on a reply.
+ *
+ * The page resolves only two things itself (did I file today, when did I first
+ * show up) so the spine paints immediately; the heavier reads stream in
+ * sibling Suspense boundaries.
  */
-const tools: (Tool & { managerOnly?: boolean; reportViewerOnly?: boolean })[] = [
-  {
-    title: "Tasks",
-    description: "Your kanban board, team tasks, and end-of-day reports.",
-    href: "/tasks",
-    icon: TasksIcon,
-  },
-  {
-    title: "Billing & Invoices",
-    description: "Generate, post, and clear invoices, and track spend.",
-    href: "/billing",
-    icon: BillingIcon,
-  },
-  {
-    title: "Chat",
-    description: "Message teammates and groups in real time.",
-    href: "/chat",
-    icon: ChatIcon,
-  },
-  {
-    title: "Reporting",
-    description: "Team activity, EOD reports, and per-employee reviews.",
-    href: "/reporting",
-    icon: ReportingIcon,
-    reportViewerOnly: true,
-  },
-];
-
 export default async function DashboardPage() {
   const access = await getUserAccess();
   if (!access) redirect("/login");
-  const profile = access.profile;
-  const firstName = (profile.full_name || profile.email).split(/[\s@]+/)[0];
-  const visible = tools.filter((t) => {
-    if (t.managerOnly && !access.canManageUsers) return false;
-    if (t.reportViewerOnly && !access.canViewReports) return false;
-    return true;
-  });
+
+  const me = access.profile.id;
+  const today = localDateISO();
+  const supabase = await createClient();
+
+  const [{ data: reportRow }, { data: logRow }] = await time("dashboard:day", () =>
+    Promise.all([
+      supabase
+        .from("eod_reports")
+        .select("*")
+        .eq("employee_id", me)
+        .eq("report_date", today)
+        .maybeSingle(),
+      supabase
+        .from("activity_logs")
+        .select("first_seen_at")
+        .eq("employee_id", me)
+        .eq("date", today)
+        .maybeSingle(),
+    ]),
+  );
+
+  const report = (reportRow as EodReport | null) ?? null;
+  const filed = Boolean(report);
+  const openedAt = (logRow as { first_seen_at: string | null } | null)?.first_seen_at;
+
+  const now = new Date();
+  const weekday = new Intl.DateTimeFormat("en-IN", { weekday: "long", timeZone: TZ }).format(now);
+  const dateLine = new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "long",
+    timeZone: TZ,
+  }).format(now);
+
+  return (
+    <div
+      className={`border-l-2 pl-5 transition-colors md:pl-8 ${
+        filed ? "border-primary" : "border-dashed"
+      }`}
+    >
+      <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{weekday}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{dateLine}</p>
+        </div>
+        {openedAt && (
+          <p className="text-sm text-muted-foreground">
+            Here since {formatClockTZ(openedAt, TZ)}
+          </p>
+        )}
+      </header>
+
+      <Suspense fallback={<Block className="mt-6 h-44" />}>
+        <CloseOut me={me} today={today} report={report} />
+      </Suspense>
+
+      <Suspense fallback={<Block className="mt-10 h-52" />}>
+        <Plate me={me} myNoteColor={access.profile.note_color} />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <Unread me={me} />
+      </Suspense>
+
+      {access.canViewReports && (
+        <Suspense fallback={<Block className="mt-10 h-24" />}>
+          <Team today={today} />
+        </Suspense>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- close out */
+
+async function CloseOut({
+  me,
+  today,
+  report,
+}: {
+  me: string;
+  today: string;
+  report: EodReport | null;
+}) {
+  const supabase = await createClient();
+  const { data } = await time("dashboard:eod-summary", () =>
+    supabase.rpc("eod_summary", { emp: me, d: today }),
+  );
+  const summary = (data as EodSummary | null) ?? {
+    created: 0,
+    in_progress: 0,
+    completed: 0,
+    pending: 0,
+  };
+  const line = dayLine(summary);
+
+  if (report) {
+    const at = formatClockTZ(report.updated_at ?? report.created_at, TZ);
+    return (
+      <section className="mt-6 rounded-2xl border border-primary/40 bg-accent p-5">
+        <h2 className="text-base font-semibold tracking-tight">Day closed out at {at}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{line}</p>
+        {report.manual_note && (
+          <p className="mt-3 whitespace-pre-wrap text-sm">{report.manual_note}</p>
+        )}
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm font-medium text-primary dark:text-ring">
+            Edit today&rsquo;s report
+          </summary>
+          <EodNoteForm initialNote={report.manual_note ?? ""} alreadySubmitted />
+        </details>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-6 rounded-2xl border bg-card p-5 shadow-sm">
+      <h2 className="text-base font-semibold tracking-tight">Close out your day</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{line}</p>
+      <EodNoteForm initialNote="" alreadySubmitted={false} />
+    </section>
+  );
+}
+
+/** "You finished 3, started 2 and added 1 today. 5 still open." */
+function dayLine(s: EodSummary): string {
+  const bits: string[] = [];
+  if (s.completed) bits.push(`finished ${s.completed}`);
+  if (s.in_progress) bits.push(`started ${s.in_progress}`);
+  if (s.created) bits.push(`added ${s.created}`);
+
+  const tail = s.pending ? ` ${s.pending} still open.` : "";
+  if (bits.length === 0) return `Nothing logged yet today.${tail}`;
+
+  const list =
+    bits.length === 1 ? bits[0] : `${bits.slice(0, -1).join(", ")} and ${bits[bits.length - 1]}`;
+  return `You ${list} today.${tail}`;
+}
+
+/* -------------------------------------------------------------------- plate */
+
+type OpenTask = Pick<
+  Task,
+  "id" | "title" | "status" | "created_by" | "deadline" | "color" | "department_id"
+>;
+
+async function Plate({ me, myNoteColor }: { me: string; myNoteColor: string | null }) {
+  const supabase = await createClient();
+  const { data } = await time("dashboard:plate", () =>
+    supabase
+      .from("tasks")
+      .select("id, title, status, created_by, deadline, color, department_id")
+      .eq("assigned_to", me)
+      .eq("archived", false)
+      .neq("status", "done")
+      .order("created_at", { ascending: false }),
+  );
+
+  const tasks = (data ?? []) as OpenTask[];
+  const running = tasks.filter((t) => t.status === "in_progress");
+  const waiting = tasks.filter((t) => t.status === "todo" && t.created_by !== me);
+  const own = tasks.filter((t) => t.status === "todo" && t.created_by === me);
+
+  // Only look up names if something was actually handed to you.
+  let senders = new Map<string, string>();
+  if (waiting.length > 0) {
+    const ids = [...new Set(waiting.map((t) => t.created_by))];
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", ids);
+    senders = new Map(
+      ((profs ?? []) as { id: string; full_name: string | null; email: string }[]).map((p) => [
+        p.id,
+        (p.full_name || p.email).split(/[\s@]+/)[0],
+      ]),
+    );
+  }
+
+  const row = (task: OpenTask, to: "in_progress" | "done", label: string, meta?: string | null) => (
+    <TaskRow
+      key={task.id}
+      id={task.id}
+      title={task.title}
+      dotClass={noteColor(task.color, myNoteColor)}
+      to={to}
+      actionLabel={label}
+      meta={meta ?? deadlineMeta(task.deadline)}
+      href="/tasks"
+    />
+  );
+
+  const shown = own.slice(0, 4);
 
   return (
     <>
-      <PageHeader
-        title={`Welcome back, ${firstName}`}
-        description="Your internal tools, all in one place."
-      />
+      <section className="mt-10">
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="text-sm font-semibold tracking-tight">
+            On your plate
+            <span className="ml-2 font-normal text-muted-foreground">{tasks.length}</span>
+          </h2>
+          <Link
+            href="/tasks"
+            className="rounded text-sm text-primary transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-ring"
+          >
+            Open your board
+          </Link>
+        </div>
 
-      <section
-        aria-label="Tools"
-        className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"
-      >
-        {visible.map((tool) => (
-          <ToolCard key={tool.href} tool={tool} />
-        ))}
+        <QuickAdd />
+
+        {tasks.length === 0 && (
+          <p className="mt-4 text-sm text-muted-foreground">
+            Nothing open. Add what you are working on and it lands on your board.
+          </p>
+        )}
+
+        {running.length > 0 && (
+          <Group title="In progress" count={running.length}>
+            {running.map((t) => row(t, "done", "Mark done"))}
+          </Group>
+        )}
+
+        {waiting.length > 0 && (
+          <Group title="Sent to you" count={waiting.length}>
+            {waiting.map((t) =>
+              row(t, "in_progress", "Start", `from ${senders.get(t.created_by) ?? "a teammate"}`),
+            )}
+          </Group>
+        )}
+
+        {own.length > 0 && (
+          <Group title="Your list" count={own.length}>
+            {shown.map((t) => row(t, "in_progress", "Start"))}
+          </Group>
+        )}
+
+        {own.length > shown.length && (
+          <p className="mt-2 pl-2 text-sm text-muted-foreground">
+            {own.length - shown.length} more on your board.
+          </p>
+        )}
       </section>
     </>
   );
+}
+
+function deadlineMeta(deadline: string | null): string | null {
+  const days = daysUntil(deadline, TZ);
+  if (days === null) return null;
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return "due today";
+  if (days === 1) return "due tomorrow";
+  return `due in ${days}d`;
+}
+
+function Group({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-5">
+      <h3 className="px-2 text-xs font-medium text-muted-foreground">
+        {title} <span className="ml-1">{count}</span>
+      </h3>
+      <ul className="mt-1">{children}</ul>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------- unread */
+
+async function Unread({ me }: { me: string }) {
+  const supabase = await createClient();
+  const { data: counts } = await time("dashboard:unread", () => supabase.rpc("unread_counts"));
+  const rows = (counts ?? []) as { conversation_id: string; unread: number }[];
+  if (rows.length === 0) return null;
+
+  const ids = rows.map((r) => r.conversation_id);
+  const [{ data: convRows }, { data: partRows }] = await time("dashboard:unread-detail", () =>
+    Promise.all([
+      supabase.from("conversations").select("id, type, name, last_message_preview").in("id", ids),
+      supabase
+        .from("conversation_participants")
+        .select("conversation_id, profile_id")
+        .in("conversation_id", ids),
+    ]),
+  );
+
+  const parts = (partRows ?? []) as { conversation_id: string; profile_id: string }[];
+  const otherIds = [...new Set(parts.map((p) => p.profile_id))].filter((id) => id !== me);
+  const { data: profRows } = otherIds.length
+    ? await supabase
+        .from("profiles")
+        .select("id, full_name, email, avatar_path")
+        .in("id", otherIds)
+    : { data: [] };
+
+  const people = new Map(
+    ((profRows ?? []) as { id: string; full_name: string | null; email: string; avatar_path: string | null }[]).map(
+      (p) => [p.id, p],
+    ),
+  );
+  const unreadBy = new Map(rows.map((r) => [r.conversation_id, Number(r.unread)]));
+  const otherIn = new Map<string, string>();
+  for (const p of parts) {
+    if (p.profile_id !== me && !otherIn.has(p.conversation_id)) {
+      otherIn.set(p.conversation_id, p.profile_id);
+    }
+  }
+
+  const convs = ((convRows ?? []) as Pick<
+    Conversation,
+    "id" | "type" | "name" | "last_message_preview"
+  >[])
+    .map((c) => {
+      const other = people.get(otherIn.get(c.id) ?? "");
+      return {
+        id: c.id,
+        label: c.type === "group" ? c.name || "Group" : other ? other.full_name || other.email : "Chat",
+        avatarPath: c.type === "group" ? null : (other?.avatar_path ?? null),
+        preview: c.last_message_preview,
+        unread: unreadBy.get(c.id) ?? 0,
+      };
+    })
+    .sort((a, b) => b.unread - a.unread);
+
+  const total = convs.reduce((n, c) => n + c.unread, 0);
+
+  return (
+    <section className="mt-10">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-sm font-semibold tracking-tight">
+          Waiting on you
+          <span className="ml-2 font-normal text-muted-foreground">{total}</span>
+        </h2>
+        <Link
+          href="/chat"
+          className="rounded text-sm text-primary transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-ring"
+        >
+          Open chat
+        </Link>
+      </div>
+      <ul className="mt-2">
+        {convs.slice(0, 3).map((c) => (
+          <li key={c.id}>
+            <Link
+              href={`/chat?c=${c.id}`}
+              className="flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Avatar
+                name={c.label}
+                path={c.avatarPath}
+                className="h-8 w-8 rounded-full"
+                fallbackClassName="bg-accent text-primary text-[10px] font-semibold"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm">{c.label}</span>
+                {c.preview && (
+                  <span className="block truncate text-xs text-muted-foreground">{c.preview}</span>
+                )}
+              </span>
+              <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                {c.unread}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/* --------------------------------------------------------------------- team */
+
+async function Team({ today }: { today: string }) {
+  const supabase = await createClient();
+  const [{ data: filedRows }, { data: profRows }] = await time("dashboard:team", () =>
+    Promise.all([
+      supabase.from("eod_reports").select("employee_id").eq("report_date", today),
+      supabase
+        .from("profiles")
+        .select("id, full_name, email, avatar_path")
+        .is("deactivated_at", null)
+        .order("full_name", { nullsFirst: false }),
+    ]),
+  );
+
+  const people = (profRows ?? []) as {
+    id: string;
+    full_name: string | null;
+    email: string;
+    avatar_path: string | null;
+  }[];
+  if (people.length === 0) return null;
+
+  const done = new Set(((filedRows ?? []) as { employee_id: string }[]).map((r) => r.employee_id));
+  const sorted = [...people].sort(
+    (a, b) => Number(done.has(b.id)) - Number(done.has(a.id)),
+  );
+  const shown = sorted.slice(0, 16);
+
+  return (
+    <section className="mt-10">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-sm font-semibold tracking-tight">
+          Reports in
+          <span className="ml-2 font-normal text-muted-foreground">
+            {done.size} of {people.length}
+          </span>
+        </h2>
+        <Link
+          href="/tasks/reports"
+          className="rounded text-sm text-primary transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-ring"
+        >
+          Read today&rsquo;s reports
+        </Link>
+      </div>
+      <ul className="mt-3 flex flex-wrap gap-1.5">
+        {shown.map((p) => {
+          const name = p.full_name || p.email;
+          const filed = done.has(p.id);
+          return (
+            <li key={p.id} title={filed ? `${name} — filed` : `${name} — nothing yet`}>
+              <Avatar
+                name={name}
+                path={p.avatar_path}
+                className={`h-8 w-8 rounded-full ${filed ? "" : "opacity-30 grayscale"}`}
+                fallbackClassName="bg-accent text-primary text-[10px] font-semibold"
+              />
+            </li>
+          );
+        })}
+        {sorted.length > shown.length && (
+          <li className="flex h-8 items-center px-1 text-xs text-muted-foreground">
+            +{sorted.length - shown.length}
+          </li>
+        )}
+      </ul>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------- skeletons */
+
+function Block({ className }: { className: string }) {
+  return <div className={`animate-pulse rounded-2xl bg-muted ${className}`} aria-hidden="true" />;
 }
