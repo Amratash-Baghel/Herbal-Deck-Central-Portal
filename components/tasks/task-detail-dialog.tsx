@@ -126,6 +126,7 @@ export function TaskDetailDialog({
   creatorName,
   canDelete,
   meId,
+  initialTitle,
   onClose,
   onSave,
   onArchive,
@@ -140,13 +141,15 @@ export function TaskDetailDialog({
   canDelete: boolean;
   /** The signed-in user's id — seeds the assignee as self when creating. */
   meId?: string;
+  /** Title already typed elsewhere, carried in so it isn't retyped. */
+  initialTitle?: string;
   onClose: () => void;
   onSave: (patch: UpdateTaskInput) => Promise<TaskResult>;
   onArchive?: () => void;
   onDelete?: () => void;
 }) {
   const creating = !task;
-  const [title, setTitle] = useState(task?.title ?? "");
+  const [title, setTitle] = useState(task?.title ?? initialTitle ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [assignedTo, setAssignedTo] = useState(
     task?.assigned_to ?? meId ?? "",

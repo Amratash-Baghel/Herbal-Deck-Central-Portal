@@ -85,7 +85,12 @@ export default async function DashboardPage() {
       </Suspense>
 
       <Suspense fallback={<BeatSkeleton className="h-56" />}>
-        <Plate me={me} myNoteColor={access.profile.note_color} />
+        <Plate
+          me={me}
+          meName={access.profile.full_name || access.profile.email}
+          myNoteColor={access.profile.note_color}
+          canAssignOthers={access.canManageUsers || access.isTeamLead}
+        />
       </Suspense>
 
       <Suspense fallback={null}>
@@ -238,7 +243,17 @@ type OpenTask = Pick<
   "id" | "title" | "status" | "created_by" | "deadline" | "color" | "department_id"
 >;
 
-async function Plate({ me, myNoteColor }: { me: string; myNoteColor: string | null }) {
+async function Plate({
+  me,
+  meName,
+  myNoteColor,
+  canAssignOthers,
+}: {
+  me: string;
+  meName: string;
+  myNoteColor: string | null;
+  canAssignOthers: boolean;
+}) {
   const supabase = await createClient();
   const { data } = await time("dashboard:plate", () =>
     supabase
@@ -297,7 +312,10 @@ async function Plate({ me, myNoteColor }: { me: string; myNoteColor: string | nu
         />
 
         <div className="mt-3 overflow-hidden rounded-2xl border bg-card shadow-sm">
-          <QuickAdd />
+          <QuickAdd
+            me={{ id: me, name: meName, noteColor: myNoteColor }}
+            canAssignOthers={canAssignOthers}
+          />
 
           {tasks.length === 0 && (
             <p className="border-t px-4 py-4 text-sm text-muted-foreground">
