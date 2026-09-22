@@ -65,13 +65,26 @@ export default async function DashboardPage() {
     timeZone: TZ,
   }).format(now);
 
+  // Greet by the hour where the office actually is, not the browser's guess.
+  const hour =
+    Number(
+      new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: TZ }).format(now),
+    ) % 24;
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const firstName = (access.profile.full_name || access.profile.email).split(/[\s@._-]+/)[0];
+  const name = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+
   return (
     <div className="mx-auto w-full max-w-[72rem]">
       <Beat done>
         <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{weekday}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{dateLine}</p>
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+              {greeting}, {name}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {weekday}, {dateLine}
+            </p>
           </div>
           {openedAt && (
             <p className="text-sm tabular-nums text-muted-foreground">
