@@ -80,7 +80,19 @@ function inPageChecks() {
   }
 
   // 4. Focus visibility (sample of focusables)
-  const focusables = [...document.querySelectorAll('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])')].slice(0, 25);
+  // Only count controls a user can actually reach. A zero-size or hidden
+  // element never receives visible focus, so it has no focus indicator to
+  // find — and React injects several per `<form action={serverAction}>`, which
+  // made this report a false HIGH on every page using a server action.
+  // Mirrors the visibility filter the tap-target check above already applies.
+  const focusables = [...document.querySelectorAll('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+    .filter((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return false;
+      const s = getComputedStyle(el);
+      return s.visibility !== 'hidden' && s.display !== 'none';
+    })
+    .slice(0, 25);
   let noFocus = 0;
   for (const el of focusables) {
     el.focus();

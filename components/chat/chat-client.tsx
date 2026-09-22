@@ -376,7 +376,10 @@ export function ChatClient({
 
   return (
     <>
-      <div className="grid h-[calc(100vh-14rem)] min-h-[460px] grid-cols-1 gap-5 md:grid-cols-[300px_1fr]">
+      {/* Fills whatever height the shell leaves, rather than subtracting a
+          hardcoded guess at the header + padding. min-h-0 lets the panels'
+          own overflow-y-auto work inside a flex parent. */}
+      <div className="grid min-h-0 flex-1 basis-[460px] grid-cols-1 gap-5 md:grid-cols-[minmax(260px,min(24%,380px))_1fr]">
         {/* Conversation list */}
         <div
           className={`${
