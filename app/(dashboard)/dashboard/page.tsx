@@ -2,28 +2,31 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { NewLine, ROW, StampDone } from "@/components/dashboard/sheet";
+import { Avatar } from "@/components/avatar";
+import { QuickAdd } from "@/components/dashboard/quick-add";
+import { TaskRow } from "@/components/dashboard/task-row";
 import { EodNoteForm } from "@/components/tasks/eod-note-form";
 import { getUserAccess } from "@/lib/auth";
 import { time } from "@/lib/perf";
 import { createClient } from "@/lib/supabase/server";
-import { dayRangeUTC, formatHM, localDateISO } from "@/lib/time";
-import type { EodReport } from "@/lib/types";
+import { noteColor } from "@/lib/tasks";
+import { daysUntil, formatClockTZ, localDateISO } from "@/lib/time";
+import type { Conversation, EodReport, EodSummary, Task } from "@/lib/types";
 
 const TZ = "Asia/Kolkata";
-const TIME_CELL = "border-r pt-2.5 pr-3 text-right text-xs tabular-nums";
 
 /**
- * Today's sheet.
+ * The day spine.
  *
- * People here don't manage tasks — at the end of the day they write down what
- * they did, one line at a time. So the page is the sheet they write on: a ruled
- * time column, their lines in the largest type on the page, and an open row at
- * the bottom with the cursor in it.
+ * Every section hangs off a rail as a beat of the working day, in the order the
+ * day is actually worked: you arrived, close out, what is still on your plate,
+ * who is waiting on a reply. Each beat's node on the rail fills in once that
+ * beat is clear, so the rail reads as a status column rather than a border —
+ * glance at it and you know how much of the day is still open.
  *
- * A line that is finished carries a time. A line that isn't carries a dash.
- * That column is the only status indicator, which is why there are no badges,
- * chips or colour dots anywhere on this page.
+ * The page resolves only two things itself (did I file today, when did I first
+ * show up) so the spine paints immediately; the heavier reads stream in
+ * sibling Suspense boundaries.
  */
 export default async function DashboardPage() {
   const access = await getUserAccess();
@@ -33,248 +36,500 @@ export default async function DashboardPage() {
   const today = localDateISO();
   const supabase = await createClient();
 
-  const { data: reportRow } = await time("dashboard:report", () =>
-    supabase
-      .from("eod_reports")
-      .select("*")
-      .eq("employee_id", me)
-      .eq("report_date", today)
-      .maybeSingle(),
+  const [{ data: reportRow }, { data: logRow }] = await time("dashboard:day", () =>
+    Promise.all([
+      supabase
+        .from("eod_reports")
+        .select("*")
+        .eq("employee_id", me)
+        .eq("report_date", today)
+        .maybeSingle(),
+      supabase
+        .from("activity_logs")
+        .select("first_seen_at")
+        .eq("employee_id", me)
+        .eq("date", today)
+        .maybeSingle(),
+    ]),
   );
-  const report = (reportRow as EodReport | null) ?? null;
 
+  const report = (reportRow as EodReport | null) ?? null;
+  const openedAt = (logRow as { first_seen_at: string | null } | null)?.first_seen_at;
+
+  const now = new Date();
+  const weekday = new Intl.DateTimeFormat("en-IN", { weekday: "long", timeZone: TZ }).format(now);
   const dateLine = new Intl.DateTimeFormat("en-IN", {
-    weekday: "long",
     day: "numeric",
     month: "long",
     timeZone: TZ,
-  }).format(new Date());
+  }).format(now);
 
   return (
-    <div className="mx-auto max-w-2xl pb-16">
-      <h1 className="text-sm text-muted-foreground">{dateLine}</h1>
+    <div className="max-w-2xl">
+      <Beat done>
+        <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{weekday}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{dateLine}</p>
+          </div>
+          {openedAt && (
+            <p className="text-sm tabular-nums text-muted-foreground">
+              Open since {formatClockTZ(openedAt, TZ)}
+            </p>
+          )}
+        </header>
+      </Beat>
 
-      <Suspense fallback={<Skeleton />}>
-        <Sheet me={me} today={today} />
+      <Suspense fallback={<BeatSkeleton className="h-44" />}>
+        <CloseOut me={me} today={today} report={report} />
+      </Suspense>
+
+      <Suspense fallback={<BeatSkeleton className="h-56" />}>
+        <Plate me={me} myNoteColor={access.profile.note_color} />
       </Suspense>
 
       <Suspense fallback={null}>
-        <Unread />
+        <Unread me={me} />
       </Suspense>
 
-      <SignOff report={report} />
-
       {access.canViewReports && (
-        <Suspense fallback={null}>
-          <Outstanding today={today} />
+        <Suspense fallback={<BeatSkeleton className="h-28" />}>
+          <Team today={today} />
         </Suspense>
       )}
     </div>
   );
 }
 
-/* -------------------------------------------------------------------- sheet */
-
-type Line = {
-  id: string;
-  title: string;
-  status: string;
-  created_at: string;
-  completed_at: string | null;
-};
+/* ----------------------------------------------------------------- the rail */
 
 /**
- * Everything on your sheet today: what you finished (with its time) and what is
- * still open (with a dash), oldest first, the way a logbook reads.
+ * One beat hung off the day rail. `done` fills the node and the line below it,
+ * so the rail is a column of answers rather than decoration. Beats render
+ * inside their own section so a section that has nothing to say (no unread, no
+ * team) takes its piece of rail with it when it returns null.
  */
-async function Sheet({ me, today }: { me: string; today: string }) {
-  const supabase = await createClient();
-  const { startISO } = dayRangeUTC(today, TZ);
-
-  const { data } = await time("dashboard:sheet", () =>
-    supabase
-      .from("tasks")
-      .select("id, title, status, created_at, completed_at")
-      .eq("assigned_to", me)
-      .eq("archived", false)
-      // Finished today, or still open from any day — both belong on the sheet.
-      .or(`status.neq.done,completed_at.gte.${startISO}`)
-      .order("created_at", { ascending: true }),
-  );
-
-  const rows = (data ?? []) as Line[];
-  const done = rows
-    .filter((t) => t.completed_at)
-    .sort((a, b) => (a.completed_at! < b.completed_at! ? -1 : 1));
-  const open = rows.filter((t) => !t.completed_at);
-  const lines = [...done, ...open];
-
+function Beat({ done = false, children }: { done?: boolean; children: React.ReactNode }) {
   return (
-    <section className="mt-2">
-      <ol className="border-t pt-1">
-        {lines.map((line) => (
-          <li key={line.id} className={ROW}>
-            <span
-              className={`${TIME_CELL} ${
-                line.completed_at ? "text-muted-foreground" : "border-dashed text-border"
-              }`}
-            >
-              {line.completed_at ? formatHM(line.completed_at, TZ) : "—"}
-            </span>
-            <span className="flex items-start justify-between gap-3 py-2 pl-4">
-              <span
-                className={`text-base leading-snug md:text-lg ${
-                  line.completed_at ? "" : "text-muted-foreground"
-                }`}
-              >
-                {line.title}
-              </span>
-              {!line.completed_at && <StampDone id={line.id} />}
-            </span>
-          </li>
-        ))}
-
-        <NewLine first={lines.length === 0} />
-      </ol>
-
-      <p className="mt-2 flex items-baseline justify-between gap-4 text-xs text-muted-foreground">
-        <span>
-          {done.length === 0
-            ? "Nothing logged yet."
-            : `${done.length} ${done.length === 1 ? "line" : "lines"} today`}
-          {open.length > 0 && ` · ${open.length} still open`}
-        </span>
-        <Link
-          href="/tasks"
-          className="rounded text-primary transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-ring"
-        >
-          Your board
-        </Link>
-      </p>
-    </section>
+    <div className="grid grid-cols-[14px_minmax(0,1fr)] gap-x-4 md:gap-x-6">
+      <div className="relative flex justify-center" aria-hidden="true">
+        <span
+          className={`absolute top-3 bottom-0 w-px ${done ? "bg-primary/40" : "bg-border"}`}
+        />
+        <span
+          className={`relative mt-1 h-3.5 w-3.5 rounded-full border-2 transition-colors ${
+            done ? "border-primary bg-primary" : "border-border bg-background"
+          }`}
+        />
+      </div>
+      <div className="min-w-0 pb-10">{children}</div>
+    </div>
   );
 }
 
-/* ----------------------------------------------------------------- sign off */
+/** A section heading with its count and the link out to the full thing. */
+function Heading({
+  title,
+  count,
+  href,
+  action,
+}: {
+  title: string;
+  count: React.ReactNode;
+  href: string;
+  action: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <h2 className="text-base font-semibold tracking-tight">
+        {title}
+        <span className="ml-2 text-sm font-normal tabular-nums text-muted-foreground">{count}</span>
+      </h2>
+      <Link
+        href={href}
+        className="shrink-0 rounded text-sm text-primary transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-ring"
+      >
+        {action}
+      </Link>
+    </div>
+  );
+}
 
-/** Closing the page: a rule, the time it was signed, and the note. */
-function SignOff({ report }: { report: EodReport | null }) {
+/* ---------------------------------------------------------------- close out */
+
+async function CloseOut({
+  me,
+  today,
+  report,
+}: {
+  me: string;
+  today: string;
+  report: EodReport | null;
+}) {
+  const supabase = await createClient();
+  const { data } = await time("dashboard:eod-summary", () =>
+    supabase.rpc("eod_summary", { emp: me, d: today }),
+  );
+  const summary = (data as EodSummary | null) ?? {
+    created: 0,
+    in_progress: 0,
+    completed: 0,
+    pending: 0,
+  };
+  const line = dayLine(summary);
+
+  // Filing is the one moment on this page worth a bold surface: the card goes
+  // solid, and it is the only filled block anywhere in the layout.
   if (report) {
-    const at = formatHM(report.updated_at ?? report.created_at, TZ);
+    const at = formatClockTZ(report.updated_at ?? report.created_at, TZ);
     return (
-      <section className="mt-10 border-t-2 border-primary pt-3">
-        <p className="text-sm">
-          <span className="font-medium">Signed off at {at}</span>
-          <span className="text-muted-foreground"> — today&rsquo;s report is with your manager.</span>
-        </p>
-        {report.manual_note && (
-          <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-            {report.manual_note}
-          </p>
-        )}
-        <details className="mt-2">
-          <summary className="cursor-pointer text-xs text-primary dark:text-ring">
-            Change the note
-          </summary>
-          <EodNoteForm initialNote={report.manual_note ?? ""} alreadySubmitted />
-        </details>
-      </section>
+      <Beat done>
+        <section className="rounded-2xl bg-primary p-5 text-primary-foreground shadow-sm">
+          <h2 className="text-lg font-semibold tracking-tight">Day closed out at {at}</h2>
+          <p className="mt-1 text-sm text-primary-foreground/75">{line}</p>
+          {report.manual_note && (
+            <p className="mt-3 whitespace-pre-wrap text-sm text-primary-foreground/90">
+              {report.manual_note}
+            </p>
+          )}
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm font-medium underline decoration-primary-foreground/40 underline-offset-4 transition hover:decoration-primary-foreground">
+              Edit today&rsquo;s report
+            </summary>
+            <div className="mt-2 rounded-xl bg-background p-3 text-foreground">
+              <EodNoteForm initialNote={report.manual_note ?? ""} alreadySubmitted />
+            </div>
+          </details>
+        </section>
+      </Beat>
     );
   }
 
   return (
-    <section className="mt-10 border-t pt-3">
-      <EodNoteForm initialNote="" alreadySubmitted={false} />
-    </section>
+    <Beat>
+      <section className="rounded-2xl border bg-card p-5 shadow-sm">
+        <h2 className="text-lg font-semibold tracking-tight">Close out your day</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{line}</p>
+        <EodNoteForm initialNote="" alreadySubmitted={false} />
+      </section>
+    </Beat>
+  );
+}
+
+/** "You finished 3, started 2 and added 1 today. 5 still open." */
+function dayLine(s: EodSummary): string {
+  const bits: string[] = [];
+  if (s.completed) bits.push(`finished ${s.completed}`);
+  if (s.in_progress) bits.push(`started ${s.in_progress}`);
+  if (s.created) bits.push(`added ${s.created}`);
+
+  const tail = s.pending ? ` ${s.pending} still open.` : "";
+  if (bits.length === 0) return `Nothing logged yet today.${tail}`;
+
+  const list =
+    bits.length === 1 ? bits[0] : `${bits.slice(0, -1).join(", ")} and ${bits[bits.length - 1]}`;
+  return `You ${list} today.${tail}`;
+}
+
+/* -------------------------------------------------------------------- plate */
+
+type OpenTask = Pick<
+  Task,
+  "id" | "title" | "status" | "created_by" | "deadline" | "color" | "department_id"
+>;
+
+async function Plate({ me, myNoteColor }: { me: string; myNoteColor: string | null }) {
+  const supabase = await createClient();
+  const { data } = await time("dashboard:plate", () =>
+    supabase
+      .from("tasks")
+      .select("id, title, status, created_by, deadline, color, department_id")
+      .eq("assigned_to", me)
+      .eq("archived", false)
+      .neq("status", "done")
+      .order("created_at", { ascending: false }),
+  );
+
+  const tasks = (data ?? []) as OpenTask[];
+  const running = tasks.filter((t) => t.status === "in_progress");
+  const waiting = tasks.filter((t) => t.status === "todo" && t.created_by !== me);
+  const own = tasks.filter((t) => t.status === "todo" && t.created_by === me);
+
+  // Only look up names if something was actually handed to you.
+  let senders = new Map<string, string>();
+  if (waiting.length > 0) {
+    const ids = [...new Set(waiting.map((t) => t.created_by))];
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", ids);
+    senders = new Map(
+      ((profs ?? []) as { id: string; full_name: string | null; email: string }[]).map((p) => [
+        p.id,
+        (p.full_name || p.email).split(/[\s@]+/)[0],
+      ]),
+    );
+  }
+
+  const row = (task: OpenTask, to: "in_progress" | "done", label: string, meta?: string | null) => (
+    <TaskRow
+      key={task.id}
+      id={task.id}
+      title={task.title}
+      dotClass={noteColor(task.color, myNoteColor)}
+      to={to}
+      actionLabel={label}
+      meta={meta ?? deadlineMeta(task.deadline)}
+      href="/tasks"
+    />
+  );
+
+  const shown = own.slice(0, 4);
+
+  return (
+    <Beat done={tasks.length === 0}>
+      <section>
+        <Heading
+          title="On your plate"
+          count={tasks.length}
+          href="/tasks"
+          action="Open your board"
+        />
+
+        <div className="mt-3 overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <QuickAdd />
+
+          {tasks.length === 0 && (
+            <p className="border-t px-4 py-4 text-sm text-muted-foreground">
+              Nothing open. Add what you are working on and it lands on your board.
+            </p>
+          )}
+
+          {running.length > 0 && (
+            <Group title="In progress" count={running.length}>
+              {running.map((t) => row(t, "done", "Mark done"))}
+            </Group>
+          )}
+
+          {waiting.length > 0 && (
+            <Group title="Sent to you" count={waiting.length}>
+              {waiting.map((t) =>
+                row(t, "in_progress", "Start", `from ${senders.get(t.created_by) ?? "a teammate"}`),
+              )}
+            </Group>
+          )}
+
+          {own.length > 0 && (
+            <Group title="Your list" count={own.length}>
+              {shown.map((t) => row(t, "in_progress", "Start"))}
+            </Group>
+          )}
+        </div>
+
+        {own.length > shown.length && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {own.length - shown.length} more on your board.
+          </p>
+        )}
+      </section>
+    </Beat>
+  );
+}
+
+function deadlineMeta(deadline: string | null): string | null {
+  const days = daysUntil(deadline, TZ);
+  if (days === null) return null;
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return "due today";
+  if (days === 1) return "due tomorrow";
+  return `due in ${days}d`;
+}
+
+function Group({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-t">
+      <h3 className="px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground">
+        {title} <span className="ml-0.5 tabular-nums">{count}</span>
+      </h3>
+      <ul className="pb-1.5">{children}</ul>
+    </div>
   );
 }
 
 /* ------------------------------------------------------------------- unread */
 
-/** One line, only when someone is actually waiting on a reply. */
-async function Unread() {
+async function Unread({ me }: { me: string }) {
   const supabase = await createClient();
-  const { data } = await time("dashboard:unread", () => supabase.rpc("unread_counts"));
-  const rows = (data ?? []) as { conversation_id: string; unread: number }[];
-  const total = rows.reduce((n, r) => n + Number(r.unread), 0);
-  if (total === 0) return null;
+  const { data: counts } = await time("dashboard:unread", () => supabase.rpc("unread_counts"));
+  const rows = (counts ?? []) as { conversation_id: string; unread: number }[];
+  if (rows.length === 0) return null;
+
+  const ids = rows.map((r) => r.conversation_id);
+  const [{ data: convRows }, { data: partRows }] = await time("dashboard:unread-detail", () =>
+    Promise.all([
+      supabase.from("conversations").select("id, type, name, last_message_preview").in("id", ids),
+      supabase
+        .from("conversation_participants")
+        .select("conversation_id, profile_id")
+        .in("conversation_id", ids),
+    ]),
+  );
+
+  const parts = (partRows ?? []) as { conversation_id: string; profile_id: string }[];
+  const otherIds = [...new Set(parts.map((p) => p.profile_id))].filter((id) => id !== me);
+  const { data: profRows } = otherIds.length
+    ? await supabase
+        .from("profiles")
+        .select("id, full_name, email, avatar_path")
+        .in("id", otherIds)
+    : { data: [] };
+
+  const people = new Map(
+    ((profRows ?? []) as { id: string; full_name: string | null; email: string; avatar_path: string | null }[]).map(
+      (p) => [p.id, p],
+    ),
+  );
+  const unreadBy = new Map(rows.map((r) => [r.conversation_id, Number(r.unread)]));
+  const otherIn = new Map<string, string>();
+  for (const p of parts) {
+    if (p.profile_id !== me && !otherIn.has(p.conversation_id)) {
+      otherIn.set(p.conversation_id, p.profile_id);
+    }
+  }
+
+  const convs = ((convRows ?? []) as Pick<
+    Conversation,
+    "id" | "type" | "name" | "last_message_preview"
+  >[])
+    .map((c) => {
+      const other = people.get(otherIn.get(c.id) ?? "");
+      return {
+        id: c.id,
+        label: c.type === "group" ? c.name || "Group" : other ? other.full_name || other.email : "Chat",
+        avatarPath: c.type === "group" ? null : (other?.avatar_path ?? null),
+        preview: c.last_message_preview,
+        unread: unreadBy.get(c.id) ?? 0,
+      };
+    })
+    .sort((a, b) => b.unread - a.unread);
+
+  const total = convs.reduce((n, c) => n + c.unread, 0);
 
   return (
-    <p className="mt-6 text-sm">
-      <Link
-        href="/chat"
-        className="rounded text-primary transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-ring"
-      >
-        {total} unread {total === 1 ? "message" : "messages"} in chat
-      </Link>
-    </p>
+    <Beat>
+      <section>
+        <Heading title="Waiting on you" count={total} href="/chat" action="Open chat" />
+        <ul className="mt-3 overflow-hidden rounded-2xl border bg-card shadow-sm">
+          {convs.slice(0, 3).map((c) => (
+            <li key={c.id} className="border-t first:border-t-0">
+              <Link
+                href={`/chat?c=${c.id}`}
+                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              >
+                <Avatar
+                  name={c.label}
+                  path={c.avatarPath}
+                  className="h-9 w-9 rounded-full"
+                  fallbackClassName="bg-accent text-primary text-[11px] font-semibold"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] leading-5">{c.label}</span>
+                  {c.preview && (
+                    <span className="block truncate text-xs text-muted-foreground">{c.preview}</span>
+                  )}
+                </span>
+                <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium tabular-nums text-primary-foreground">
+                  {c.unread}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </Beat>
   );
 }
 
-/* -------------------------------------------------------------- outstanding */
+/* --------------------------------------------------------------------- team */
 
-/**
- * Managers only, and only the part a manager has to act on: who hasn't filed
- * yet. The ones who have need no attention, so they aren't listed.
- */
-async function Outstanding({ today }: { today: string }) {
+async function Team({ today }: { today: string }) {
   const supabase = await createClient();
-  const [{ data: filedRows }, { data: profRows }] = await time("dashboard:outstanding", () =>
+  const [{ data: filedRows }, { data: profRows }] = await time("dashboard:team", () =>
     Promise.all([
       supabase.from("eod_reports").select("employee_id").eq("report_date", today),
       supabase
         .from("profiles")
-        .select("id, full_name, email")
+        .select("id, full_name, email, avatar_path")
         .is("deactivated_at", null)
         .order("full_name", { nullsFirst: false }),
     ]),
   );
 
-  const people = (profRows ?? []) as { id: string; full_name: string | null; email: string }[];
+  const people = (profRows ?? []) as {
+    id: string;
+    full_name: string | null;
+    email: string;
+    avatar_path: string | null;
+  }[];
   if (people.length === 0) return null;
 
-  const filed = new Set(((filedRows ?? []) as { employee_id: string }[]).map((r) => r.employee_id));
-  const missing = people.filter((p) => !filed.has(p.id));
+  const done = new Set(((filedRows ?? []) as { employee_id: string }[]).map((r) => r.employee_id));
+  const sorted = [...people].sort((a, b) => Number(done.has(b.id)) - Number(done.has(a.id)));
+  const shown = sorted.slice(0, 16);
+  const pct = Math.round((done.size / people.length) * 100);
 
   return (
-    <section className="mt-10 border-t pt-3">
-      <p className="flex items-baseline justify-between gap-4 text-sm">
-        <span>
-          <span className="tabular-nums font-medium">
-            {filed.size} of {people.length}
-          </span>
-          <span className="text-muted-foreground"> reports in</span>
-        </span>
-        <Link
+    <Beat done={done.size === people.length}>
+      <section>
+        <Heading
+          title="Reports in"
+          count={`${done.size} of ${people.length}`}
           href="/tasks/reports"
-          className="rounded text-primary transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-ring"
-        >
-          Read them
-        </Link>
-      </p>
-      {missing.length > 0 && (
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Still to file: {missing.map((p) => p.full_name || p.email).join(", ")}
-        </p>
-      )}
-    </section>
+          action="Read today's reports"
+        />
+        <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+        </div>
+        <ul className="mt-3 flex flex-wrap gap-1.5">
+          {shown.map((p) => {
+            const name = p.full_name || p.email;
+            const filed = done.has(p.id);
+            return (
+              <li key={p.id} title={filed ? `${name} — filed` : `${name} — nothing yet`}>
+                <Avatar
+                  name={name}
+                  path={p.avatar_path}
+                  className={`h-8 w-8 rounded-full ${filed ? "" : "opacity-30 grayscale"}`}
+                  fallbackClassName="bg-accent text-primary text-[10px] font-semibold"
+                />
+              </li>
+            );
+          })}
+          {sorted.length > shown.length && (
+            <li className="flex h-8 items-center px-1 text-xs tabular-nums text-muted-foreground">
+              +{sorted.length - shown.length}
+            </li>
+          )}
+        </ul>
+      </section>
+    </Beat>
   );
 }
 
 /* ---------------------------------------------------------------- skeletons */
 
-/** Matches the sheet's row rhythm so nothing jumps when it arrives. */
-function Skeleton() {
+function BeatSkeleton({ className }: { className: string }) {
   return (
-    <div className="mt-2 border-t pt-1" aria-hidden="true">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className={ROW}>
-          <span className={`${TIME_CELL} text-transparent`}>00:00</span>
-          <span className="py-2 pl-4">
-            <span className="block h-5 w-full max-w-sm animate-pulse rounded bg-muted md:h-6" />
-          </span>
-        </div>
-      ))}
-    </div>
+    <Beat>
+      <div className={`animate-pulse rounded-2xl bg-muted ${className}`} aria-hidden="true" />
+    </Beat>
   );
 }
