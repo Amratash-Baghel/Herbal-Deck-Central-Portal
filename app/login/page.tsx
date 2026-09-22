@@ -14,7 +14,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="mt-2 w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60"
+      className="mt-2 min-h-11 w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60"
     >
       {pending ? "Signing in…" : "Sign in"}
     </button>
@@ -50,7 +50,7 @@ export default function LoginPage() {
                 autoComplete="email"
                 required
                 placeholder="you@herbaldeck.com"
-                className="rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+                className="min-h-11 rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
 
@@ -59,9 +59,11 @@ export default function LoginPage() {
                 <label htmlFor="password" className="text-sm font-medium">
                   Password
                 </label>
+                {/* Negative margin keeps the row's visual height unchanged
+                    while the link itself is a full 44px touch target. */}
                 <Link
                   href="/forgot-password"
-                  className="text-xs font-medium text-primary transition hover:underline"
+                  className="-my-3 inline-flex min-h-11 items-center rounded-lg px-1 text-xs font-medium text-primary transition hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Forgot password?
                 </Link>
@@ -73,7 +75,7 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 required
                 placeholder="••••••••"
-                className="rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
+                className="min-h-11 rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
 
