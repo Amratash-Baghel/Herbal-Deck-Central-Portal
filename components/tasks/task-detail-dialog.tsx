@@ -112,8 +112,10 @@ function TaskHistory({ taskId }: { taskId: string }) {
 }
 
 /**
- * View / edit a task. In editable mode (your own or assigned task) the fields
- * are live and you can archive or delete; otherwise it's a read-only detail.
+ * View / edit a task, or — when `task` is omitted — create one. Creating
+ * reuses the same form so the full set of fields (assignee, deadline, colour,
+ * description) can be set in one pass instead of a bare-title quick-add
+ * followed by a second trip through this dialog to fill in the rest.
  */
 export function TaskDetailDialog({
   task,
@@ -123,35 +125,43 @@ export function TaskDetailDialog({
   departments,
   creatorName,
   canDelete,
+  meId,
   onClose,
   onSave,
   onArchive,
   onDelete,
 }: {
-  task: Task;
+  task?: Task;
   editable: boolean;
   canReassign?: boolean;
   assignable: Person[];
   departments: DeptRef[];
   creatorName: string;
   canDelete: boolean;
+  /** The signed-in user's id — seeds the assignee as self when creating. */
+  meId?: string;
   onClose: () => void;
   onSave: (patch: UpdateTaskInput) => Promise<TaskResult>;
-  onArchive: () => void;
-  onDelete: () => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
 }) {
-  const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description ?? "");
-  const [assignedTo, setAssignedTo] = useState(task.assigned_to ?? "");
-  const [departmentId, setDepartmentId] = useState(task.department_id);
-  const [deadline, setDeadline] = useState(task.deadline ?? "");
-  const [color, setColor] = useState<string | null>(task.color ?? null);
+  const creating = !task;
+  const [title, setTitle] = useState(task?.title ?? "");
+  const [description, setDescription] = useState(task?.description ?? "");
+  const [assignedTo, setAssignedTo] = useState(
+    task?.assigned_to ?? meId ?? "",
+  );
+  const [departmentId, setDepartmentId] = useState(
+    task?.department_id ?? departments[0]?.id ?? "",
+  );
+  const [deadline, setDeadline] = useState(task?.deadline ?? "");
+  const [color, setColor] = useState<string | null>(task?.color ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // A completed task is locked from further editing — everything except its
   // note colour, which can still be changed so the board stays organised.
-  const doneLocked = editable && task.status === "done";
+  const doneLocked = editable && task?.status === "done";
 
   async function save() {
     if (busy) return;
@@ -182,7 +192,7 @@ export function TaskDetailDialog({
       <div className="relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border bg-card shadow-xl">
         <div className="flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-base font-semibold tracking-tight">
-            {editable ? "Edit task" : "Task"}
+            {creating ? "New task" : editable ? "Edit task" : "Task"}
           </h2>
           <button
             type="button"
@@ -222,7 +232,7 @@ export function TaskDetailDialog({
                 onChange={setDescription}
                 placeholder="Add detail — bold, lists, and more…"
               />
-            ) : task.description ? (
+            ) : task?.description ? (
               <RichText html={task.description} className="text-sm text-foreground/80" />
             ) : (
               <p className="text-sm text-muted-foreground">—</p>
@@ -324,9 +334,12 @@ export function TaskDetailDialog({
             />
           </div>
 
-          <TaskTimestamps task={task} creatorName={creatorName} />
-
-          <TaskHistory taskId={task.id} />
+          {!creating && task && (
+            <>
+              <TaskTimestamps task={task} creatorName={creatorName} />
+              <TaskHistory taskId={task.id} />
+            </>
+          )}
 
           {error && (
             <p role="alert" className="text-sm text-red-600 dark:text-red-400">
@@ -338,7 +351,7 @@ export function TaskDetailDialog({
         {editable && (
           <div className="flex items-center justify-between gap-2 border-t px-5 py-3">
             <div className="flex items-center gap-2">
-              {task.status === "done" && (
+              {!creating && task?.status === "done" && (
                 <button
                   type="button"
                   onClick={onArchive}
@@ -347,7 +360,7 @@ export function TaskDetailDialog({
                   Archive
                 </button>
               )}
-              {canDelete && (
+              {!creating && canDelete && (
                 <button
                   type="button"
                   onClick={onDelete}
@@ -364,7 +377,7 @@ export function TaskDetailDialog({
               disabled={busy || !title.trim()}
               className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition hover:opacity-90 disabled:opacity-50"
             >
-              {busy ? "Saving…" : "Save"}
+              {busy ? (creating ? "Creating…" : "Saving…") : creating ? "Create task" : "Save"}
             </button>
           </div>
         )}

@@ -56,6 +56,8 @@ export function TaskBoard({
   const [openId, setOpenId] = useState<string | null>(null);
   const [quickTitle, setQuickTitle] = useState("");
   const [adding, setAdding] = useState(false);
+  /** The full create dialog, opened from the + button beside the quick-add box. */
+  const [creating, setCreating] = useState(false);
   const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
@@ -93,6 +95,22 @@ export function TaskBoard({
       setTasks((prev) => [res.task as Task, ...prev]);
       setQuickTitle("");
     }
+  }
+
+  /** Create with the full form (assignee, deadline, colour, description) in one pass. */
+  async function handleCreate(patch: UpdateTaskInput) {
+    const res = await createTask({
+      title: patch.title ?? "",
+      description: patch.description ?? undefined,
+      departmentId: patch.departmentId,
+      assignedTo: patch.assignedTo,
+      deadline: patch.deadline,
+      color: patch.color,
+    });
+    if (res.ok && res.task) {
+      setTasks((prev) => [res.task as Task, ...prev]);
+    }
+    return res;
   }
 
   async function handleMove(taskId: string, status: TaskStatus) {
@@ -302,7 +320,16 @@ export function TaskBoard({
 
               {col.value === "todo" && (
                 <div className="mb-3 flex items-center gap-2 rounded-xl border bg-background px-2 py-1.5">
-                  <PlusIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <button
+                    type="button"
+                    onClick={() => setCreating(true)}
+                    disabled={noDept}
+                    aria-label="New task with full details"
+                    title="New task — set assignee, deadline, colour and description up front"
+                    className="shrink-0 rounded-lg p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                  </button>
                   <input
                     value={quickTitle}
                     onChange={(e) => setQuickTitle(e.target.value)}
@@ -453,6 +480,20 @@ export function TaskBoard({
           onSave={(patch) => handleSave(openTask.id, patch)}
           onArchive={() => void handleArchive(openTask.id)}
           onDelete={() => void handleDelete(openTask.id)}
+        />
+      )}
+
+      {creating && (
+        <TaskDetailDialog
+          editable
+          canReassign={canAssignOthers}
+          assignable={assignable}
+          departments={departments}
+          creatorName={me.name}
+          canDelete={false}
+          meId={me.id}
+          onClose={() => setCreating(false)}
+          onSave={handleCreate}
         />
       )}
     </>
