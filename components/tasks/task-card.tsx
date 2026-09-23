@@ -1,8 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { noteColor, adjacentStatus } from "@/lib/tasks";
-import { daysUntil, formatDuration, timeAgo } from "@/lib/time";
+import { useState, type ReactNode } from "react";
+import { noteColor, noteSwatch, deptNoteColor, adjacentStatus } from "@/lib/tasks";
+import { daysUntil } from "@/lib/time";
 import { ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from "@/components/icons";
 import { PopoverMenu } from "@/components/popover-menu";
 import { RichText } from "@/components/tasks/rich-text";
@@ -35,27 +35,6 @@ function tiltOf(id: string): number {
   return (Math.abs(h) % 5) - 2; // -2..2
 }
 
-/** Lifecycle timestamps: created date + started/completed context. */
-function TaskTiming({ task }: { task: Task }) {
-  const created = new Date(task.created_at).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-  });
-  let extra: string | null = null;
-  if (task.status === "done" && task.started_at && task.completed_at) {
-    const d = formatDuration(task.started_at, task.completed_at);
-    if (d) extra = `Completed in ${d}`;
-  } else if (task.status === "in_progress" && task.started_at) {
-    extra = `Started ${timeAgo(task.started_at)}`;
-  }
-  return (
-    <p className="mt-2 text-[10px] text-foreground/50">
-      Created {created}
-      {extra && ` · ${extra}`}
-    </p>
-  );
-}
-
 function DeadlinePill({ deadline }: { deadline: string | null }) {
   const days = daysUntil(deadline);
   if (days === null) return null;
@@ -80,13 +59,14 @@ function DeadlinePill({ deadline }: { deadline: string | null }) {
 }
 
 /**
- * A sticky-note task card. Coloured by its department, gently tilted, and lifts
- * on hover. Editable cards can be dragged between columns, nudged with the ◀ ▶
- * controls (the mobile-friendly move), and opened for the full editor.
+ * A sticky-note task card. Tilted, lifts on hover, and carries its state
+ * physically: a pin while it's in hand, a red dog-ear when it's overdue, and
+ * the department as a corner tag rather than a footer row. Editable cards drag
+ * between columns, nudge with the ◀ ▶ controls, and open the full editor —
+ * where the creator and the lifecycle timestamps live.
  */
 export function TaskCard({
   task,
-  creatorName,
   assigneeName,
   deptName,
   deptSlug,
@@ -102,7 +82,6 @@ export function TaskCard({
   onAssign,
 }: {
   task: Task;
-  creatorName: string;
   assigneeName: string | null;
   deptName: string;
   deptSlug: string | null;
@@ -123,6 +102,10 @@ export function TaskCard({
   const prev = adjacentStatus(task.status, "prev");
   const next = adjacentStatus(task.status, "next");
   const tilt = tiltOf(task.id);
+  const days = daysUntil(task.deadline);
+  const [dragging, setDragging] = useState(false);
+  // Set on drag end so the note bounces as it settles; cleared by the animation.
+  const [settling, setSettling] = useState(false);
 
   return (
     <div
@@ -130,40 +113,63 @@ export function TaskCard({
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", task.id);
         e.dataTransfer.effectAllowed = "move";
+        setDragging(true);
       }}
+      onDragEnd={() => {
+        setDragging(false);
+        setSettling(true);
+      }}
+      onAnimationEnd={() => setSettling(false)}
       style={{ transform: `rotate(${tilt}deg)` }}
-      className={`group relative rounded-2xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:rotate-0 hover:shadow-md ${noteColor(
+      className={`group note border p-3 ${noteColor(
         task.color,
         assigneeNoteColor,
         deptSlug,
-      )} ${editable && !selectable ? "cursor-grab active:cursor-grabbing" : ""} ${
-        selected ? "ring-2 ring-primary" : ""
-      } ${faded ? "opacity-70 saturate-50 hover:opacity-100 hover:saturate-100" : ""}`}
+      )} ${dragging ? "is-dragging" : ""} ${settling ? "note-settle" : ""} ${
+        editable && !selectable ? "cursor-grab active:cursor-grabbing" : ""
+      } ${selected ? "ring-2 ring-primary" : ""} ${
+        faded ? "opacity-70 saturate-50 hover:opacity-100 hover:saturate-100" : ""
+      }`}
     >
+      {/* Department: a corner tag instead of a whole footer line. */}
+      <span
+        className="note-tag"
+        style={{ background: noteSwatch(deptNoteColor(deptSlug)) }}
+        aria-hidden="true"
+      />
+      <span className="note-tagname">{deptName}</span>
+      {task.status === "in_progress" && <span className="note-pin" aria-hidden="true" />}
+      {days !== null && days < 0 && <span className="note-dogear" aria-hidden="true" />}
+
       {selectable && (
         <input
           type="checkbox"
           checked={selected}
           onChange={onToggleSelect}
           aria-label={`Select ${task.title}`}
-          className="absolute right-2 top-2 h-4 w-4 accent-primary"
+          className="absolute left-2 top-2 h-4 w-4 accent-primary"
         />
       )}
       <button
         type="button"
         onClick={selectable ? onToggleSelect : onOpen}
-        className={`block w-full text-left text-foreground ${selectable ? "pr-6" : ""}`}
+        className={`block w-full text-left text-foreground ${selectable ? "pl-6" : ""}`}
       >
         <p className="text-sm font-semibold leading-snug">{task.title}</p>
         {task.description && (
           <RichText
             html={task.description}
-            className="mt-1 line-clamp-2 text-xs text-foreground/70"
+            className="note-desc mt-1 line-clamp-2 text-xs text-foreground/70"
           />
         )}
       </button>
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-foreground/80">
+      {/* One meta line. The nudges float over its right end, so leave room. */}
+      <div
+        className={`note-meta mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-foreground/80 ${
+          editable && onMove ? "pr-11" : ""
+        }`}
+      >
         {editable && onAssign && assignable ? (
           <PopoverMenu
             ariaLabel="Assign to"
@@ -219,37 +225,30 @@ export function TaskCard({
         <DeadlinePill deadline={task.deadline} />
       </div>
 
-      <TaskTiming task={task} />
-
-      <div className="mt-2 flex items-center justify-between border-t border-foreground/10 pt-2">
-        <span className="truncate text-[10px] uppercase tracking-wide text-foreground/55">
-          {deptName} · by {creatorName.split(" ")[0]}
+      {editable && onMove && (
+        <span className="note-nudge absolute bottom-1.5 right-1.5 flex gap-0.5">
+          {prev && (
+            <button
+              type="button"
+              onClick={() => onMove(prev)}
+              aria-label="Move left"
+              className="inline-flex h-[21px] w-[21px] items-center justify-center rounded-md bg-foreground/10 transition hover:brightness-90"
+            >
+              <ChevronLeftIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {next && (
+            <button
+              type="button"
+              onClick={() => onMove(next)}
+              aria-label="Move right"
+              className="inline-flex h-[21px] w-[21px] items-center justify-center rounded-md bg-foreground/10 transition hover:brightness-90"
+            >
+              <ChevronRightIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
         </span>
-        {editable && onMove && (
-          <span className="flex items-center gap-1">
-            {prev && (
-              <button
-                type="button"
-                onClick={() => onMove(prev)}
-                aria-label="Move left"
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-foreground/60 transition hover:bg-foreground/10 hover:text-foreground"
-              >
-                <ChevronLeftIcon className="h-4 w-4" />
-              </button>
-            )}
-            {next && (
-              <button
-                type="button"
-                onClick={() => onMove(next)}
-                aria-label="Move right"
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-foreground/60 transition hover:bg-foreground/10 hover:text-foreground"
-              >
-                <ChevronRightIcon className="h-4 w-4" />
-              </button>
-            )}
-          </span>
-        )}
-      </div>
+      )}
     </div>
   );
 }

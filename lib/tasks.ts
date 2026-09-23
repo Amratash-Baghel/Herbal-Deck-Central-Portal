@@ -89,6 +89,11 @@ const NOTE_COLOR_BY_KEY = new Map(NOTE_COLORS.map((c) => [c.key, c.className]));
  *   2. the assignee's default note colour (unique within their department), else
  *   3. the department colour (e.g. for an unassigned note).
  */
+/** The saturated sibling of a note class — `note-sky` → `var(--n-sky-b)`. */
+export function noteSwatch(noteClass: string): string {
+  return `var(--n-${noteClass.slice("note-".length)}-b)`;
+}
+
 export function noteColor(
   colorKey?: string | null,
   assigneeColorKey?: string | null,

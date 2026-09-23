@@ -9,10 +9,9 @@
  * automatically in dark mode with almost no `dark:` overrides.
  * ------------------------------------------------------------------------- */
 
-/* `dark:` utilities apply under BOTH the Dark and Midnight themes, so
- * component-level dark overrides (error alerts, status colours, …) work in
- * either. Each theme still fully overrides the semantic tokens below. */
-@custom-variant dark (&:where(.dark, .dark *, .midnight, .midnight *));
+/* Graphite is the one dark theme, so `dark:` utilities key off it. The other
+ * five are light grounds and take the default branch. */
+@custom-variant dark (&:where(.graphite, .graphite *));
 
 /* ---------------------------------------------------------------------------
  * Shape variants — the display's aspect ratio, not just its width.
@@ -33,27 +32,51 @@
 @custom-variant wide (@media (min-aspect-ratio: 3/2));
 @custom-variant ultrawide (@media (min-aspect-ratio: 2/1));
 
+/* ---------------------------------------------------------------------------
+ * The six themes
+ * ---------------------------------------------------------------------------
+ * Paper is the default (:root); the other five are classes on <html>. Every
+ * theme carries the same token set, so a theme is one block here and nothing
+ * else anywhere.
+ *
+ * Three surfaces, always distinct: --background is the ground, --card lifts off
+ * it, --muted (the column "well") sinks into it. They used to be near-identical
+ * whites, which is why nothing could lift. --accent is a separate hover tint,
+ * never equal to --muted, so hover is visible.
+ *
+ * Notes are token pairs: --n-X pale fill, --n-X-b saturated sibling. The
+ * gradient runs pale at the TOP (where every word sits, so contrast holds) and
+ * blooms vivid at the FOOT.
+ * ------------------------------------------------------------------------- */
+
+/* Paper — warm ground, white cards, brand green. */
 :root {
-  /* Surfaces */
-  --background: #ffffff;        /* clean white page background        */
-  --foreground: #1a1a1a;        /* dark charcoal text                 */
-  --card: #ffffff;             /* card surface                       */
-  --muted: #f0faf4;            /* light mint subtle background        */
-  --muted-foreground: #5b6b62;  /* secondary / helper text            */
-  --border: #e4efe9;           /* hairline borders                   */
-  --sidebar: #fbfdfc;          /* sidebar surface                    */
-  --sidebar-foreground: #1a1a1a;
+  --background:#f7f5f1; --card:#ffffff; --muted:#efece5; --border:#e2ded4;
+  --foreground:#1c1917; --muted-foreground:#7a736b;
+  --primary:#10663c; --primary-foreground:#ffffff; --accent:#e4f1e9; --ring:#10663c;
+  --sidebar:#ffffff; --sidebar-foreground:#1c1917;
+  --note-ink:#1c1917; --note-soft:rgba(28,25,23,.60); --note-line:rgba(28,25,23,.12);
+  --shadow:0 1px 2px rgba(60,50,35,.07), 0 8px 16px -10px rgba(60,50,35,.32);
+  --shadow-lift:0 3px 6px rgba(60,50,35,.09), 0 20px 30px -16px rgba(60,50,35,.45);
+  --cork:rgba(120,105,85,.055);
+  --n-yellow:#fef6c0; --n-yellow-b:#f7e894;  --n-red:#fee2e0;  --n-red-b:#fbc8c4;
+  --n-orange:#ffeacf; --n-orange-b:#fdd3a2;  --n-pink:#fce5f0; --n-pink-b:#f9c9e0;
+  --n-green:#d9fbe4;  --n-green-b:#b3f2c9;   --n-teal:#c9faef; --n-teal-b:#93f0de;
+  --n-sky:#dcf0fe;    --n-sky-b:#b2e2fc;     --n-violet:#eae5fe; --n-violet-b:#d7cdfd;
+  --n-indigo:#dee4ff; --n-indigo-b:#c2cbfe;  --n-slate:#eeece6; --n-slate-b:#d9d5ca;
+  --n-lime:#eafcc4;   --n-lime-b:#d4f894;    --n-amber:#fef0be; --n-amber-b:#fce18d;
+}
 
-  /* Brand */
-  --primary: #1a5c38;          /* deep forest green                  */
-  --primary-foreground: #ffffff;
-  --accent: #f0faf4;           /* hover / active tint                */
-  --ring: #1a5c38;
-
-  /* Sticky notes — "Aurora". Each hue is a pair: --n-X is the pale fill,
-   * --n-X-b the saturated sibling used as the border and the foot of the
-   * gradient. The gradient runs pale at the TOP (where every word sits, so
-   * contrast holds) and blooms vivid at the FOOT. */
+/* Aurora — electric blue / cyan / peach on sky. */
+.aurora {
+  --background:#dceefc; --card:#ffffff; --muted:#cfe6fa; --border:#b6d9f5;
+  --foreground:#0b1b33; --muted-foreground:#5b7595;
+  --primary:#0b37e8; --primary-foreground:#ffffff; --accent:#e3f1fd; --ring:#0b37e8;
+  --sidebar:#ffffff; --sidebar-foreground:#0b1b33;
+  --note-ink:#0b1b33; --note-soft:rgba(11,27,51,.62); --note-line:rgba(11,27,51,.12);
+  --shadow:0 1px 2px rgba(11,55,232,.10), 0 10px 20px -12px rgba(11,55,232,.40);
+  --shadow-lift:0 3px 8px rgba(11,55,232,.14), 0 24px 34px -16px rgba(11,55,232,.55);
+  --cork:rgba(11,55,232,.05);
   --n-yellow:#fff4d2; --n-yellow-b:#ffc95e;  --n-red:#ffe2e0;  --n-red-b:#ff6a6a;
   --n-orange:#ffe9d3; --n-orange-b:#ffab5c;  --n-pink:#fde0ef; --n-pink-b:#f857b6;
   --n-green:#d8f7e6;  --n-green-b:#34d99a;   --n-teal:#d1f6f6; --n-teal-b:#22d9f5;
@@ -62,54 +85,71 @@
   --n-lime:#e8f8cc;   --n-lime-b:#9ad63a;    --n-amber:#fff0cf; --n-amber-b:#f5a524;
 }
 
-.dark {
-  /* Surfaces */
-  --background: #0d2b1a;        /* deep dark green                    */
-  --foreground: #ffffff;        /* white text                         */
-  --card: #0f3420;             /* slightly raised surface            */
-  --muted: #123b24;            /* subtle dark panel background        */
-  --muted-foreground: #b3c9bc;  /* brighter sage — better icon/text contrast */
-  --border: #234f37;           /* a touch lighter, more visible hairline    */
-  --sidebar: #0a2114;
-  --sidebar-foreground: #ffffff;
-
-  /* Brand — deep green stays; the accent green is lighter for visibility */
-  --primary: #1a5c38;
-  --primary-foreground: #ffffff;
-  --accent: #1b4a30;            /* lighter hover/active tint           */
-  --ring: #3ea873;              /* lighter, more visible accent green  */
-
-  /* Sticky notes — "Graphite": the same twelve hues, dimmed to near-charcoal
-   * so a note reads as a tinted surface rather than a light source. */
-  --n-yellow:#2e2a12; --n-yellow-b:#6d6222;  --n-red:#2f1a1a;  --n-red-b:#6e3a38;
-  --n-orange:#2e2312; --n-orange-b:#6d5124;  --n-pink:#2d1824; --n-pink-b:#6c3552;
-  --n-green:#142a1e;  --n-green-b:#2a5f41;   --n-teal:#112a29; --n-teal-b:#22605c;
-  --n-sky:#13222f;    --n-sky-b:#2a5479;     --n-violet:#221a35; --n-violet-b:#4e3c86;
-  --n-indigo:#1a1d33; --n-indigo-b:#3a4285;  --n-slate:#1e1f26; --n-slate-b:#464a5a;
-  --n-lime:#1f2a14;   --n-lime-b:#46632a;    --n-amber:#2d2513; --n-amber-b:#6a5824;
+/* Bloom — magenta / pink / white, sky-blue accents. */
+.bloom {
+  --background:#fbdfe9; --card:#ffffff; --muted:#f8d2e0; --border:#f3bdd2;
+  --foreground:#2b0f1e; --muted-foreground:#8a5c70;
+  --primary:#f41bae; --primary-foreground:#ffffff; --accent:#fdeaf3; --ring:#f41bae;
+  --sidebar:#ffffff; --sidebar-foreground:#2b0f1e;
+  --note-ink:#2b0f1e; --note-soft:rgba(43,15,30,.62); --note-line:rgba(43,15,30,.12);
+  --shadow:0 1px 2px rgba(244,27,174,.10), 0 10px 20px -12px rgba(244,27,174,.38);
+  --shadow-lift:0 3px 8px rgba(244,27,174,.14), 0 24px 34px -16px rgba(244,27,174,.52);
+  --cork:rgba(244,27,174,.05);
+  --n-yellow:#fff2d6; --n-yellow-b:#ffcb63;  --n-red:#ffdedd;  --n-red-b:#ff5f6e;
+  --n-orange:#ffe7d6; --n-orange-b:#ff9457;  --n-pink:#fdd9ec; --n-pink-b:#f41bae;
+  --n-green:#daf6e4;  --n-green-b:#3fd39b;   --n-teal:#d6f4f7; --n-teal-b:#45c8e0;
+  --n-sky:#dbecfb;    --n-sky-b:#57b3e0;     --n-violet:#ece1fb; --n-violet-b:#a45cf0;
+  --n-indigo:#e0e4fc; --n-indigo-b:#4a5be8;  --n-slate:#efe6ea; --n-slate-b:#a8929c;
+  --n-lime:#eef9cf;   --n-lime-b:#a6d840;    --n-amber:#fff0d4; --n-amber-b:#f2a72f;
 }
 
-/* Midnight — near-black surfaces with the same brand green, tuned for high
- * contrast (the standard Dark theme is green-on-green and can read flat). */
-.midnight {
-  /* Surfaces */
-  --background: #050706;        /* near-black                          */
-  --foreground: #ffffff;        /* pure white text                     */
-  --card: #0b100d;             /* raised near-black surface            */
-  --muted: #101915;            /* subtle panel background              */
-  --muted-foreground: #a8c9b8;  /* brighter sage — better icon/text contrast */
-  --border: #26332c;           /* a touch lighter, more visible hairline    */
-  --sidebar: #040605;
-  --sidebar-foreground: #ffffff;
+/* Dusk — violet / blue / mint on lavender. */
+.dusk {
+  --background:#e3d9fb; --card:#ffffff; --muted:#d9c9f9; --border:#c8b4f2;
+  --foreground:#1c1038; --muted-foreground:#6b5b93;
+  --primary:#7b2bf0; --primary-foreground:#ffffff; --accent:#efe8fe; --ring:#7b2bf0;
+  --sidebar:#ffffff; --sidebar-foreground:#1c1038;
+  --note-ink:#1c1038; --note-soft:rgba(28,16,56,.62); --note-line:rgba(28,16,56,.12);
+  --shadow:0 1px 2px rgba(123,43,240,.10), 0 10px 20px -12px rgba(123,43,240,.40);
+  --shadow-lift:0 3px 8px rgba(123,43,240,.14), 0 24px 34px -16px rgba(123,43,240,.55);
+  --cork:rgba(123,43,240,.05);
+  --n-yellow:#fef2cf; --n-yellow-b:#f7c94b;  --n-red:#ffe0e2;  --n-red-b:#f5616f;
+  --n-orange:#ffe8d5; --n-orange-b:#f99a4e;  --n-pink:#fbdfef; --n-pink-b:#ea4fb0;
+  --n-green:#d8f6e2;  --n-green-b:#35cf8c;   --n-teal:#d2f4ec; --n-teal-b:#33c9b0;
+  --n-sky:#dceafd;    --n-sky-b:#2b3fe8;     --n-violet:#e7dcfe; --n-violet-b:#7b2bf0;
+  --n-indigo:#ddddfd; --n-indigo-b:#4436e0;  --n-slate:#e9e5f0; --n-slate-b:#9c92b3;
+  --n-lime:#ecf8cd;   --n-lime-b:#92d13c;    --n-amber:#fdf0d2; --n-amber-b:#efa62c;
+}
 
-  /* Brand — deep green stays; the accent green is lighter for visibility */
-  --primary: #1a5c38;
-  --primary-foreground: #ffffff;
-  --accent: #1b4a30;            /* lighter hover/active tint           */
-  --ring: #3ea873;              /* lighter, more visible accent green  */
+/* Zest — yellow / green / teal on chartreuse. */
+.zest {
+  --background:#eef2c4; --card:#ffffff; --muted:#e6eba3; --border:#d6dd8b;
+  --foreground:#1b2208; --muted-foreground:#6c7546;
+  --primary:#3cc61e; --primary-foreground:#06200a; --accent:#f3f7d9; --ring:#3cc61e;
+  --sidebar:#ffffff; --sidebar-foreground:#1b2208;
+  --note-ink:#1b2208; --note-soft:rgba(27,34,8,.62); --note-line:rgba(27,34,8,.12);
+  --shadow:0 1px 2px rgba(60,120,20,.12), 0 10px 20px -12px rgba(60,120,20,.42);
+  --shadow-lift:0 3px 8px rgba(60,120,20,.16), 0 24px 34px -16px rgba(60,120,20,.55);
+  --cork:rgba(60,198,30,.06);
+  --n-yellow:#fdf6c2; --n-yellow-b:#f0e611;  --n-red:#ffe1de;  --n-red-b:#f4635a;
+  --n-orange:#ffeacd; --n-orange-b:#f59a34;  --n-pink:#fde0ec; --n-pink-b:#ea5f9e;
+  --n-green:#dcf6cd;  --n-green-b:#3cc61e;   --n-teal:#d2f5ef; --n-teal-b:#2fd4c4;
+  --n-sky:#dbeefb;    --n-sky-b:#38a8e8;     --n-violet:#e9e2fb; --n-violet-b:#8b62e0;
+  --n-indigo:#e0e5fb; --n-indigo-b:#4a5cd8;  --n-slate:#eaece0; --n-slate-b:#99a184;
+  --n-lime:#edf9c0;   --n-lime-b:#8fd423;    --n-amber:#fdf3c8; --n-amber-b:#e8b41c;
+}
 
-  /* Sticky notes — "Graphite": the same twelve hues, dimmed to near-charcoal
-   * so a note reads as a tinted surface rather than a light source. */
+/* Graphite — charcoal, light only at the edges. The one dark theme, so the
+ * `dark:` variant above keys off this class. */
+.graphite {
+  --background:#08080a; --card:#16171c; --muted:#101116; --border:#2a2c36;
+  --foreground:#eceef5; --muted-foreground:#8b90a3;
+  --primary:#b9bfd4; --primary-foreground:#0b0c10; --accent:#1c1e26; --ring:#b9bfd4;
+  --sidebar:#0c0d11; --sidebar-foreground:#eceef5;
+  --note-ink:#eceef5; --note-soft:rgba(236,238,245,.60); --note-line:rgba(236,238,245,.14);
+  --shadow:0 1px 2px rgba(0,0,0,.7), 0 10px 22px -12px rgba(0,0,0,.95);
+  --shadow-lift:0 3px 8px rgba(0,0,0,.75), 0 26px 40px -18px #000;
+  --cork:rgba(255,255,255,.028);
   --n-yellow:#2e2a12; --n-yellow-b:#6d6222;  --n-red:#2f1a1a;  --n-red-b:#6e3a38;
   --n-orange:#2e2312; --n-orange-b:#6d5124;  --n-pink:#2d1824; --n-pink-b:#6c3552;
   --n-green:#142a1e;  --n-green-b:#2a5f41;   --n-teal:#112a29; --n-teal-b:#22605c;
@@ -152,19 +192,177 @@ body {
 /* Sticky notes. One class per hue, emitted by noteColor() in lib/tasks.ts —
  * so every surface that shows a note (board, list, dashboard dot) picks up the
  * palette from here and nowhere else. Pale top, vivid foot: text lives in the
- * top band, which stays past 4.5:1 in both themes. */
-.note-yellow { background: linear-gradient(180deg, var(--n-yellow) 0%, var(--n-yellow) 55%, var(--n-yellow-b) 100%); border-color: var(--n-yellow-b); }
-.note-red    { background: linear-gradient(180deg, var(--n-red)    0%, var(--n-red)    55%, var(--n-red-b)    100%); border-color: var(--n-red-b); }
-.note-orange { background: linear-gradient(180deg, var(--n-orange) 0%, var(--n-orange) 55%, var(--n-orange-b) 100%); border-color: var(--n-orange-b); }
-.note-pink   { background: linear-gradient(180deg, var(--n-pink)   0%, var(--n-pink)   55%, var(--n-pink-b)   100%); border-color: var(--n-pink-b); }
-.note-green  { background: linear-gradient(180deg, var(--n-green)  0%, var(--n-green)  55%, var(--n-green-b)  100%); border-color: var(--n-green-b); }
-.note-teal   { background: linear-gradient(180deg, var(--n-teal)   0%, var(--n-teal)   55%, var(--n-teal-b)   100%); border-color: var(--n-teal-b); }
-.note-sky    { background: linear-gradient(180deg, var(--n-sky)    0%, var(--n-sky)    55%, var(--n-sky-b)    100%); border-color: var(--n-sky-b); }
-.note-violet { background: linear-gradient(180deg, var(--n-violet) 0%, var(--n-violet) 55%, var(--n-violet-b) 100%); border-color: var(--n-violet-b); }
-.note-indigo { background: linear-gradient(180deg, var(--n-indigo) 0%, var(--n-indigo) 55%, var(--n-indigo-b) 100%); border-color: var(--n-indigo-b); }
-.note-slate  { background: linear-gradient(180deg, var(--n-slate)  0%, var(--n-slate)  55%, var(--n-slate-b)  100%); border-color: var(--n-slate-b); }
-.note-lime   { background: linear-gradient(180deg, var(--n-lime)   0%, var(--n-lime)   55%, var(--n-lime-b)   100%); border-color: var(--n-lime-b); }
-.note-amber  { background: linear-gradient(180deg, var(--n-amber)  0%, var(--n-amber)  55%, var(--n-amber-b)  100%); border-color: var(--n-amber-b); }
+ * top band, which stays past 4.5:1 in every theme. */
+.note-yellow { background: linear-gradient(180deg, var(--n-yellow) 0%, var(--n-yellow) 42%, var(--n-yellow-b) 100%); border-color: var(--n-yellow-b); }
+.note-red    { background: linear-gradient(180deg, var(--n-red)    0%, var(--n-red)    42%, var(--n-red-b)    100%); border-color: var(--n-red-b); }
+.note-orange { background: linear-gradient(180deg, var(--n-orange) 0%, var(--n-orange) 42%, var(--n-orange-b) 100%); border-color: var(--n-orange-b); }
+.note-pink   { background: linear-gradient(180deg, var(--n-pink)   0%, var(--n-pink)   42%, var(--n-pink-b)   100%); border-color: var(--n-pink-b); }
+.note-green  { background: linear-gradient(180deg, var(--n-green)  0%, var(--n-green)  42%, var(--n-green-b)  100%); border-color: var(--n-green-b); }
+.note-teal   { background: linear-gradient(180deg, var(--n-teal)   0%, var(--n-teal)   42%, var(--n-teal-b)   100%); border-color: var(--n-teal-b); }
+.note-sky    { background: linear-gradient(180deg, var(--n-sky)    0%, var(--n-sky)    42%, var(--n-sky-b)    100%); border-color: var(--n-sky-b); }
+.note-violet { background: linear-gradient(180deg, var(--n-violet) 0%, var(--n-violet) 42%, var(--n-violet-b) 100%); border-color: var(--n-violet-b); }
+.note-indigo { background: linear-gradient(180deg, var(--n-indigo) 0%, var(--n-indigo) 42%, var(--n-indigo-b) 100%); border-color: var(--n-indigo-b); }
+.note-slate  { background: linear-gradient(180deg, var(--n-slate)  0%, var(--n-slate)  42%, var(--n-slate-b)  100%); border-color: var(--n-slate-b); }
+.note-lime   { background: linear-gradient(180deg, var(--n-lime)   0%, var(--n-lime)   42%, var(--n-lime-b)   100%); border-color: var(--n-lime-b); }
+.note-amber  { background: linear-gradient(180deg, var(--n-amber)  0%, var(--n-amber)  42%, var(--n-amber-b)  100%); border-color: var(--n-amber-b); }
+
+/* ---------------------------------------------------------------------------
+ * Note anatomy — the physical tells
+ * ---------------------------------------------------------------------------
+ * A note is a piece of paper on a board, so it says so without words: it sits
+ * at a slight tilt, straightens and lifts when you reach for it, and casts a
+ * real shadow. The department is a folded corner, not a footer row. A pin means
+ * in-hand; a red dog-ear means overdue.
+ * ------------------------------------------------------------------------- */
+.note {
+  position: relative;
+  border-radius: 18px;
+  color: var(--note-ink);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.25, 1),
+    box-shadow 0.18s,
+    filter 0.18s,
+    opacity 0.18s;
+}
+
+/* !important because the per-note tilt is an inline style — the hover has to
+ * win over it to straighten the note. */
+.note:hover {
+  transform: rotate(0deg) translateY(-3px) !important;
+  box-shadow: var(--shadow-lift), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  z-index: 6;
+}
+
+.note.is-dragging {
+  opacity: 0.35;
+  transform: rotate(4deg) scale(1.04) !important;
+  box-shadow: var(--shadow-lift);
+}
+
+/* Dropping settles the note with a bounce, so a move reads as a landing. */
+.note-settle { animation: note-settle 0.42s cubic-bezier(0.2, 1.5, 0.35, 1); }
+@keyframes note-settle {
+  0%   { transform: scale(1.07) rotate(3deg); }
+  100% { transform: none; }
+}
+
+/* Department: a folded corner. The name appears on hover, so the note keeps the
+ * colour-coding without spending a line on it. */
+.note-tag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+}
+.note-tag::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(225deg, rgba(0, 0, 0, 0.2), transparent 62%);
+  clip-path: inherit;
+}
+.note-tagname {
+  position: absolute;
+  top: 5px;
+  right: 27px;
+  font: 700 9px/1 inherit;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--note-soft);
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.note:hover .note-tagname { opacity: 1; }
+
+/* Pinned = in progress, literally in hand. */
+.note-pin {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 34% 30%, #fb7185, #be123c 70%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45), inset 0 -1px 1px rgba(0, 0, 0, 0.3);
+}
+
+/* Overdue = a torn red corner. Visible at a glance across the whole board. */
+.note-dogear {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 26px;
+  height: 26px;
+  background: linear-gradient(225deg, #ef4444 48%, transparent 48%);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* The ◀ ▶ move controls only appear on the note you're pointing at. */
+.note-nudge { opacity: 0; transition: opacity 0.15s; }
+.note:hover .note-nudge,
+.note:focus-within .note-nudge { opacity: 1; }
+
+/* The column is a corkboard well: a surface the notes sit *in*, sunk below the
+ * page rather than floating on it, with a faint dot texture. */
+.col-well {
+  background-image: radial-gradient(var(--cork) 1px, transparent 1px);
+  background-size: 9px 9px;
+}
+
+/* The add affordance is itself a note: a blank one, pinned crooked, waiting to
+ * be written on. Focusing it straightens it and fills it in — the paper
+ * becoming real as you commit to it. */
+.addnote {
+  border: 1.5px dashed var(--border);
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+  transform: rotate(-1.4deg);
+  transition: 0.18s;
+}
+.addnote:focus-within {
+  transform: rotate(0);
+  background: var(--card);
+  border-color: var(--ring);
+  border-style: solid;
+}
+
+/* Done stops being a list and becomes a pile. Older notes overlap all but a
+ * title strip, so sixteen of them cost ~180px instead of a scrollbar. Hover
+ * spreads them slightly; the toggle fans them apart. Deliberately not flex —
+ * the overlap *is* the negative margin, and a gap would cancel it. */
+.pile .note {
+  margin-top: -74px;
+  filter: saturate(0.6);
+  opacity: 0.9;
+  transition: margin-top 0.36s cubic-bezier(0.2, 0.8, 0.25, 1), transform 0.18s,
+    box-shadow 0.18s, filter 0.18s, opacity 0.18s;
+}
+.pile .note:first-child { margin-top: 0; }
+.pile .note:hover { filter: none; opacity: 1; }
+.pile:not(.open):hover .note { margin-top: -70px; }
+.pile:not(.open):hover .note:first-child { margin-top: 0; }
+.pile.open .note { margin-top: 11px; }
+.pile.open .note:first-child { margin-top: 0; }
+/* Collapsed, every note but the last is just its title. */
+.pile:not(.open) .note:not(:last-child) .note-desc,
+.pile:not(.open) .note:not(:last-child) .note-meta,
+.pile:not(.open) .note .note-nudge { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .note,
+  .note:hover,
+  .note.is-dragging { transition: none; transform: none !important; }
+  .note-settle { animation: none; }
+  .addnote { transform: none; transition: none; }
+  .pile .note { transition: none; }
+}
 
 /* Notification banners drop in from the top edge. The overshoot in the easing
  * curve is what gives it the settle of an iOS banner rather than a linear

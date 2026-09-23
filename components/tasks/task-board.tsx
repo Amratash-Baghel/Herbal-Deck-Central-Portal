@@ -106,6 +106,7 @@ export function TaskBoard({
   /** The full create dialog, opened from the + button beside the quick-add box. */
   const [creating, setCreating] = useState(false);
   const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
+  const [pileOpen, setPileOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -276,6 +277,47 @@ export function TaskBoard({
     null;
   const openIsHistory = openTask !== null && !tasks.includes(openTask);
 
+  /** One board note. Shared by the live columns and the collapsed Done pile. */
+  function renderCard(task: Task) {
+    const dept = deptOf(task.department_id);
+    // The assignee, a manager, or someone who can assign others (team lead over
+    // their dept) may move a task.
+    const canMove =
+      canManage ||
+      canAssignOthers ||
+      task.assigned_to === me.id ||
+      task.assigned_to === null;
+    // Reassign: managers + team leads (or an unassigned task) — but never once
+    // the task is Done (its assignee is locked).
+    const canReassign =
+      (canAssignOthers || task.assigned_to === null) && task.status !== "done";
+    return (
+      <TaskCard
+        key={task.id}
+        task={task}
+        assigneeName={nameOf(task.assigned_to)}
+        deptName={dept?.name ?? "—"}
+        deptSlug={dept?.slug ?? null}
+        editable
+        assignable={assignable}
+        assigneeNoteColor={noteColorOf(task.assigned_to)}
+        selectable={selectMode}
+        selected={selected.has(task.id)}
+        faded={isAgedDone(task, todayISO)}
+        onToggleSelect={() => toggleSelect(task.id)}
+        onOpen={() => setOpenId(task.id)}
+        onMove={
+          !selectMode && canMove ? (s) => void handleMove(task.id, s) : undefined
+        }
+        onAssign={
+          !selectMode && canReassign
+            ? (id) => void handleAssign(task.id, id)
+            : undefined
+        }
+      />
+    );
+  }
+
   return (
     <>
       {noDept && (
@@ -344,6 +386,15 @@ export function TaskBoard({
           const items = tasks
             .filter((t) => t.status === col.value)
             .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+          // Done splits in two: today's wins stay full size, everything older
+          // collapses into the pile below them.
+          const piled =
+            col.value === "done"
+              ? items.filter((t) => isAgedDone(t, todayISO))
+              : [];
+          const fresh = piled.length
+            ? items.filter((t) => !isAgedDone(t, todayISO))
+            : items;
           return (
             <div
               key={col.value}
@@ -358,7 +409,7 @@ export function TaskBoard({
                 const id = e.dataTransfer.getData("text/plain");
                 if (id) void handleMove(id, col.value);
               }}
-              className={`flex flex-col rounded-2xl border bg-muted/30 p-3 transition ${
+              className={`col-well flex flex-col rounded-3xl border bg-muted p-3 transition ${
                 dragOver === col.value ? "ring-2 ring-primary" : ""
               }`}
             >
@@ -371,15 +422,18 @@ export function TaskBoard({
                 </span>
               </div>
 
+              {/* The add affordance is a blank note, pinned crooked. Typing in
+                  it straightens it; Enter pins it up. The + corner opens the
+                  full form for when a title alone won't do. */}
               {col.value === "todo" && (
-                <div className="mb-3 flex items-center gap-2 rounded-xl border bg-background px-2 py-1.5">
+                <div className="addnote relative mb-3 rounded-xl px-3 py-2.5">
                   <button
                     type="button"
                     onClick={() => setCreating(true)}
                     disabled={noDept}
                     aria-label="New task with full details"
                     title="New task — set assignee, deadline, colour and description up front"
-                    className="shrink-0 rounded-lg p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                    className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-lg border bg-card text-muted-foreground transition hover:border-primary hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none disabled:opacity-50"
                   >
                     <PlusIcon className="h-4 w-4" />
                   </button>
@@ -393,62 +447,61 @@ export function TaskBoard({
                       }
                     }}
                     disabled={noDept}
-                    placeholder="Add a task…"
-                    className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
+                    placeholder="Write a note…"
+                    className="w-full bg-transparent pr-7 text-sm font-semibold outline-none placeholder:font-medium placeholder:text-muted-foreground disabled:opacity-50"
                   />
+                  <p className="mt-1 text-[10.5px] text-muted-foreground">
+                    Enter to pin it up
+                  </p>
                 </div>
               )}
 
-              <div className="flex flex-1 flex-col gap-3">
-                {items.map((task) => {
-                  const dept = deptOf(task.department_id);
-                  // The assignee, a manager, or someone who can assign others
-                  // (team lead over their dept) may move a task.
-                  const canMove =
-                    canManage ||
-                    canAssignOthers ||
-                    task.assigned_to === me.id ||
-                    task.assigned_to === null;
-                  // Reassign: managers + team leads (or an unassigned task) — but
-                  // never once the task is Done (its assignee is locked).
-                  const canReassign =
-                    (canAssignOthers || task.assigned_to === null) &&
-                    task.status !== "done";
-                  return (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      creatorName={nameOf(task.created_by) ?? "Someone"}
-                      assigneeName={nameOf(task.assigned_to)}
-                      deptName={dept?.name ?? "—"}
-                      deptSlug={dept?.slug ?? null}
-                      editable
-                      assignable={assignable}
-                      assigneeNoteColor={noteColorOf(task.assigned_to)}
-                      selectable={selectMode}
-                      selected={selected.has(task.id)}
-                      faded={isAgedDone(task, todayISO)}
-                      onToggleSelect={() => toggleSelect(task.id)}
-                      onOpen={() => setOpenId(task.id)}
-                      onMove={
-                        !selectMode && canMove
-                          ? (s) => void handleMove(task.id, s)
-                          : undefined
-                      }
-                      onAssign={
-                        !selectMode && canReassign
-                          ? (id) => void handleAssign(task.id, id)
-                          : undefined
-                      }
-                    />
-                  );
-                })}
+              <div
+                className={`flex flex-col gap-3 ${piled.length ? "" : "flex-1"}`}
+              >
+                {fresh.map(renderCard)}
                 {items.length === 0 && col.value !== "todo" && (
                   <p className="px-1 py-6 text-center text-xs text-muted-foreground">
                     Nothing here yet.
                   </p>
                 )}
               </div>
+
+              {/* Older Done work is a pile, not a list: notes overlap to a
+                  title strip each, so sixteen finished tasks cost an inch of
+                  column instead of a scrollbar. Collapsed, a click anywhere on
+                  it fans it open rather than opening the note it landed on —
+                  hence capture, before the note's own handler sees it. */}
+              {piled.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setPileOpen(!pileOpen)}
+                    aria-expanded={pileOpen}
+                    aria-controls="done-pile"
+                    className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-2.5 text-xs font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                  >
+                    <ChevronDownIcon
+                      className={`h-3.5 w-3.5 transition-transform ${
+                        pileOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                    {piled.length} earlier
+                  </button>
+                  <div
+                    id="done-pile"
+                    className={`pile mt-3 ${pileOpen ? "open" : ""}`}
+                    onClickCapture={(e) => {
+                      if (pileOpen) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setPileOpen(true);
+                    }}
+                  >
+                    {piled.map(renderCard)}
+                  </div>
+                </>
+              )}
             </div>
           );
         })}
@@ -514,7 +567,6 @@ export function TaskBoard({
                   <div key={task.id} className="flex flex-col gap-1">
                     <TaskCard
                       task={task}
-                      creatorName={nameOf(task.created_by) ?? "Someone"}
                       assigneeName={nameOf(task.assigned_to)}
                       deptName={dept?.name ?? "—"}
                       deptSlug={dept?.slug ?? null}

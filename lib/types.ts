@@ -223,12 +223,12 @@ export interface Task {
 }
 
 /**
- * Columns the task board/list/reporting UI actually reads. Excludes
- * `updated_at`, which nothing in the app displays — every task query selects
- * this instead of `select("*")`.
+ * Columns the task board/list/reporting UI actually reads — every task query
+ * selects this instead of `select("*")`. `updated_at` is here for the Team
+ * view's "stalled" lens (nothing has touched the task in a week).
  */
 export const TASK_LIST_COLUMNS =
-  "id, title, description, status, created_by, assigned_to, department_id, deadline, archived, color, started_at, completed_at, created_at";
+  "id, title, description, status, created_by, assigned_to, department_id, deadline, archived, color, started_at, completed_at, created_at, updated_at";
 
 /**
  * An append-only activity row from `public.task_activity` — the task history

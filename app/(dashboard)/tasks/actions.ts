@@ -223,10 +223,11 @@ export async function createTask(input: CreateTaskInput): Promise<TaskResult> {
 }
 
 /**
- * Move a task to a new column (status). Only the assignee may push a task
- * forward — the creator can put one in someone's To Do but not move it on for
- * them. Admins + HR & Management may move anything; an unassigned task may be
- * moved by whoever has edit access (typically the creator).
+ * Move a task to a new column (status). The assignee, a manager, or the
+ * department's team lead may move it — the creator can put one in someone's
+ * To Do but not move it on for them. An unassigned task may be moved by
+ * whoever has edit access (typically the creator). Mirrors the rule the
+ * `tasks_enforce_rules` trigger enforces in the database (migration 0015).
  */
 export async function moveTask(
   taskId: string,
@@ -238,7 +239,7 @@ export async function moveTask(
   const supabase = await createClient();
   const { data: current } = await supabase
     .from("tasks")
-    .select("assigned_to")
+    .select("assigned_to, department_id")
     .eq("id", taskId)
     .single();
   if (!current) return { ok: false, error: "Task not found." };
@@ -246,7 +247,8 @@ export async function moveTask(
   const canMove =
     access.canManageUsers ||
     current.assigned_to === null ||
-    current.assigned_to === access.profile.id;
+    current.assigned_to === access.profile.id ||
+    (access.isTeamLead && access.departmentIds.includes(current.department_id));
   if (!canMove) {
     return { ok: false, error: "Only the assignee can move this task." };
   }
