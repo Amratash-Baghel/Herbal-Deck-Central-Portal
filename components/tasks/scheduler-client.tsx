@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PlusIcon, TrashIcon, CloseIcon, ClockIcon } from "@/components/icons";
+import { PlusIcon, TrashIcon, CloseIcon } from "@/components/icons";
+import { noteColor, noteSwatch } from "@/lib/tasks";
+import { formatDayShort } from "@/lib/time";
 import {
   createSchedule,
   toggleSchedule,
@@ -60,6 +62,29 @@ function recurrenceSummary(s: TaskSchedule): string {
 }
 
 /**
+ * The next day this schedule will put a task on someone's board, or null when
+ * it has nothing left to fire. Mirrors the firing rules in migration 0024
+ * (`daily`/`range` = Mon–Sat, `weekly` = the chosen weekdays, `once` = its one
+ * date) so the answer needs no round trip. A pure function of `todayISO`, never
+ * the clock, so the server and the client agree.
+ */
+function nextFireISO(s: TaskSchedule, todayISO: string): string | null {
+  if (s.recurrence === "once") return s.start_date >= todayISO ? s.start_date : null;
+  const from = s.start_date > todayISO ? s.start_date : todayISO;
+  const t = Date.parse(`${from}T00:00:00Z`);
+  if (Number.isNaN(t)) return null;
+  // A year is enough: every recurrence above repeats at least weekly.
+  for (let i = 0; i < 366; i++) {
+    const d = new Date(t + i * 86_400_000);
+    const iso = d.toISOString().slice(0, 10);
+    if (s.end_date && iso > s.end_date) return null;
+    const dow = d.getUTCDay();
+    if (s.recurrence === "weekly" ? s.weekdays.includes(dow) : dow !== 0) return iso;
+  }
+  return null;
+}
+
+/**
  * Create and manage task schedules. Employees schedule for themselves; team
  * leads for their department(s); admins + HR for anyone/everyone. The available
  * target options reflect the caller's role (and the database re-checks).
@@ -72,6 +97,7 @@ export function SchedulerClient({
   allowedTargets,
   nameOf,
   deptNameOf,
+  noteColorOf,
   todayISO,
 }: {
   me: string;
@@ -81,11 +107,24 @@ export function SchedulerClient({
   allowedTargets: ScheduleTarget[];
   nameOf: Record<string, string>;
   deptNameOf: Record<string, string>;
+  /** Each person's note colour, so a schedule wears its owner's stripe. */
+  noteColorOf: Record<string, string | null>;
   todayISO: string;
 }) {
   const router = useRouter();
   const [list, setList] = useState(schedules);
   const [showForm, setShowForm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  // Only "everyone" targets are offered to people who can manage users, so this
+  // doubles as the manage check — the same one the row-level policy applies.
+  const canManage = allowedTargets.includes("everyone");
+  const canEdit = (s: TaskSchedule) => canManage || s.created_by === me;
+
+  const active = list.filter((s) => s.active);
+  const paused = list.filter((s) => !s.active);
+  const firingToday = active.filter((s) => nextFireISO(s, todayISO) === todayISO).length;
 
   function targetSummary(s: TaskSchedule): string {
     if (s.target_type === "everyone") return "Everyone";
@@ -95,20 +134,134 @@ export function SchedulerClient({
   }
 
   async function onToggle(id: string, active: boolean) {
+    const before = list;
+    setError(null);
     setList((prev) => prev.map((s) => (s.id === id ? { ...s, active } : s)));
-    await toggleSchedule(id, active);
+    const res = await toggleSchedule(id, active);
+    if (!res.ok) {
+      setList(before);
+      setError(res.error ?? `Could not ${active ? "resume" : "pause"} this schedule.`);
+    }
   }
 
   async function onDelete(id: string) {
+    const before = list;
+    setError(null);
+    setConfirmId(null);
     setList((prev) => prev.filter((s) => s.id !== id));
-    await deleteSchedule(id);
+    const res = await deleteSchedule(id);
+    if (!res.ok) {
+      setList(before);
+      setError(res.error ?? "Could not delete this schedule.");
+    }
+  }
+
+  function Row({ s }: { s: TaskSchedule }) {
+    const fires = s.active ? nextFireISO(s, todayISO) : null;
+    return (
+      <li
+        // The owner's colour as a stripe, the same shorthand the board and the
+        // team list use — whose schedule this is reads before the words do.
+        style={{
+          borderLeftColor: noteSwatch(
+            noteColor(null, noteColorOf[s.target_person ?? ""], null),
+          ),
+        }}
+        className={`group flex flex-wrap items-center justify-between gap-3 rounded-xl border border-l-4 bg-card px-4 py-3 ${
+          s.active ? "" : "opacity-70"
+        }`}
+      >
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium">{s.title}</p>
+            {s.recurrence === "weekly" ? (
+              <span
+                title={recurrenceSummary(s)}
+                className="flex shrink-0 gap-0.5"
+                aria-label={recurrenceSummary(s)}
+              >
+                {DAY_LETTERS.map((letter, i) => (
+                  <span
+                    key={i}
+                    aria-hidden="true"
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
+                      s.weekdays.includes(i)
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-foreground/10 text-muted-foreground"
+                    }`}
+                  >
+                    {letter}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {recurrenceSummary(s)}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {s.active
+              ? fires === todayISO
+                ? "Fires today"
+                : fires
+                  ? `Fires next · ${formatDayShort(fires, todayISO)}`
+                  : "Finished"
+              : "Paused"}{" "}
+            · for <span className="font-medium">{targetSummary(s)}</span>
+          </p>
+        </div>
+        {/* Reserved whether or not it's filled, so nothing shifts on hover. */}
+        <div className="flex h-8 items-center gap-2">
+          {canEdit(s) &&
+            (confirmId === s.id ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void onDelete(s.id)}
+                  className="rounded-lg border border-red-500 px-2.5 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmId(null)}
+                  className="rounded-lg border px-2.5 py-1.5 text-xs font-medium transition hover:bg-accent"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <span className="flex items-center gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={() => void onToggle(s.id, !s.active)}
+                  className="rounded-lg border px-2.5 py-1.5 text-xs font-medium transition hover:bg-accent"
+                >
+                  {s.active ? "Pause" : "Resume"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmId(s.id)}
+                  aria-label="Delete schedule"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-red-600"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
+              </span>
+            ))}
+        </div>
+      </li>
+    );
   }
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {list.length} schedule{list.length === 1 ? "" : "s"}
+          {active.length} active
+          {paused.length > 0 && ` · ${paused.length} paused`}
+          {firingToday > 0 && ` · ${firingToday} fire today`}
         </p>
         <button
           type="button"
@@ -120,51 +273,46 @@ export function SchedulerClient({
         </button>
       </div>
 
+      {error && (
+        <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+
       <ul className="space-y-2">
         {list.length === 0 && (
-          <li className="rounded-xl border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-            No schedules yet. Create one to have tasks appear automatically.
+          <li className="flex flex-col items-center gap-3 rounded-xl border bg-card px-4 py-10 text-center">
+            <p className="text-sm text-muted-foreground">
+              No schedules yet. Create one to have tasks appear automatically.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground shadow-sm transition hover:opacity-90"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Create a schedule
+            </button>
           </li>
         )}
-        {list.map((s) => (
-          <li
-            key={s.id}
-            className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card px-4 py-3"
-          >
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <ClockIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <p className="truncate text-sm font-medium">{s.title}</p>
-                {!s.active && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    Paused
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {recurrenceSummary(s)} · for <span className="font-medium">{targetSummary(s)}</span>
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void onToggle(s.id, !s.active)}
-                className="rounded-lg border px-2.5 py-1.5 text-xs font-medium transition hover:bg-accent"
-              >
-                {s.active ? "Pause" : "Resume"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void onDelete(s.id)}
-                aria-label="Delete schedule"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-red-600"
-              >
-                <TrashIcon className="h-4 w-4" />
-              </button>
-            </div>
-          </li>
+        {active.map((s) => (
+          <Row key={s.id} s={s} />
         ))}
       </ul>
+
+      {/* Paused schedules still matter, but not enough to sit in the way. */}
+      {paused.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer list-none rounded-lg px-1 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+            {paused.length} paused
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {paused.map((s) => (
+              <Row key={s.id} s={s} />
+            ))}
+          </ul>
+        </details>
+      )}
 
       {showForm && (
         <ScheduleForm

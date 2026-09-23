@@ -7,7 +7,12 @@ import { SchedulerClient } from "@/components/tasks/scheduler-client";
 import type { DeptRef, Person } from "@/components/tasks/types";
 import type { ScheduleTarget, TaskSchedule } from "@/lib/types";
 
-type ProfileRow = { id: string; full_name: string | null; email: string };
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+  email: string;
+  note_color: string | null;
+};
 
 /**
  * Task Scheduler — create recurring/scheduled tasks that materialise onto the
@@ -27,7 +32,7 @@ export default async function SchedulerPage() {
       supabase.from("departments").select("id, name, slug").order("name"),
       supabase
         .from("profiles")
-        .select("id, full_name, email")
+        .select("id, full_name, email, note_color")
         .is("deactivated_at", null)
         .order("full_name", { nullsFirst: false }),
       supabase
@@ -46,6 +51,9 @@ export default async function SchedulerPage() {
     name: p.full_name || p.email,
   }));
   const nameOf = Object.fromEntries(allPeople.map((p) => [p.id, p.name]));
+  const noteColorOf = Object.fromEntries(
+    ((profs ?? []) as ProfileRow[]).map((p) => [p.id, p.note_color]),
+  );
   const deptNameOf = Object.fromEntries(allDepartments.map((d) => [d.id, d.name]));
 
   // Whom this user may target with a "person" schedule.
@@ -86,6 +94,7 @@ export default async function SchedulerPage() {
         departments={departments}
         allowedTargets={allowedTargets}
         nameOf={nameOf}
+        noteColorOf={noteColorOf}
         deptNameOf={deptNameOf}
         todayISO={localDateISO()}
       />
