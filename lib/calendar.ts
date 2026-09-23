@@ -6,29 +6,36 @@ import type { CalendarEventType } from "@/lib/types";
  * RLS (migration 0023); this file is only presentation + creation affordances.
  */
 
+/**
+ * Each type keeps the hue it has always had — sky, violet, green, amber — but
+ * draws it from the note palette rather than Tailwind's fixed one, so the
+ * calendar shifts with the theme like every other surface. `dot` is the
+ * saturated foot of the note; `badge` is its pale top band, where note ink
+ * stays legible in all six themes (which is why no `dark:` pair is needed).
+ */
 export const EVENT_TYPE_META: Record<
   CalendarEventType,
   { label: string; dot: string; badge: string }
 > = {
   personal: {
     label: "Personal",
-    dot: "bg-sky-500",
-    badge: "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+    dot: "bg-[var(--n-sky-b)]",
+    badge: "bg-[var(--n-sky)] text-[var(--note-ink)]",
   },
   department: {
     label: "Department",
-    dot: "bg-violet-500",
-    badge: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+    dot: "bg-[var(--n-violet-b)]",
+    badge: "bg-[var(--n-violet)] text-[var(--note-ink)]",
   },
   common: {
     label: "Office-wide",
-    dot: "bg-emerald-500",
-    badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+    dot: "bg-[var(--n-green-b)]",
+    badge: "bg-[var(--n-green)] text-[var(--note-ink)]",
   },
   targeted: {
     label: "Departments",
-    dot: "bg-amber-500",
-    badge: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+    dot: "bg-[var(--n-amber-b)]",
+    badge: "bg-[var(--n-amber)] text-[var(--note-ink)]",
   },
 };
 

@@ -144,7 +144,7 @@ export function CalendarView({
       </div>
 
       {/* Grid */}
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="cal-sheet overflow-hidden rounded-2xl border bg-card">
         <div className="grid grid-cols-7 border-b bg-muted/40 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           {WEEKDAY_LABELS.map((w) => (
             <div key={w} className="py-2">
@@ -153,24 +153,30 @@ export function CalendarView({
           ))}
         </div>
         <div className="grid grid-cols-7">
-          {grid.map((g) => {
+          {grid.map((g, i) => {
             const events = eventsByDate[g.date] ?? [];
             const birthdays = birthdaysByKey[monthDayKey(g.date)] ?? [];
             const attDot = attendanceDot(attendanceByDate[g.date] ?? "");
             const isToday = g.date === todayISO;
+            // Sunday-first grid, so column 0 and 6 are the weekend.
+            const isWeekend = i % 7 === 0 || i % 7 === 6;
             return (
               <button
                 type="button"
                 key={g.date}
                 onClick={() => setSelected(g.date)}
-                className={`flex min-h-[76px] flex-col gap-1 border-b border-r p-1.5 text-left transition hover:bg-accent/50 ${
-                  g.inMonth ? "" : "bg-muted/20 text-muted-foreground"
+                className={`cal-day flex min-h-[84px] flex-col gap-1 border-b border-r p-1.5 text-left ${
+                  g.inMonth ? (isWeekend ? "cal-weekend" : "") : "bg-muted/20 text-muted-foreground"
                 }`}
               >
                 <span className="flex items-center justify-between">
                   <span
-                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
-                      isToday ? "bg-primary text-primary-foreground" : ""
+                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium tabular-nums ${
+                      isToday
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : g.inMonth
+                          ? ""
+                          : "opacity-70"
                     }`}
                   >
                     {g.day}
@@ -181,13 +187,15 @@ export function CalendarView({
                   </span>
                 </span>
                 <span className="flex flex-col gap-0.5">
+                  {/* A tinted chip rather than a dot and a line of text — at this
+                    * size the fill is what carries the type, and the title stays
+                    * on the pale top band where note ink is legible. */}
                   {events.slice(0, 3).map((e) => (
                     <span
                       key={e.id}
-                      className="flex items-center gap-1 truncate text-[10px] leading-tight"
+                      className={`truncate rounded-md px-1.5 py-px text-[10px] leading-tight ${EVENT_TYPE_META[e.event_type].badge}`}
                     >
-                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${EVENT_TYPE_META[e.event_type].dot}`} />
-                      <span className="truncate">{e.title}</span>
+                      {e.title}
                     </span>
                   ))}
                   {events.length > 3 && (
@@ -208,9 +216,9 @@ export function CalendarView({
             aria-hidden="true"
             tabIndex={-1}
             onClick={() => setSelected(null)}
-            className="absolute inset-0 bg-black/40"
+            className="cal-fade absolute inset-0 bg-black/40 backdrop-blur-[2px]"
           />
-          <div className="relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border bg-card shadow-xl">
+          <div className="cal-pop relative z-10 flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border bg-card shadow-xl">
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold tracking-tight">{fmtLongDate(selected)}</h2>
               <button

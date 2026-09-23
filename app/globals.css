@@ -333,6 +333,61 @@ body {
   border-style: solid;
 }
 
+/* ---------------------------------------------------------------------------
+ * Calendar — the month as a sheet on the same desk
+ * ---------------------------------------------------------------------------
+ * The board has notes in a cork well; the month is the paper pinned beside it.
+ * Same shadow tokens, same dot texture, so the two tabs read as one surface.
+ * ------------------------------------------------------------------------- */
+.cal-sheet {
+  background-image: radial-gradient(var(--cork) 1px, transparent 1px);
+  background-size: 9px 9px;
+  box-shadow: var(--shadow);
+}
+
+/* A day is a card you press, not a table cell you click. It warms on hover and
+ * gives under the finger — the one thing the grid never did. */
+.cal-day {
+  transition:
+    background-color 0.16s,
+    box-shadow 0.16s,
+    transform 0.12s cubic-bezier(0.2, 0.8, 0.25, 1);
+}
+.cal-day:hover {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.cal-day:active {
+  transform: scale(0.985);
+  background: color-mix(in srgb, var(--accent) 90%, transparent);
+}
+
+/* Saturday and Sunday sit a shade back, so the working week has a shape you
+ * read before you read any number. */
+.cal-weekend {
+  background: color-mix(in srgb, var(--muted) 38%, transparent);
+}
+
+/* The day sheet arrives rather than appears: backdrop fades, panel settles in
+ * from slightly small and low. Deceleration on entry — it is coming to rest. */
+.cal-fade {
+  animation: cal-fade 0.18s ease-out;
+}
+@keyframes cal-fade {
+  from {
+    opacity: 0;
+  }
+}
+.cal-pop {
+  animation: cal-pop 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes cal-pop {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.97);
+  }
+}
+
 /* Done stops being a list and becomes a pile. Older notes overlap all but a
  * title strip, so sixteen of them cost ~180px instead of a scrollbar. Hover
  * spreads them slightly; the toggle fans them apart. Deliberately not flex —
@@ -362,6 +417,10 @@ body {
   .note-settle { animation: none; }
   .addnote { transform: none; transition: none; }
   .pile .note { transition: none; }
+  .cal-day,
+  .cal-day:active { transition: none; transform: none; }
+  .cal-fade,
+  .cal-pop { animation: none; }
 }
 
 /* Notification banners drop in from the top edge. The overshoot in the easing
