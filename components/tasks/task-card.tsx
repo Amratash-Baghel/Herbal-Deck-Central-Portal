@@ -132,7 +132,7 @@ export function TaskCard({
         e.dataTransfer.effectAllowed = "move";
       }}
       style={{ transform: `rotate(${tilt}deg)` }}
-      className={`group relative rounded-xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:rotate-0 hover:shadow-md ${noteColor(
+      className={`group relative rounded-2xl border p-3 shadow-sm transition hover:-translate-y-0.5 hover:rotate-0 hover:shadow-md ${noteColor(
         task.color,
         assigneeNoteColor,
         deptSlug,

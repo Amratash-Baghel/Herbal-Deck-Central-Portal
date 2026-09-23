@@ -49,6 +49,17 @@
   --primary-foreground: #ffffff;
   --accent: #f0faf4;           /* hover / active tint                */
   --ring: #1a5c38;
+
+  /* Sticky notes — "Aurora". Each hue is a pair: --n-X is the pale fill,
+   * --n-X-b the saturated sibling used as the border and the foot of the
+   * gradient. The gradient runs pale at the TOP (where every word sits, so
+   * contrast holds) and blooms vivid at the FOOT. */
+  --n-yellow:#fff4d2; --n-yellow-b:#ffc95e;  --n-red:#ffe2e0;  --n-red-b:#ff6a6a;
+  --n-orange:#ffe9d3; --n-orange-b:#ffab5c;  --n-pink:#fde0ef; --n-pink-b:#f857b6;
+  --n-green:#d8f7e6;  --n-green-b:#34d99a;   --n-teal:#d1f6f6; --n-teal-b:#22d9f5;
+  --n-sky:#d7ecfe;    --n-sky-b:#2f7cf6;     --n-violet:#e6e2fe; --n-violet-b:#7b4be8;
+  --n-indigo:#dee2fe; --n-indigo-b:#0b37e8;  --n-slate:#e6ecf3; --n-slate-b:#90a6bd;
+  --n-lime:#e8f8cc;   --n-lime-b:#9ad63a;    --n-amber:#fff0cf; --n-amber-b:#f5a524;
 }
 
 .dark {
@@ -67,6 +78,15 @@
   --primary-foreground: #ffffff;
   --accent: #1b4a30;            /* lighter hover/active tint           */
   --ring: #3ea873;              /* lighter, more visible accent green  */
+
+  /* Sticky notes — "Graphite": the same twelve hues, dimmed to near-charcoal
+   * so a note reads as a tinted surface rather than a light source. */
+  --n-yellow:#2e2a12; --n-yellow-b:#6d6222;  --n-red:#2f1a1a;  --n-red-b:#6e3a38;
+  --n-orange:#2e2312; --n-orange-b:#6d5124;  --n-pink:#2d1824; --n-pink-b:#6c3552;
+  --n-green:#142a1e;  --n-green-b:#2a5f41;   --n-teal:#112a29; --n-teal-b:#22605c;
+  --n-sky:#13222f;    --n-sky-b:#2a5479;     --n-violet:#221a35; --n-violet-b:#4e3c86;
+  --n-indigo:#1a1d33; --n-indigo-b:#3a4285;  --n-slate:#1e1f26; --n-slate-b:#464a5a;
+  --n-lime:#1f2a14;   --n-lime-b:#46632a;    --n-amber:#2d2513; --n-amber-b:#6a5824;
 }
 
 /* Midnight — near-black surfaces with the same brand green, tuned for high
@@ -87,6 +107,15 @@
   --primary-foreground: #ffffff;
   --accent: #1b4a30;            /* lighter hover/active tint           */
   --ring: #3ea873;              /* lighter, more visible accent green  */
+
+  /* Sticky notes — "Graphite": the same twelve hues, dimmed to near-charcoal
+   * so a note reads as a tinted surface rather than a light source. */
+  --n-yellow:#2e2a12; --n-yellow-b:#6d6222;  --n-red:#2f1a1a;  --n-red-b:#6e3a38;
+  --n-orange:#2e2312; --n-orange-b:#6d5124;  --n-pink:#2d1824; --n-pink-b:#6c3552;
+  --n-green:#142a1e;  --n-green-b:#2a5f41;   --n-teal:#112a29; --n-teal-b:#22605c;
+  --n-sky:#13222f;    --n-sky-b:#2a5479;     --n-violet:#221a35; --n-violet-b:#4e3c86;
+  --n-indigo:#1a1d33; --n-indigo-b:#3a4285;  --n-slate:#1e1f26; --n-slate-b:#464a5a;
+  --n-lime:#1f2a14;   --n-lime-b:#46632a;    --n-amber:#2d2513; --n-amber-b:#6a5824;
 }
 
 @theme inline {
@@ -119,6 +148,23 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Sticky notes. One class per hue, emitted by noteColor() in lib/tasks.ts —
+ * so every surface that shows a note (board, list, dashboard dot) picks up the
+ * palette from here and nowhere else. Pale top, vivid foot: text lives in the
+ * top band, which stays past 4.5:1 in both themes. */
+.note-yellow { background: linear-gradient(180deg, var(--n-yellow) 0%, var(--n-yellow) 55%, var(--n-yellow-b) 100%); border-color: var(--n-yellow-b); }
+.note-red    { background: linear-gradient(180deg, var(--n-red)    0%, var(--n-red)    55%, var(--n-red-b)    100%); border-color: var(--n-red-b); }
+.note-orange { background: linear-gradient(180deg, var(--n-orange) 0%, var(--n-orange) 55%, var(--n-orange-b) 100%); border-color: var(--n-orange-b); }
+.note-pink   { background: linear-gradient(180deg, var(--n-pink)   0%, var(--n-pink)   55%, var(--n-pink-b)   100%); border-color: var(--n-pink-b); }
+.note-green  { background: linear-gradient(180deg, var(--n-green)  0%, var(--n-green)  55%, var(--n-green-b)  100%); border-color: var(--n-green-b); }
+.note-teal   { background: linear-gradient(180deg, var(--n-teal)   0%, var(--n-teal)   55%, var(--n-teal-b)   100%); border-color: var(--n-teal-b); }
+.note-sky    { background: linear-gradient(180deg, var(--n-sky)    0%, var(--n-sky)    55%, var(--n-sky-b)    100%); border-color: var(--n-sky-b); }
+.note-violet { background: linear-gradient(180deg, var(--n-violet) 0%, var(--n-violet) 55%, var(--n-violet-b) 100%); border-color: var(--n-violet-b); }
+.note-indigo { background: linear-gradient(180deg, var(--n-indigo) 0%, var(--n-indigo) 55%, var(--n-indigo-b) 100%); border-color: var(--n-indigo-b); }
+.note-slate  { background: linear-gradient(180deg, var(--n-slate)  0%, var(--n-slate)  55%, var(--n-slate-b)  100%); border-color: var(--n-slate-b); }
+.note-lime   { background: linear-gradient(180deg, var(--n-lime)   0%, var(--n-lime)   55%, var(--n-lime-b)   100%); border-color: var(--n-lime-b); }
+.note-amber  { background: linear-gradient(180deg, var(--n-amber)  0%, var(--n-amber)  55%, var(--n-amber-b)  100%); border-color: var(--n-amber-b); }
 
 /* Notification banners drop in from the top edge. The overshoot in the easing
  * curve is what gives it the settle of an iOS banner rather than a linear

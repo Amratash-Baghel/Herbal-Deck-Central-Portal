@@ -158,7 +158,7 @@ export function TaskList({
           return (
             <li
               key={t.id}
-              className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${noteColor(t.color, noteColorOf(t.assigned_to), d?.slug)} ${
+              className={`flex items-start gap-3 rounded-2xl border px-4 py-3 ${noteColor(t.color, noteColorOf(t.assigned_to), d?.slug)} ${
                 isAgedDone(t, todayISO) ? "opacity-70 saturate-50" : ""
               }`}
             >
