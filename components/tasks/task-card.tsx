@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { noteColor, noteSwatch, deptNoteColor, adjacentStatus } from "@/lib/tasks";
-import { daysUntil } from "@/lib/time";
+import { daysUntil, formatDayShort, formatHM, localDateISO } from "@/lib/time";
 import { ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from "@/components/icons";
 import { PopoverMenu } from "@/components/popover-menu";
 import { RichText } from "@/components/tasks/rich-text";
@@ -70,6 +70,7 @@ export function TaskCard({
   assigneeName,
   deptName,
   deptSlug,
+  todayISO,
   editable,
   assignable,
   assigneeNoteColor,
@@ -85,6 +86,9 @@ export function TaskCard({
   assigneeName: string | null;
   deptName: string;
   deptSlug: string | null;
+  /** Today in the business timezone — so the date stamp renders the same on
+   *  the server and the client instead of reading the clock twice. */
+  todayISO: string;
   editable: boolean;
   assignable?: Person[];
   /** The assignee's default note-colour key — the note's fallback background. */
@@ -103,6 +107,15 @@ export function TaskCard({
   const next = adjacentStatus(task.status, "next");
   const tilt = tiltOf(task.id);
   const days = daysUntil(task.deadline);
+  // The corner stamp: when it was written, or — once finished — when it was
+  // finished. Today's work shows the time, older work the day.
+  const stampISO =
+    task.status === "done" ? task.completed_at ?? task.created_at : task.created_at;
+  const stamp = `${task.status === "done" ? "✓ " : ""}${
+    localDateISO("Asia/Kolkata", new Date(stampISO)) === todayISO
+      ? formatHM(stampISO)
+      : formatDayShort(stampISO, todayISO)
+  }`;
   const [dragging, setDragging] = useState(false);
   // Set on drag end so the note bounces as it settles; cleared by the animation.
   const [settling, setSettling] = useState(false);
@@ -224,6 +237,19 @@ export function TaskCard({
         )}
         <DeadlinePill deadline={task.deadline} />
       </div>
+
+      <span
+        title={`Created ${formatDayShort(task.created_at, todayISO)}, ${formatHM(task.created_at)}${
+          task.completed_at
+            ? ` · Done ${formatDayShort(task.completed_at, todayISO)}, ${formatHM(task.completed_at)}`
+            : ""
+        }`}
+        className={`pointer-events-none absolute bottom-1.5 text-[10px] tabular-nums text-foreground/45 ${
+          days !== null && days < 0 ? "right-7" : "right-2"
+        } ${editable && onMove ? "transition-opacity group-hover:opacity-0" : ""}`}
+      >
+        {stamp}
+      </span>
 
       {editable && onMove && (
         <span className="note-nudge absolute bottom-1.5 right-1.5 flex gap-0.5">

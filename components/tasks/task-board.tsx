@@ -298,6 +298,7 @@ export function TaskBoard({
         assigneeName={nameOf(task.assigned_to)}
         deptName={dept?.name ?? "—"}
         deptSlug={dept?.slug ?? null}
+        todayISO={todayISO}
         editable
         assignable={assignable}
         assigneeNoteColor={noteColorOf(task.assigned_to)}
@@ -570,6 +571,7 @@ export function TaskBoard({
                       assigneeName={nameOf(task.assigned_to)}
                       deptName={dept?.name ?? "—"}
                       deptSlug={dept?.slug ?? null}
+                      todayISO={todayISO}
                       editable={false}
                       assigneeNoteColor={noteColorOf(task.assigned_to)}
                       faded

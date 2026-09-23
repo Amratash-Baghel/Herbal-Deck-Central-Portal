@@ -146,6 +146,27 @@ export function localDateISO(tz = "Asia/Kolkata", date: Date = new Date()): stri
 }
 
 /**
+ * A short calendar day, e.g. "21 Sep" — with the year ("21 Sep 24") only when
+ * it differs from the caller's today. Takes `todayISO` rather than reading the
+ * clock, so server and client render the same string.
+ */
+export function formatDayShort(
+  iso: string,
+  todayISO: string,
+  tz = "Asia/Kolkata",
+): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const sameYear = localDateISO(tz, d).slice(0, 4) === todayISO.slice(0, 4);
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    day: "numeric",
+    month: "short",
+    ...(sameYear ? {} : { year: "2-digit" }),
+  }).format(d);
+}
+
+/**
  * Days until a deadline (negative if overdue), comparing calendar dates in IST.
  * Returns null for no deadline.
  */
