@@ -100,7 +100,7 @@ export default async function PostInvoicePage() {
       <div className="space-y-8">
         <PostInvoiceForm departments={departments} categories={categories} />
 
-        <div className="rounded-2xl border bg-card shadow-sm">
+        <div className="cal-sheet rounded-2xl border bg-card">
           <div className="border-b px-6 py-4">
             <h2 className="text-base font-semibold tracking-tight">
               Your posted invoices
@@ -141,7 +141,7 @@ export default async function PostInvoicePage() {
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-2">
-                        <span className="font-semibold">
+                        <span className="font-semibold tabular-nums">
                           {formatMoney(Number(invoice.amount), currency)}
                         </span>
                         <div className="flex items-center gap-2">

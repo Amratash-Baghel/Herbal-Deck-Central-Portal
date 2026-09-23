@@ -17,7 +17,7 @@ function Kpi({ label, value, sub }: { label: string; value: string; sub?: string
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
       {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );

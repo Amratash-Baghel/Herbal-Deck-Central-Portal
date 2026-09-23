@@ -95,6 +95,24 @@ export interface UserAccess {
    * (their own department[s]). Clearing/rejecting stays with billing managers.
    */
   canViewDeptInvoices: boolean;
+  /**
+   * Draw a signature onto an invoice in Clearing. Deliberately one person, not
+   * a role: a signature is an individual's mark, and nothing else in the portal
+   * identifies a person rather than a capability. Everyone else sees Clearing
+   * exactly as before.
+   */
+  canSignInvoices: boolean;
+}
+
+/** The only account that may sign — see `canSignInvoices`. */
+export const SIGNER_EMAIL = "parth.filmart@gmail.com";
+
+/**
+ * Where an invoice's signature lives in the private `invoices` bucket. Derived
+ * from the id rather than stored, so signing needs no column and no migration.
+ */
+export function signaturePath(invoiceId: string): string {
+  return `${invoiceId}/signature.png`;
 }
 
 /** The departments (id + slug) a profile belongs to. Cached per-request. */
@@ -155,6 +173,7 @@ export const getUserAccess = cache(async (): Promise<UserAccess | null> => {
     canManageBilling: canManage,
     canViewReports: canManage || isTeamLead,
     canViewDeptInvoices: canManage || isTeamLead,
+    canSignInvoices: profile.email === SIGNER_EMAIL,
   };
 });
 

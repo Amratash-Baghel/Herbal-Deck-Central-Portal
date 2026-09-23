@@ -69,7 +69,7 @@ export function DeptInvoicesList({ invoices }: { invoices: DeptInvoiceRow[] }) {
   }, [invoices, query, sort]);
 
   return (
-    <div className="rounded-2xl border bg-card shadow-sm">
+    <div className="cal-sheet rounded-2xl border bg-card">
       <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 sm:max-w-xs">
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

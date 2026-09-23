@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getUserAccess, requireBillingManager } from "@/lib/auth";
+import { getUserAccess, requireBillingManager, signaturePath } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUsers, getManagementUserIds } from "@/lib/notifications";
@@ -225,6 +225,40 @@ export async function uploadSignedInvoice(formData: FormData): Promise<void> {
 
   await admin.from("invoices").update({ file_path: path }).eq("id", id);
   revalidatePath("/billing/clearing");
+}
+
+/**
+ * Save a drawn signature against an invoice. The path is derived from the
+ * invoice id, so there is nothing to migrate and nothing to keep in sync: a
+ * signature either exists at `<id>/signature.png` or it doesn't. Re-signing
+ * overwrites. No timestamp is recorded — the mark is the whole point.
+ *
+ * The gate is re-checked here; the UI hiding the control is only a convenience.
+ */
+export async function saveInvoiceSignature(
+  formData: FormData,
+): Promise<{ error: string | null }> {
+  const access = await getUserAccess();
+  if (!access?.canSignInvoices) return { error: "You cannot sign invoices." };
+
+  const id = String(formData.get("invoice_id") ?? "");
+  const file = formData.get("signature");
+  if (!id || !(file instanceof File) || file.size === 0) {
+    return { error: "Nothing to save — draw a signature first." };
+  }
+
+  const admin = createAdminClient();
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const { error } = await admin.storage
+    .from("invoices")
+    .upload(signaturePath(id), bytes, {
+      contentType: "image/png",
+      upsert: true,
+    });
+  if (error) return { error: "Could not save the signature. Try again." };
+
+  revalidatePath("/billing/clearing");
+  return { error: null };
 }
 
 export interface PettyCashState {

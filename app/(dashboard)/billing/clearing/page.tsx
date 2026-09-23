@@ -1,16 +1,19 @@
 import Link from "next/link";
-import { requireBillingManager } from "@/lib/auth";
+import { requireBillingManager, signaturePath } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/page-header";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { InvoiceManageActions } from "@/components/invoice-manage-actions";
 import { InvoiceSearch } from "@/components/invoice-search";
+import { InvoiceSignaturePad } from "@/components/invoice-signature-pad";
+import { deptNoteColor, noteSwatch } from "@/lib/tasks";
 import { formatMoney, type CurrencyCode } from "@/lib/money";
 import { time } from "@/lib/perf";
 import { INVOICE_LIST_COLUMNS, type Invoice, type InvoiceStatus } from "@/lib/types";
 
-type Named = { id: string; name: string };
+/** Departments carry a `slug` (it picks their note colour); categories don't. */
+type Named = { id: string; name: string; slug?: string };
 type Search = { status?: string; dept?: string; q?: string; sort?: string };
 
 const STATUS_TABS: { value: string; label: string }[] = [
@@ -56,7 +59,7 @@ export default async function ClearingPage({
 }: {
   searchParams: Promise<Search>;
 }) {
-  await requireBillingManager();
+  const access = await requireBillingManager();
   const sp = await searchParams;
   const current: Search = {
     status: sp.status,
@@ -72,7 +75,7 @@ export default async function ClearingPage({
         .from("invoices")
         .select(INVOICE_LIST_COLUMNS)
         .order("created_at", { ascending: false }),
-      supabase.from("departments").select("id, name").order("name"),
+      supabase.from("departments").select("id, name, slug").order("name"),
       supabase.from("invoice_categories").select("id, name"),
     ]),
   );
@@ -80,6 +83,11 @@ export default async function ClearingPage({
   const all = (invoiceRes.data as Invoice[]) ?? [];
   const departments = (deptRes.data as Named[]) ?? [];
   const deptName = new Map(departments.map((d) => [d.id, d.name]));
+  // The same department→colour map the board and Reports use, so a department
+  // is the same colour everywhere in the portal.
+  const deptStripe = new Map(
+    departments.map((d) => [d.id, noteSwatch(deptNoteColor(d.slug))]),
+  );
   const catName = new Map(
     ((catRes.data ?? []) as Named[]).map((c) => [c.id, c.name]),
   );
@@ -165,6 +173,22 @@ export default async function ClearingPage({
     });
   }
 
+  // Signatures have no column to filter on — the path is derived from the id —
+  // so we ask for all of them at once. Unsigned invoices simply come back with
+  // a null url, which the `if` below skips.
+  const sigUrl = new Map<string, string>();
+  if (invoices.length > 0) {
+    const { data: signed } = await admin.storage
+      .from("invoices")
+      .createSignedUrls(
+        invoices.map((i) => signaturePath(i.id)),
+        3600,
+      );
+    signed?.forEach((s, idx) => {
+      if (s.signedUrl) sigUrl.set(invoices[idx].id, s.signedUrl);
+    });
+  }
+
   const statusCount = (s: InvoiceStatus) => all.filter((i) => i.status === s).length;
   const allCount = all.length;
 
@@ -195,12 +219,13 @@ export default async function ClearingPage({
             <Link
               key={d.id}
               href={hrefWith(current, { dept: d.id })}
-              className={`rounded-2xl border p-4 transition hover:border-primary/40 ${
+              style={{ borderLeftColor: deptStripe.get(d.id) }}
+              className={`rounded-2xl border border-l-4 p-4 transition hover:border-primary/40 ${
                 active ? "border-primary bg-accent" : "bg-card"
               }`}
             >
               <p className="truncate text-sm font-semibold">{d.name}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                 {stats.count} · {formatMoney(stats.total, "INR")}
               </p>
             </Link>
@@ -265,8 +290,13 @@ export default async function ClearingPage({
           {invoices.map((invoice) => {
             const currency = (invoice.currency as CurrencyCode) ?? "INR";
             const url = signedUrl.get(invoice.id);
+            const signature = sigUrl.get(invoice.id) ?? null;
             return (
-              <li key={invoice.id} className="rounded-2xl border bg-card p-5 shadow-sm">
+              <li
+                key={invoice.id}
+                style={{ borderLeftColor: deptStripe.get(invoice.department_id) }}
+                className="cal-sheet rounded-2xl border border-l-4 bg-card p-5"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -284,7 +314,7 @@ export default async function ClearingPage({
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-semibold">
+                    <p className="text-lg font-semibold tabular-nums">
                       {formatMoney(Number(invoice.amount), currency)}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -308,6 +338,21 @@ export default async function ClearingPage({
                   </p>
                 )}
 
+                {/* A signature is shown to everyone who can see the invoice —
+                  * only drawing it is restricted. White ground, because the ink
+                  * in the PNG is a fixed colour and can't follow the theme. */}
+                {signature && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">Signed</span>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={signature}
+                      alt="Signature"
+                      className="h-12 rounded-lg border bg-white px-2"
+                    />
+                  </div>
+                )}
+
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                   {url ? (
                     <a
@@ -323,14 +368,23 @@ export default async function ClearingPage({
                       No file attached
                     </span>
                   )}
-                  <InvoiceManageActions
-                    invoiceId={invoice.id}
-                    status={invoice.status}
-                    canManage
-                    canDelete
-                    hasSignedFile={Boolean(invoice.file_path)}
-                    paymentProofUrl={proofUrl.get(invoice.id) ?? null}
-                  />
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {access.canSignInvoices && (
+                      <InvoiceSignaturePad
+                        invoiceId={invoice.id}
+                        vendorName={invoice.vendor_name || "Service provider"}
+                        existingUrl={signature}
+                      />
+                    )}
+                    <InvoiceManageActions
+                      invoiceId={invoice.id}
+                      status={invoice.status}
+                      canManage
+                      canDelete
+                      hasSignedFile={Boolean(invoice.file_path)}
+                      paymentProofUrl={proofUrl.get(invoice.id) ?? null}
+                    />
+                  </div>
                 </div>
               </li>
             );

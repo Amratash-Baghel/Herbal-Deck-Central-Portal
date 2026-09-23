@@ -1,10 +1,14 @@
 import type { InvoiceStatus } from "@/lib/types";
 
+/**
+ * Pale note tops, the same band the calendar chips and board notes use — note
+ * ink stays legible on them in all six themes, so no `dark:` pair is needed.
+ * `cleared` keeps `bg-primary`: it's the colour people already read as "done".
+ */
 const STYLES: Record<InvoiceStatus, string> = {
-  pending:
-    "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
+  pending: "bg-[var(--n-amber)] text-[var(--note-ink)]",
   cleared: "bg-primary text-primary-foreground",
-  rejected: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300",
+  rejected: "bg-[var(--n-red)] text-[var(--note-ink)]",
 };
 
 export function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
