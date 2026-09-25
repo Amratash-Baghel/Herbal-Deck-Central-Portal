@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canGroup, mergeMessages, isNearBottom, insertAt } from "../components/chat/chat-model.ts";
+import { canGroup, mergeMessages, isNearBottom, insertAt, isGifUrl } from "../components/chat/chat-model.ts";
 
 const a = { id: "a", sender_id: "one", conversation_id: "room", created_at: "2026-09-24T12:00:00Z", body: "first" };
 test("groups only same sender and conversation within five minutes", () => {
@@ -33,4 +33,12 @@ test("inserts emoji at the caret, over a selection and past the text end", () =>
   assert.equal(insertAt("", 0, 0, "✅"), "✅");
   assert.equal(insertAt("hi", 99, 99, "🌿"), "hi🌿");
   assert.equal(insertAt("hi", 2, 0, "🌿"), "hi🌿");
+});
+
+test("recognises only direct https .gif links", () => {
+  assert.equal(isGifUrl("https://media.example.com/cat.gif"), true);
+  assert.equal(isGifUrl("https://media.example.com/cat.GIF?w=200"), true);
+  assert.equal(isGifUrl("http://media.example.com/cat.gif"), false);
+  assert.equal(isGifUrl("https://example.com/page-about.gifs"), false);
+  assert.equal(isGifUrl("https://example.com/cat.gif evil"), false);
 });

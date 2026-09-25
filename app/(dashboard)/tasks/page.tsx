@@ -3,6 +3,7 @@ import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { TaskBoard } from "@/components/tasks/task-board";
+import { EodQuickSubmit } from "@/components/tasks/eod-quick-submit";
 import type { Person, DeptRef } from "@/components/tasks/types";
 import { time } from "@/lib/perf";
 import { localDateISO } from "@/lib/time";
@@ -33,6 +34,7 @@ export default async function TasksPage() {
   const profile = access.profile;
   const supabase = await createClient();
   const me = profile.id;
+  const today = localDateISO();
 
   // Bring any scheduled tasks due today onto the board before we read it, so a
   // recurring task shows up the moment its owner opens their board (idempotent).
@@ -47,6 +49,7 @@ export default async function TasksPage() {
     { data: profs },
     { data: taskRows },
     { data: historyRows },
+    { data: todayReport },
   ] = await time("tasks:board-queries", () =>
       Promise.all([
         supabase.from("profile_departments").select("department_id").eq("profile_id", me),
@@ -72,6 +75,14 @@ export default async function TasksPage() {
           .eq("status", "done")
           .order("completed_at", { ascending: false })
           .limit(50),
+        // Today's EOD, so the header button opens the note already written
+        // rather than a blank box.
+        supabase
+          .from("eod_reports")
+          .select("manual_note")
+          .eq("employee_id", me)
+          .eq("report_date", today)
+          .maybeSingle(),
       ]),
     );
 
@@ -105,6 +116,16 @@ export default async function TasksPage() {
       <PageHeader
         title="My Board"
         description="Your tasks as sticky notes — add one, drag it across, get it done."
+        action={
+          // Everyone who files an EOD gets the shortcut — employees, team
+          // leads, HR & Management. Owner-level accounts don't file one.
+          !access.isAdmin && (
+            <EodQuickSubmit
+              initialNote={(todayReport as { manual_note: string | null } | null)?.manual_note ?? ""}
+              alreadySubmitted={Boolean(todayReport)}
+            />
+          )
+        }
       />
       <TaskBoard
         me={toPerson(profile)}
@@ -112,7 +133,7 @@ export default async function TasksPage() {
         canAssignOthers={access.canManageUsers || access.isTeamLead}
         initialTasks={(taskRows ?? []) as Task[]}
         initialHistory={(historyRows ?? []) as Task[]}
-        todayISO={localDateISO()}
+        todayISO={today}
         people={people}
         assignable={assignable}
         departments={myDepartments}

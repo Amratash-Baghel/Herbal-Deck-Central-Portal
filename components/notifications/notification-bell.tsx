@@ -37,19 +37,21 @@ export function NotificationBell() {
     if (n.link) router.push(n.link);
   }
 
-  // Close (rather than chase) the panel on scroll/resize/Escape, matching the
-  // task PopoverMenu so it never drifts off its anchor or lingers stale.
+  // Close the panel on resize/Escape — deliberately NOT on scroll. The panel is
+  // `fixed` at static viewport coords and reads no anchor rect, so it cannot
+  // drift; a capture-phase scroll listener here fired on the list's OWN scroll
+  // (capture runs root → target, so window sees a descendant's scroll even
+  // though scroll doesn't bubble) and slammed the panel shut the instant you
+  // tried to read past the third notification.
   useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", close);
       window.removeEventListener("keydown", onKey);
     };
@@ -136,7 +138,7 @@ export function NotificationBell() {
               </p>
             )}
 
-            <ul className="max-h-[60vh] divide-y overflow-y-auto md:max-h-[28rem]">
+            <ul className="max-h-[60vh] divide-y overflow-y-auto overscroll-contain md:max-h-[28rem]">
               {recent.length === 0 && (
                 <li className="px-4 py-10 text-center text-sm text-muted-foreground">
                   You&apos;re all caught up.

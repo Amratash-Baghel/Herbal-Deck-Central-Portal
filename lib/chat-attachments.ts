@@ -36,6 +36,7 @@ export const ALLOWED_TYPES: Record<
   jpg: { mime: "image/jpeg", kind: "image", label: "JPG image" },
   jpeg: { mime: "image/jpeg", kind: "image", label: "JPG image" },
   png: { mime: "image/png", kind: "image", label: "PNG image" },
+  gif: { mime: "image/gif", kind: "image", label: "GIF" },
   pdf: { mime: "application/pdf", kind: "document", label: "PDF" },
   doc: { mime: "application/msword", kind: "document", label: "Word document" },
   docx: {
@@ -51,7 +52,10 @@ export const ALLOWED_TYPES: Record<
 };
 
 /** The `accept` attribute for the file picker. */
-export const ATTACHMENT_ACCEPT = ".jpg,.jpeg,.png,.pdf,.doc,.docx,.xlsx,image/jpeg,image/png,application/pdf";
+export const ATTACHMENT_ACCEPT = ".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xlsx,image/jpeg,image/png,image/gif,application/pdf";
+
+/** The private bucket holding each person's reusable GIFs, at `<profile_id>/<uuid>.gif`. */
+export const GIF_BUCKET = "gif-library";
 
 /** Lowercased extension of a filename, or "". */
 export function extOf(name: string): string {
@@ -83,7 +87,7 @@ export function checkFile(file: { name: string; size: number }): FileCheck {
     return {
       ok: false,
       reason: "bad_type",
-      error: "That file type isn't supported. Allowed: JPG, PNG, PDF, DOC, DOCX, XLSX.",
+      error: "That file type isn't supported. Allowed: JPG, PNG, GIF, PDF, DOC, DOCX, XLSX.",
     };
   }
   if (file.size > MAX_ATTACHMENT_BYTES) {

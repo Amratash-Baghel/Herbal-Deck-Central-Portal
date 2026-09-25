@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
   }
 
   const [{ data: profiles }, { data: submitted }] = await Promise.all([
-    admin.from("profiles").select("id").is("deactivated_at", null),
+    // Owner-level accounts neither file an EOD nor clock in (same policy as
+    // /tasks/reports and the dashboard), so never nag them for one.
+    admin.from("profiles").select("id").is("deactivated_at", null).neq("role", "admin"),
     admin.from("eod_reports").select("employee_id").eq("report_date", today),
   ]);
 

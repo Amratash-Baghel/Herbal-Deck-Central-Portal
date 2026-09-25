@@ -7,10 +7,11 @@ import { QuickAdd } from "@/components/dashboard/quick-add";
 import { TaskRow } from "@/components/dashboard/task-row";
 import { EodNoteForm } from "@/components/tasks/eod-note-form";
 import { getUserAccess } from "@/lib/auth";
+import { formatMoney } from "@/lib/money";
 import { time } from "@/lib/perf";
 import { createClient } from "@/lib/supabase/server";
 import { noteColor } from "@/lib/tasks";
-import { daysUntil, formatClockTZ, localDateISO } from "@/lib/time";
+import { daysUntil, formatClockTZ, isoDaysAgo, localDateISO } from "@/lib/time";
 import type { Conversation, EodReport, EodSummary, Task } from "@/lib/types";
 
 const TZ = "Asia/Kolkata";
@@ -35,6 +36,26 @@ export default async function DashboardPage() {
 
   const me = access.profile.id;
   const today = localDateISO();
+  const firstName = (access.profile.full_name || access.profile.email).split(/[\s@._-]+/)[0];
+  const name = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+
+  // Owner-level accounts neither file an EOD nor clock in — the same policy
+  // /tasks/reports already applies. That removes both of the spine's first two
+  // beats, so there is no day left to spine: they get the company's day instead,
+  // and skip the two personal reads below entirely.
+  if (access.isAdmin) {
+    return (
+      <Owner
+        name={name}
+        me={me}
+        meName={access.profile.full_name || access.profile.email}
+        myNoteColor={access.profile.note_color}
+        today={today}
+        canSeeBilling={access.canManageBilling}
+      />
+    );
+  }
+
   const supabase = await createClient();
 
   const [{ data: reportRow }, { data: logRow }] = await time("dashboard:day", () =>
@@ -57,35 +78,11 @@ export default async function DashboardPage() {
   const report = (reportRow as EodReport | null) ?? null;
   const openedAt = (logRow as { first_seen_at: string | null } | null)?.first_seen_at;
 
-  const now = new Date();
-  const weekday = new Intl.DateTimeFormat("en-IN", { weekday: "long", timeZone: TZ }).format(now);
-  const dateLine = new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "long",
-    timeZone: TZ,
-  }).format(now);
-
-  // Greet by the hour where the office actually is, not the browser's guess.
-  const hour =
-    Number(
-      new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: TZ }).format(now),
-    ) % 24;
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const firstName = (access.profile.full_name || access.profile.email).split(/[\s@._-]+/)[0];
-  const name = firstName.charAt(0).toUpperCase() + firstName.slice(1);
-
   return (
     <div className="mx-auto w-full max-w-[72rem]">
       <Beat done>
         <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-              {greeting}, {name}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {weekday}, {dateLine}
-            </p>
-          </div>
+          <Greeting name={name} />
           {openedAt && (
             <p className="text-sm tabular-nums text-muted-foreground">
               Open since {formatClockTZ(openedAt, TZ)}
@@ -138,6 +135,250 @@ export default async function DashboardPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+/** The same salutation on both dashboards: who you are, and what day it is by
+ *  the clock where the office actually is rather than the browser's guess. */
+function Greeting({ name }: { name: string }) {
+  const now = new Date();
+  const weekday = new Intl.DateTimeFormat("en-IN", { weekday: "long", timeZone: TZ }).format(now);
+  const dateLine = new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "long",
+    timeZone: TZ,
+  }).format(now);
+  const hour =
+    Number(
+      new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: TZ }).format(now),
+    ) % 24;
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  return (
+    <div>
+      <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+        {greeting}, {name}
+      </h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {weekday}, {dateLine}
+      </p>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- the owner */
+
+/**
+ * The company's day, for the people who run it.
+ *
+ * Nothing here is personal housekeeping — an owner has no EOD to file and no
+ * clock to punch — so the page leads with the work itself and then answers, in
+ * order: is the team's day accounted for, who is waiting on a reply, what money
+ * is stuck. Each section streams in its own boundary and carries its own count
+ * in its heading, so none of them blocks the others and there is no summary
+ * strip repeating numbers the sections already state.
+ *
+ * Every section returns null when it has nothing to say, so the page is exactly
+ * as long as the day is busy: a clear afternoon collapses to a greeting and a
+ * quiet board rather than a wall of zeroes.
+ */
+function Owner({
+  name,
+  me,
+  meName,
+  myNoteColor,
+  today,
+  canSeeBilling,
+}: {
+  name: string;
+  me: string;
+  meName: string;
+  myNoteColor: string | null;
+  today: string;
+  canSeeBilling: boolean;
+}) {
+  return (
+    <div className="mx-auto w-full max-w-[80rem] space-y-10">
+      <header>
+        <Greeting name={name} />
+      </header>
+
+      <div className="space-y-10 xl:grid xl:grid-cols-[minmax(0,1fr)_fit-content(22rem)] xl:gap-x-12 xl:space-y-0">
+        <div className="space-y-10">
+          <Suspense
+            fallback={<div className="h-72 animate-pulse rounded-2xl bg-muted" aria-hidden="true" />}
+          >
+            <Board me={me} meName={meName} myNoteColor={myNoteColor} today={today} />
+          </Suspense>
+
+          <Suspense
+            fallback={<div className="h-28 animate-pulse rounded-2xl bg-muted" aria-hidden="true" />}
+          >
+            <Team today={today} />
+          </Suspense>
+        </div>
+
+        <aside className="space-y-10">
+          <Suspense fallback={null}>
+            <Unread me={me} />
+          </Suspense>
+
+          {canSeeBilling && (
+            <Suspense fallback={null}>
+              <Ledger />
+            </Suspense>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+type BoardTask = Pick<Task, "id" | "title" | "assigned_to" | "deadline" | "color" | "created_at">;
+
+/** The four ways an open task asks for an owner's attention, most urgent first.
+ *  Each task lands in exactly one lane, so nothing is counted or read twice. */
+const LANES = [
+  { key: "overdue", title: "Overdue" },
+  { key: "unassigned", title: "Nobody on it" },
+  { key: "today", title: "Due today" },
+  { key: "stalled", title: "Open a week or more" },
+] as const;
+
+function lane(t: BoardTask, today: string, staleBefore: string) {
+  if (t.deadline && t.deadline < today) return "overdue";
+  if (!t.assigned_to) return "unassigned";
+  if (t.deadline === today) return "today";
+  if (t.created_at < staleBefore) return "stalled";
+  return null;
+}
+
+async function Board({
+  me,
+  meName,
+  myNoteColor,
+  today,
+}: {
+  me: string;
+  meName: string;
+  myNoteColor: string | null;
+  today: string;
+}) {
+  const supabase = await createClient();
+  const [{ data: taskRows }, { data: profRows }] = await time("dashboard:board", () =>
+    Promise.all([
+      supabase
+        .from("tasks")
+        .select("id, title, assigned_to, deadline, color, created_at")
+        .eq("archived", false)
+        .neq("status", "done")
+        .order("deadline", { ascending: true, nullsFirst: false }),
+      supabase.from("profiles").select("id, full_name, email").is("deactivated_at", null),
+    ]),
+  );
+
+  const tasks = (taskRows ?? []) as BoardTask[];
+  const who = new Map(
+    ((profRows ?? []) as { id: string; full_name: string | null; email: string }[]).map((p) => [
+      p.id,
+      (p.full_name || p.email).split(/[\s@]+/)[0],
+    ]),
+  );
+
+  const staleBefore = isoDaysAgo(7);
+  const lanes = LANES.map((l) => ({
+    ...l,
+    tasks: tasks.filter((t) => lane(t, today, staleBefore) === l.key),
+  })).filter((l) => l.tasks.length > 0);
+
+  return (
+    <section>
+      <Heading
+        title="Across the company"
+        count={tasks.length}
+        href="/tasks/manage"
+        action="Open the board"
+      />
+
+      <div className="mt-3 overflow-hidden rounded-2xl border bg-card shadow-sm">
+        <QuickAdd me={{ id: me, name: meName, noteColor: myNoteColor }} canAssignOthers />
+
+        {lanes.length === 0 && (
+          <p className="border-t px-4 py-4 text-sm text-muted-foreground">
+            {tasks.length === 0
+              ? "No open tasks anywhere. Add one and it lands on the board."
+              : `All ${tasks.length} open tasks are assigned and on schedule.`}
+          </p>
+        )}
+
+        {lanes.map((l) => (
+          <Group key={l.key} title={l.title} count={l.tasks.length}>
+            {l.tasks.slice(0, 5).map((t) => (
+              <li key={t.id}>
+                {/* Read-only on purpose: the row on the personal dashboard moves
+                    a task, and `moveTask` checks the assignee — none of these
+                    are the owner's, so the button would only ever refuse. */}
+                <Link
+                  href="/tasks/manage"
+                  className="flex items-center gap-3 px-4 py-2 transition hover:bg-accent"
+                >
+                  <span
+                    className={`h-2.5 w-2.5 shrink-0 rounded-full border ${noteColor(t.color, myNoteColor)}`}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] leading-5">{t.title}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {[
+                        t.assigned_to ? (who.get(t.assigned_to) ?? "someone") : "unassigned",
+                        deadlineMeta(t.deadline),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+            {l.tasks.length > 5 && (
+              <li className="px-4 pb-1 pt-0.5 text-xs text-muted-foreground">
+                +{l.tasks.length - 5} more
+              </li>
+            )}
+          </Group>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Money that is stuck: invoices posted but not yet cleared. Silent when the
+ *  queue is empty, like every other section on this page. */
+async function Ledger() {
+  const supabase = await createClient();
+  const { data } = await time("dashboard:ledger", () =>
+    supabase.from("invoices").select("amount").eq("status", "pending"),
+  );
+
+  const pending = (data ?? []) as { amount: number }[];
+  if (pending.length === 0) return null;
+
+  const total = pending.reduce((sum, r) => sum + Number(r.amount), 0);
+
+  return (
+    <section>
+      <Heading
+        title="Awaiting clearing"
+        count={pending.length}
+        href="/billing/clearing"
+        action="Open the queue"
+      />
+      {/* Totalled as INR, matching the billing tab, which reads every amount
+          the same way despite the column allowing others. */}
+      <p className="mt-3 rounded-2xl border bg-card px-4 py-3 text-2xl font-semibold tabular-nums shadow-sm">
+        {formatMoney(total, "INR")}
+      </p>
+    </section>
   );
 }
 
@@ -519,6 +760,9 @@ async function Team({ today }: { today: string }) {
         .from("profiles")
         .select("id, full_name, email, avatar_path")
         .is("deactivated_at", null)
+        // Owner-level accounts don't file an EOD, so counting them would hold
+        // this bar permanently short of 100% and grey out faces that are fine.
+        .neq("role", "admin")
         .order("full_name", { nullsFirst: false }),
     ]),
   );
@@ -534,13 +778,16 @@ async function Team({ today }: { today: string }) {
   const done = new Set(((filedRows ?? []) as { employee_id: string }[]).map((r) => r.employee_id));
   const sorted = [...people].sort((a, b) => Number(done.has(b.id)) - Number(done.has(a.id)));
   const shown = sorted.slice(0, 16);
-  const pct = Math.round((done.size / people.length) * 100);
+  // Count against `people`, not `done`: a historical owner row would otherwise
+  // push the numerator past a denominator that no longer includes owners.
+  const filedCount = people.filter((p) => done.has(p.id)).length;
+  const pct = Math.round((filedCount / people.length) * 100);
 
   return (
     <section>
       <Heading
         title="Reports in"
-        count={`${done.size} of ${people.length}`}
+        count={`${filedCount} of ${people.length}`}
         href="/tasks/reports"
         action="Read today's reports"
       />

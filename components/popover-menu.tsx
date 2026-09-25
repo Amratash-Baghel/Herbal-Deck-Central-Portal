@@ -35,6 +35,7 @@ export function PopoverMenu({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   function place() {
     const el = triggerRef.current;
@@ -60,12 +61,20 @@ export function PopoverMenu({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    // Close (rather than chase) on scroll/resize so it never drifts off its anchor.
-    window.addEventListener("scroll", close, true);
+    // Close (rather than chase) on page scroll/resize so it never drifts off its
+    // anchor — but ignore scrolling INSIDE the menu. Capture runs root → target,
+    // so window sees a descendant's scroll even though scroll doesn't bubble,
+    // and an unguarded listener shuts a long scrollable menu (e.g. the task
+    // card's "Assign to" list) the moment you scroll it.
+    const onScroll = (e: Event) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", close);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", close);
       window.removeEventListener("keydown", onKey);
     };
@@ -102,6 +111,7 @@ export function PopoverMenu({
               className="fixed inset-0 z-[100] cursor-default"
             />
             <div
+              ref={menuRef}
               role="menu"
               style={{ top: pos.top, left: pos.left, width }}
               onClick={(e) => e.stopPropagation()}

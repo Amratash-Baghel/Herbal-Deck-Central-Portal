@@ -9,9 +9,10 @@ import { MessageAttachments } from "./message-attachments";
 import { LinkPreviewCards } from "./link-preview";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MessageActionPopover } from "./message-actions";
+import { GifPicker } from "./gif-picker";
 import { ChatAvatar } from "./chat-avatar";
 import { GroupBadge } from "./group-badges";
-import { canGroup, isNearBottom, formatConversationDate, messageTextParts, insertAt, PICKER_EMOJI } from "./chat-model";
+import { canGroup, isNearBottom, formatConversationDate, messageTextParts, insertAt, isGifUrl, PICKER_EMOJI } from "./chat-model";
 import { detectShareLinks, checkFile, uploadChatAttachment, ATTACHMENT_ACCEPT, MAX_ATTACHMENTS_PER_MESSAGE, type Attachment } from "@/lib/chat-attachments";
 
 import type { ConversationSummary, DirectoryEntry } from "./types";
@@ -38,6 +39,7 @@ const paths: Record<string, ReactNode> = {
   people: <><circle cx="9" cy="8" r="3"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 5a3 3 0 0 1 0 6M19 15a5 5 0 0 1 3 5"/></>,
   file: <path d="M5 2h9l5 5v15H5V2Zm9 0v6h5M8 13h8M8 17h6"/>,
   smile: <><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8.5 14.5a4.5 4.5 0 0 0 7 0"/></>,
+  gif: <><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10.2 10H8.6a1.1 1.1 0 0 0-1.1 1.1v1.8A1.1 1.1 0 0 0 8.6 14h1.6v-1.8M12.6 10v4M15.2 14v-4h2.3M15.2 12.2h1.9"/></>,
 };
 function Icon({ name }: { name: string }) { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] ?? paths.chat}</svg>; }
 function Tool({ label, icon, onClick, active }: { label: string; icon: string; onClick: () => void; active?: boolean }) { return <button type="button" className={`cp-tool ${active ? "is-active" : ""}`} title={label} aria-label={label} aria-pressed={active} onClick={onClick}><Icon name={icon}/></button>; }
@@ -73,6 +75,7 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
   const [picked, setPicked] = useState<string[]>([]);
   const [rename, setRename] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [gifOpen, setGifOpen] = useState(false);
   const caret = useRef<[number, number]>([0, 0]);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -254,7 +257,10 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
       }
       if(live.windowed) await live.latest();
       scrollBottom.current=true;live.setAtBottom(true);setAway(false);input.current?.focus();
-    } catch {setNotice("Send could not be confirmed. Your draft and files are kept. Check the conversation before retrying.");}
+    // An upload that fails already says why ("larger than 3MB", "check your
+    // connection"); hiding that behind the generic line makes a fixable problem
+    // look like a mystery.
+    } catch(e) {setNotice(e instanceof Error && e.message ? e.message : "Send could not be confirmed. Your draft and files are kept. Check the conversation before retrying.");}
     finally {sendingRef.current=false;setSending(false);}
   }
   function attach(list: FileList | File[]) {
@@ -335,7 +341,7 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
               <div className="cp-message-content">{first && !mine && <div className="cp-sender">{name(m.sender_id)}</div>}
                 <div className="cp-bubble" style={!mine ? { "--sender": person(m.sender_id)?.color || "var(--primary)" } as CSSProperties : undefined}>
                   {m.reply && !quoted && !m.deleted && <button className="cp-quote" onClick={()=>void jump(m.reply!)}><strong>Reply</strong><span>View original message</span></button>}{quoted && !m.deleted && <button className="cp-quote" onClick={() => jump(quoted.id)}><strong>{name(quoted.sender_id)}</strong><span>{quoted.deleted ? "Message deleted" : quoted.body || "Attachment"}</span></button>}
-                  {m.deleted ? <p className="cp-deleted">This message was deleted</p> : <><p className="cp-body">{messageTextParts(m.body,(m.mentions || []).map(name)).map((part,j)=>part.kind==="link" ? <a key={j} href={part.text} target="_blank" rel="noreferrer">{part.text.length>90 ? `${part.text.slice(0,87)}…`:part.text}</a> : part.kind==="mention" ? <span key={j} className="cp-mention">{part.text}</span> : part.text)}</p>{m.attachments?.length > 0 && <MessageAttachments supabase={supabase} attachments={m.attachments}/>}{detectShareLinks(m.body).length > 0 && <LinkPreviewCards links={detectShareLinks(m.body)}/>}</>}
+                  {m.deleted ? <p className="cp-deleted">This message was deleted</p> : <><p className="cp-body">{messageTextParts(m.body,(m.mentions || []).map(name)).map((part,j)=>part.kind==="link" ? <a key={j} href={part.text} target="_blank" rel="noreferrer">{isGifUrl(part.text) ? <img className="cp-gif-inline" src={part.text} alt="GIF" loading="lazy"/> : part.text.length>90 ? `${part.text.slice(0,87)}…`:part.text}</a> : part.kind==="mention" ? <span key={j} className="cp-mention">{part.text}</span> : part.text)}</p>{m.attachments?.length > 0 && <MessageAttachments supabase={supabase} attachments={m.attachments}/>}{detectShareLinks(m.body).length > 0 && <LinkPreviewCards links={detectShareLinks(m.body)}/>}</>}
                 </div>
                 {!!m.reactions?.length && !m.deleted && <div className="cp-reactions">{EMOJI.filter(emoji=>m.reactions?.some(r=>r.emoji===emoji)).map(emoji=>{
                   const rs=m.reactions!.filter(r=>r.emoji===emoji), mine=rs.some(r=>r.profile_id===me.id);
@@ -352,7 +358,7 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
           {(reply || editing) && <div className="cp-compose-context"><Icon name="reply"/><span><strong>{editing ? "Editing your message" : `Replying to ${name(reply!.sender_id)}`}</strong><small>{(editing || reply)?.body || "Attachment"}</small></span><Tool label="Cancel reply or edit" icon="close" onClick={() => { setReply(null); setEditing(null); }}/></div>}
           {files.length > 0 && <div className="cp-pending-files">{files.map((f, i) => <div key={`${f.name}-${i}`}>{f.mime.startsWith("image/") ? <img src={f.url} alt="" className="cp-pending-thumbnail"/> : <Icon name="file"/>}<span>{f.name}{sending && <small>{f.uploaded ? "Uploaded" : `${f.progress || 0}% uploaded`}</small>}</span><button aria-label={`Remove ${f.name}`} disabled={sending} onClick={() => {requestId.current=null; setFiles(fs => fs.filter((_, n) => n !== i));}}><Icon name="close"/></button></div>)}</div>}
           {suggestions.length > 0 && <div className="cp-mentions" aria-label="Mention suggestions">{suggestions.map((id, index) => <button className={index === mentionIndex ? "is-active" : ""} key={id} onClick={() => { setText(text.replace(/@[^@\n]*$/, `@${name(id)} `)); setMentionOpen(false); input.current?.focus(); }}>{avatar(id)}{name(id)}</button>)}</div>}
-          <div className="cp-composer"><input ref={upload} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={e => { if (e.target.files) attach(e.target.files); e.target.value = ""; }}/><button type="button" className="cp-tool" disabled={Boolean(editing) || sending || !selected} title="Attach files" aria-label="Attach files" onClick={() => upload.current?.click()}><Icon name="plus"/></button><button type="button" className={`cp-tool ${emojiOpen ? "is-active" : ""}`} disabled={sending || !selected} title="Insert emoji" aria-label="Insert emoji" aria-expanded={emojiOpen} onClick={() => emojiOpen ? closeEmoji() : openEmoji()}><Icon name="smile"/></button>{emojiOpen && <MessageActionPopover label="Insert emoji" onClose={closeEmoji}><div className="cp-emoji cp-emoji-grid">{PICKER_EMOJI.map(emoji => <button key={emoji} type="button" aria-label={`Insert ${emoji}`} onClick={() => insertEmoji(emoji)}>{emoji}</button>)}</div></MessageActionPopover>}<textarea ref={input} rows={1} disabled={sending || !selected} aria-label="Write a message" placeholder={`Message ${title(current)}…`} value={text} onChange={e => setText(e.target.value)} onPaste={e => { if (!editing && e.clipboardData.files.length) { e.preventDefault(); attach(e.clipboardData.files); } }} onKeyDown={e => {
+          <div className="cp-composer"><input ref={upload} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={e => { if (e.target.files) attach(e.target.files); e.target.value = ""; }}/><button type="button" className="cp-tool" disabled={Boolean(editing) || sending || !selected} title="Attach files" aria-label="Attach files" onClick={() => upload.current?.click()}><Icon name="plus"/></button><button type="button" className={`cp-tool ${emojiOpen ? "is-active" : ""}`} disabled={sending || !selected} title="Insert emoji" aria-label="Insert emoji" aria-expanded={emojiOpen} onClick={() => emojiOpen ? closeEmoji() : openEmoji()}><Icon name="smile"/></button>{emojiOpen && <MessageActionPopover label="Insert emoji" onClose={closeEmoji}><div className="cp-emoji cp-emoji-grid">{PICKER_EMOJI.map(emoji => <button key={emoji} type="button" aria-label={`Insert ${emoji}`} onClick={() => insertEmoji(emoji)}>{emoji}</button>)}</div></MessageActionPopover>}<button type="button" className={`cp-tool ${gifOpen ? "is-active" : ""}`} disabled={Boolean(editing) || sending || !selected} title="Your GIFs" aria-label="Your GIFs" aria-expanded={gifOpen} onClick={() => setGifOpen(o => !o)}><Icon name="gif"/></button>{gifOpen && <MessageActionPopover label="Your GIFs" onClose={() => setGifOpen(false)}><GifPicker supabase={supabase} meId={me.id} onPick={file => { attach([file]); setGifOpen(false); }}/></MessageActionPopover>}<textarea ref={input} rows={1} disabled={sending || !selected} aria-label="Write a message" placeholder={`Message ${title(current)}…`} value={text} onChange={e => setText(e.target.value)} onPaste={e => { if (!editing && e.clipboardData.files.length) { e.preventDefault(); attach(e.clipboardData.files); } }} onKeyDown={e => {
               if (suggestions.length && !e.nativeEvent.isComposing) {
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setMentionIndex(i => (i + (e.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length); return; }
                 if (e.key === "Enter") { e.preventDefault(); const id = suggestions[mentionIndex % suggestions.length]; setText(text.replace(/@[^@\n]*$/, `@${name(id)} `)); setMentionOpen(false); return; }
