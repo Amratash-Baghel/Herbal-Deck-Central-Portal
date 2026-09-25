@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canGroup, mergeMessages, isNearBottom } from "../components/chat/chat-model.ts";
+import { canGroup, mergeMessages, isNearBottom, insertAt } from "../components/chat/chat-model.ts";
 
 const a = { id: "a", sender_id: "one", conversation_id: "room", created_at: "2026-09-24T12:00:00Z", body: "first" };
 test("groups only same sender and conversation within five minutes", () => {
@@ -26,4 +26,11 @@ test("scroll follows latest only inside the 96 pixel boundary", () => {
   assert.equal(isNearBottom(0, 400, 800), false);
   assert.equal(isNearBottom(304, 400, 800), true);
   assert.equal(isNearBottom(303, 400, 800), false);
+});
+test("inserts emoji at the caret, over a selection and past the text end", () => {
+  assert.equal(insertAt("hi there", 2, 2, "🎉"), "hi🎉 there");
+  assert.equal(insertAt("hi there", 0, 2, "👋"), "👋 there");
+  assert.equal(insertAt("", 0, 0, "✅"), "✅");
+  assert.equal(insertAt("hi", 99, 99, "🌿"), "hi🌿");
+  assert.equal(insertAt("hi", 2, 0, "🌿"), "hi🌿");
 });

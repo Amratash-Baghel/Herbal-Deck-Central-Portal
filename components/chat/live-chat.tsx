@@ -11,7 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { MessageActionPopover } from "./message-actions";
 import { ChatAvatar } from "./chat-avatar";
 import { GroupBadge } from "./group-badges";
-import { canGroup, isNearBottom, formatConversationDate, messageTextParts } from "./chat-model";
+import { canGroup, isNearBottom, formatConversationDate, messageTextParts, insertAt, PICKER_EMOJI } from "./chat-model";
 import { detectShareLinks, checkFile, uploadChatAttachment, ATTACHMENT_ACCEPT, MAX_ATTACHMENTS_PER_MESSAGE, type Attachment } from "@/lib/chat-attachments";
 
 import type { ConversationSummary, DirectoryEntry } from "./types";
@@ -37,6 +37,7 @@ const paths: Record<string, ReactNode> = {
   check: <path d="m5 12 4 4L19 6"/>, down: <path d="m6 9 6 6 6-6"/>,
   people: <><circle cx="9" cy="8" r="3"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 5a3 3 0 0 1 0 6M19 15a5 5 0 0 1 3 5"/></>,
   file: <path d="M5 2h9l5 5v15H5V2Zm9 0v6h5M8 13h8M8 17h6"/>,
+  smile: <><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8.5 14.5a4.5 4.5 0 0 0 7 0"/></>,
 };
 function Icon({ name }: { name: string }) { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] ?? paths.chat}</svg>; }
 function Tool({ label, icon, onClick, active }: { label: string; icon: string; onClick: () => void; active?: boolean }) { return <button type="button" className={`cp-tool ${active ? "is-active" : ""}`} title={label} aria-label={label} aria-pressed={active} onClick={onClick}><Icon name={icon}/></button>; }
@@ -71,6 +72,8 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
   const [groupName, setGroupName] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [rename, setRename] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const caret = useRef<[number, number]>([0, 0]);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [matchIndex, setMatchIndex] = useState(0);
@@ -183,6 +186,23 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
   function avatar(id: string, group = false, size: "row" | "header" | "message" | "detail" = "row") {
     const p = person(id);
     return <ChatAvatar id={id} name={name(id)} kind={group ? "group" : "person"} avatarPath={p?.avatarPath} color={p?.color} size={size} />;
+  }
+  // The picker is a modal dialog, so the textarea is blurred while it is open: the
+  // caret is tracked in a ref and restored once the picker closes.
+  function openEmoji() {
+    const el = input.current;
+    caret.current = [el?.selectionStart ?? text.length, el?.selectionEnd ?? text.length];
+    setEmojiOpen(true);
+  }
+  function insertEmoji(emoji: string) {
+    const [start, end] = caret.current;
+    caret.current = [start + emoji.length, start + emoji.length];
+    setText(insertAt(text, start, end, emoji));
+    setMentionOpen(false);
+  }
+  function closeEmoji() {
+    setEmojiOpen(false);
+    requestAnimationFrame(() => { const el = input.current; if (!el) return; el.focus(); el.setSelectionRange(caret.current[0], caret.current[1]); });
   }
   function setText(value: string) { requestId.current=null; if (editing) setEditText(value); else setStore(s => ({ ...s, drafts: { ...s.drafts, [selected]: value } })); setMentionOpen(true); setMentionIndex(0); }
   function open(id:string) {
@@ -332,7 +352,7 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
           {(reply || editing) && <div className="cp-compose-context"><Icon name="reply"/><span><strong>{editing ? "Editing your message" : `Replying to ${name(reply!.sender_id)}`}</strong><small>{(editing || reply)?.body || "Attachment"}</small></span><Tool label="Cancel reply or edit" icon="close" onClick={() => { setReply(null); setEditing(null); }}/></div>}
           {files.length > 0 && <div className="cp-pending-files">{files.map((f, i) => <div key={`${f.name}-${i}`}>{f.mime.startsWith("image/") ? <img src={f.url} alt="" className="cp-pending-thumbnail"/> : <Icon name="file"/>}<span>{f.name}{sending && <small>{f.uploaded ? "Uploaded" : `${f.progress || 0}% uploaded`}</small>}</span><button aria-label={`Remove ${f.name}`} disabled={sending} onClick={() => {requestId.current=null; setFiles(fs => fs.filter((_, n) => n !== i));}}><Icon name="close"/></button></div>)}</div>}
           {suggestions.length > 0 && <div className="cp-mentions" aria-label="Mention suggestions">{suggestions.map((id, index) => <button className={index === mentionIndex ? "is-active" : ""} key={id} onClick={() => { setText(text.replace(/@[^@\n]*$/, `@${name(id)} `)); setMentionOpen(false); input.current?.focus(); }}>{avatar(id)}{name(id)}</button>)}</div>}
-          <div className="cp-composer"><input ref={upload} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={e => { if (e.target.files) attach(e.target.files); e.target.value = ""; }}/><button type="button" className="cp-tool" disabled={Boolean(editing) || sending || !selected} title="Attach files" aria-label="Attach files" onClick={() => upload.current?.click()}><Icon name="plus"/></button><textarea ref={input} rows={1} disabled={sending || !selected} aria-label="Write a message" placeholder={`Message ${title(current)}…`} value={text} onChange={e => setText(e.target.value)} onPaste={e => { if (!editing && e.clipboardData.files.length) { e.preventDefault(); attach(e.clipboardData.files); } }} onKeyDown={e => {
+          <div className="cp-composer"><input ref={upload} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={e => { if (e.target.files) attach(e.target.files); e.target.value = ""; }}/><button type="button" className="cp-tool" disabled={Boolean(editing) || sending || !selected} title="Attach files" aria-label="Attach files" onClick={() => upload.current?.click()}><Icon name="plus"/></button><button type="button" className={`cp-tool ${emojiOpen ? "is-active" : ""}`} disabled={sending || !selected} title="Insert emoji" aria-label="Insert emoji" aria-expanded={emojiOpen} onClick={() => emojiOpen ? closeEmoji() : openEmoji()}><Icon name="smile"/></button>{emojiOpen && <MessageActionPopover label="Insert emoji" onClose={closeEmoji}><div className="cp-emoji cp-emoji-grid">{PICKER_EMOJI.map(emoji => <button key={emoji} type="button" aria-label={`Insert ${emoji}`} onClick={() => insertEmoji(emoji)}>{emoji}</button>)}</div></MessageActionPopover>}<textarea ref={input} rows={1} disabled={sending || !selected} aria-label="Write a message" placeholder={`Message ${title(current)}…`} value={text} onChange={e => setText(e.target.value)} onPaste={e => { if (!editing && e.clipboardData.files.length) { e.preventDefault(); attach(e.clipboardData.files); } }} onKeyDown={e => {
               if (suggestions.length && !e.nativeEvent.isComposing) {
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setMentionIndex(i => (i + (e.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length); return; }
                 if (e.key === "Enter") { e.preventDefault(); const id = suggestions[mentionIndex % suggestions.length]; setText(text.replace(/@[^@\n]*$/, `@${name(id)} `)); setMentionOpen(false); return; }

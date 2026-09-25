@@ -1,3 +1,5 @@
+// Typed into the message body, so unlike reactions this is not capped by the database check constraint.
+export const PICKER_EMOJI = ["😀","😃","😄","😁","😅","😂","🙂","😉","😊","😇","🥰","😍","😘","😋","😎","🤩","🤔","🤗","🙃","😴","😐","😢","😭","😤","😱","🤯","🥳","😬","🙄","😷","👍","👎","👌","🙏","👏","🙌","💪","🤝","👋","✌️","❤️","🧡","💚","💙","💜","🔥","✨","⭐","🎉","🎊","💯","✅","❌","⚠️","📌","📎","📅","⏰","☕","🌿","🌱","🍀","🚀","💡"];
 export type GroupableMessage = { id: string; sender_id: string; conversation_id: string; created_at: string };
 export function formatConversationDate(date:string):string {
   return new Date(date).toLocaleDateString("en-IN", {month:"short",day:"numeric",timeZone:"Asia/Kolkata"});
@@ -26,6 +28,12 @@ export function canGroup(a: GroupableMessage | undefined, b: GroupableMessage): 
   return first.toDateString() === second.toDateString() && gap >= 0 && gap <= 300_000;
 }
 export function isNearBottom(top: number, height: number, total: number) { return total - top - height <= 96; }
+/** Splice text into a caret position or over a selection, clamped to the text. */
+export function insertAt(text: string, start: number, end: number, insert: string): string {
+  const from = Math.max(0, Math.min(start, text.length));
+  const to = Math.max(from, Math.min(end, text.length));
+  return text.slice(0, from) + insert + text.slice(to);
+}
 export function mergeMessages<T extends GroupableMessage>(existing: T[], incoming: T[]): T[] {
   return [...new Map([...existing, ...incoming].map(m => [m.id, m])).values()].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
 }

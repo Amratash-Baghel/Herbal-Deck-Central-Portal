@@ -95,6 +95,7 @@ main.chat-page-frame { max-width:none!important; padding:26px 28px 20px!importan
 .cp-emoji { display:flex; justify-content:space-between; padding:4px 0 8px; border-bottom:1px solid var(--border); margin-bottom:3px; }
 .cp-emoji button { font-size:20px; padding:3px; border-radius:5px; }
 .cp-emoji button:hover { background:var(--accent); }
+.cp-emoji-grid { flex-wrap:wrap; justify-content:flex-start; gap:2px; max-height:232px; overflow-y:auto; border-bottom:0; margin-bottom:0; padding:2px 0; }
 .cp-danger { color:#c44545; }
 .cp-reactions { display:flex; gap:4px; margin:5px 0 0; }
 .cp-reactions button { background:var(--card); border:1px solid color-mix(in srgb,var(--primary) 28%,var(--border)); border-radius:12px; padding:2px 7px; font-size:12px; display:flex; gap:5px; align-items:center; }

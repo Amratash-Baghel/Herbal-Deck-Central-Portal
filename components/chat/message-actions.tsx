@@ -3,7 +3,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
 /** Native modal behaviour gives the action sheet focus containment and Escape. */
-export function MessageActionPopover({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+export function MessageActionPopover({ children, onClose, label = "Message actions" }: { children: ReactNode; onClose: () => void; label?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const close = useRef(onClose);
   useEffect(() => { close.current = onClose; }, [onClose]);
@@ -24,5 +24,5 @@ export function MessageActionPopover({ children, onClose }: { children: ReactNod
     dialog.addEventListener("cancel", cancel);
     return () => { dialog.removeEventListener("cancel", cancel); dialog.close(); trigger?.focus({ preventScroll: true }); };
   }, []);
-  return <dialog ref={ref} className="cp-action-menu" aria-label="Message actions" onClick={event => { if (event.target === event.currentTarget) onClose(); }}>{children}</dialog>;
+  return <dialog ref={ref} className="cp-action-menu" aria-label={label} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>{children}</dialog>;
 }
