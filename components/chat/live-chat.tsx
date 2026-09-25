@@ -10,9 +10,10 @@ import { LinkPreviewCards } from "./link-preview";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MessageActionPopover } from "./message-actions";
 import { GifPicker } from "./gif-picker";
+import { shrinkImage } from "@/lib/shrink-image";
 import { ChatAvatar } from "./chat-avatar";
 import { GroupBadge } from "./group-badges";
-import { canGroup, isNearBottom, formatConversationDate, messageTextParts, insertAt, isGifUrl, PICKER_EMOJI } from "./chat-model";
+import { canGroup, isNearBottom, formatConversationDate, messageTextParts, insertAt, isGifUrl, previewText, PICKER_EMOJI } from "./chat-model";
 import { detectShareLinks, checkFile, uploadChatAttachment, ATTACHMENT_ACCEPT, MAX_ATTACHMENTS_PER_MESSAGE, type Attachment } from "@/lib/chat-attachments";
 
 import type { ConversationSummary, DirectoryEntry } from "./types";
@@ -263,10 +264,31 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
     } catch(e) {setNotice(e instanceof Error && e.message ? e.message : "Send could not be confirmed. Your draft and files are kept. Check the conversation before retrying.");}
     finally {sendingRef.current=false;setSending(false);}
   }
-  function attach(list: FileList | File[]) {
+  /**
+   * Send a Giphy GIF as its link. The thread already renders a `.gif` link as
+   * an inline image, so it looks the same as an uploaded one — but Giphy's CDN
+   * serves it, so it costs no storage and no Supabase egress per view.
+   */
+  async function sendGifLink(url: string) {
+    if(sendingRef.current || !selected || loading || !ready || offline || editing) return;
+    sendingRef.current=true;setSending(true);
+    try {
+      const result=await sendMessage(selected,url,[],[],advanced ? {clientRequestId:crypto.randomUUID(),replyToId:reply?.id}:undefined);
+      if(!result.ok || !result.message) {setNotice(result.error || "Could not send the GIF.");return;}
+      await live.accept(result.message);
+      setReply(null);
+      if(live.windowed) await live.latest();
+      scrollBottom.current=true;live.setAtBottom(true);setAway(false);
+    } catch {setNotice("Could not send the GIF. Check your connection and try again.");}
+    finally {sendingRef.current=false;setSending(false);}
+  }
+  async function attach(list: FileList | File[]) {
     if(sendingRef.current || !selected) return;
     requestId.current=null;
-    const incoming = Array.from(list);
+    // Shrink photos before the size check: a 6 MB phone photo becomes a few
+    // hundred KB, so it fits under the 3 MB cap instead of being refused, and
+    // costs a fraction of the storage and bandwidth.
+    const incoming = await Promise.all(Array.from(list).map(file => shrinkImage(file)));
     if (files.length + incoming.length > MAX_ATTACHMENTS_PER_MESSAGE) { setNotice("You can attach up to six files per message."); return; }
     const invalid = incoming.map(file => ({ file, result: checkFile(file) })).find(({ result }) => !result.ok);
     if (invalid && !invalid.result.ok) { setNotice(invalid.result.error); return; }
@@ -310,7 +332,7 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
         <label className="cp-search"><Icon name="search"/><input aria-label="Search conversations" placeholder="Find a conversation" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button aria-label="Clear conversation search" onClick={() => setQuery("")}><Icon name="close"/></button>}</label>
         <div className="cp-filters" aria-label="Filter conversations">{["All", "Unread", "Groups"].map(f => <button key={f} aria-pressed={filter === f} className={filter === f ? "selected" : ""} onClick={() => setFilter(f)}>{f}{f === "Unread" && all.some(c => c.unread > 0) && <span>{all.filter(c => c.unread > 0).length}</span>}</button>)}</div>
         <div className="cp-conversations">{visible.length === 0 && <div className="cp-small-empty"><Icon name="search"/><strong>{filter === "Unread" ? "You’re all caught up" : "No conversations found"}</strong><p>{query ? "Try another name or clear your search." : "Your conversations will appear here."}</p><button onClick={() => { setQuery(""); setFilter("All"); }}>Show all conversations</button></div>}{visible.map(c => {
-          const preview = store.drafts[c.id] || c.lastMessagePreview || "Start a conversation";
+          const preview = store.drafts[c.id] || (c.lastMessagePreview ? previewText(c.lastMessagePreview) : "") || "Start a conversation";
           return <button key={c.id} className={`cp-conversation ${selected === c.id ? "selected" : ""}`} aria-current={selected === c.id ? "true" : undefined} onClick={() => open(c.id)}>{avatar(c.type === "group" ? c.id : c.participantIds.find(id => id !== me.id) || me.id, c.type === "group")}<span className="cp-conversation-text"><span className="cp-conversation-top"><strong>{title(c)}</strong><small>{c.lastMessageAt ? formatConversationDate(c.lastMessageAt) : ""}</small></span><span className="cp-conversation-bottom"><span>{store.drafts[c.id] && <em>Draft: </em>}{preview}</span>{c.unread > 0 && <b>{c.unread}</b>}</span></span></button>;
         })}</div>
         <div className="cp-list-footer"><span>{offline ? "Offline" : live.connection}</span></div>
@@ -358,7 +380,7 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
           {(reply || editing) && <div className="cp-compose-context"><Icon name="reply"/><span><strong>{editing ? "Editing your message" : `Replying to ${name(reply!.sender_id)}`}</strong><small>{(editing || reply)?.body || "Attachment"}</small></span><Tool label="Cancel reply or edit" icon="close" onClick={() => { setReply(null); setEditing(null); }}/></div>}
           {files.length > 0 && <div className="cp-pending-files">{files.map((f, i) => <div key={`${f.name}-${i}`}>{f.mime.startsWith("image/") ? <img src={f.url} alt="" className="cp-pending-thumbnail"/> : <Icon name="file"/>}<span>{f.name}{sending && <small>{f.uploaded ? "Uploaded" : `${f.progress || 0}% uploaded`}</small>}</span><button aria-label={`Remove ${f.name}`} disabled={sending} onClick={() => {requestId.current=null; setFiles(fs => fs.filter((_, n) => n !== i));}}><Icon name="close"/></button></div>)}</div>}
           {suggestions.length > 0 && <div className="cp-mentions" aria-label="Mention suggestions">{suggestions.map((id, index) => <button className={index === mentionIndex ? "is-active" : ""} key={id} onClick={() => { setText(text.replace(/@[^@\n]*$/, `@${name(id)} `)); setMentionOpen(false); input.current?.focus(); }}>{avatar(id)}{name(id)}</button>)}</div>}
-          <div className="cp-composer"><input ref={upload} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={e => { if (e.target.files) attach(e.target.files); e.target.value = ""; }}/><button type="button" className="cp-tool" disabled={Boolean(editing) || sending || !selected} title="Attach files" aria-label="Attach files" onClick={() => upload.current?.click()}><Icon name="plus"/></button><button type="button" className={`cp-tool ${emojiOpen ? "is-active" : ""}`} disabled={sending || !selected} title="Insert emoji" aria-label="Insert emoji" aria-expanded={emojiOpen} onClick={() => emojiOpen ? closeEmoji() : openEmoji()}><Icon name="smile"/></button>{emojiOpen && <MessageActionPopover label="Insert emoji" onClose={closeEmoji}><div className="cp-emoji cp-emoji-grid">{PICKER_EMOJI.map(emoji => <button key={emoji} type="button" aria-label={`Insert ${emoji}`} onClick={() => insertEmoji(emoji)}>{emoji}</button>)}</div></MessageActionPopover>}<button type="button" className={`cp-tool ${gifOpen ? "is-active" : ""}`} disabled={Boolean(editing) || sending || !selected} title="Your GIFs" aria-label="Your GIFs" aria-expanded={gifOpen} onClick={() => setGifOpen(o => !o)}><Icon name="gif"/></button>{gifOpen && <MessageActionPopover label="Your GIFs" onClose={() => setGifOpen(false)}><GifPicker supabase={supabase} meId={me.id} onPick={file => { attach([file]); setGifOpen(false); }}/></MessageActionPopover>}<textarea ref={input} rows={1} disabled={sending || !selected} aria-label="Write a message" placeholder={`Message ${title(current)}…`} value={text} onChange={e => setText(e.target.value)} onPaste={e => { if (!editing && e.clipboardData.files.length) { e.preventDefault(); attach(e.clipboardData.files); } }} onKeyDown={e => {
+          <div className="cp-composer"><input ref={upload} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={e => { if (e.target.files) attach(e.target.files); e.target.value = ""; }}/><button type="button" className="cp-tool" disabled={Boolean(editing) || sending || !selected} title="Attach files" aria-label="Attach files" onClick={() => upload.current?.click()}><Icon name="plus"/></button><button type="button" className={`cp-tool ${emojiOpen ? "is-active" : ""}`} disabled={sending || !selected} title="Insert emoji" aria-label="Insert emoji" aria-expanded={emojiOpen} onClick={() => emojiOpen ? closeEmoji() : openEmoji()}><Icon name="smile"/></button>{emojiOpen && <MessageActionPopover label="Insert emoji" onClose={closeEmoji}><div className="cp-emoji cp-emoji-grid">{PICKER_EMOJI.map(emoji => <button key={emoji} type="button" aria-label={`Insert ${emoji}`} onClick={() => insertEmoji(emoji)}>{emoji}</button>)}</div></MessageActionPopover>}<button type="button" className={`cp-tool ${gifOpen ? "is-active" : ""}`} disabled={Boolean(editing) || sending || !selected} title="Your GIFs" aria-label="Your GIFs" aria-expanded={gifOpen} onClick={() => setGifOpen(o => !o)}><Icon name="gif"/></button>{gifOpen && <MessageActionPopover label="Your GIFs" onClose={() => setGifOpen(false)}><GifPicker supabase={supabase} meId={me.id} onPick={file => { attach([file]); setGifOpen(false); }} onPickUrl={url => { setGifOpen(false); void sendGifLink(url); }}/></MessageActionPopover>}<textarea ref={input} rows={1} disabled={sending || !selected} aria-label="Write a message" placeholder={`Message ${title(current)}…`} value={text} onChange={e => setText(e.target.value)} onPaste={e => { if (!editing && e.clipboardData.files.length) { e.preventDefault(); attach(e.clipboardData.files); } }} onKeyDown={e => {
               if (suggestions.length && !e.nativeEvent.isComposing) {
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setMentionIndex(i => (i + (e.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length); return; }
                 if (e.key === "Enter") { e.preventDefault(); const id = suggestions[mentionIndex % suggestions.length]; setText(text.replace(/@[^@\n]*$/, `@${name(id)} `)); setMentionOpen(false); return; }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/avatar";
 import { updateAvatar, removeAvatar } from "@/app/(dashboard)/profile/actions";
 import { validateAvatar } from "@/lib/avatar-validation";
+import { shrinkImage } from "@/lib/shrink-image";
 
 export function AvatarUpload({ name, avatarPath }: { name: string; avatarPath: string | null }) {
   const router = useRouter();
@@ -45,8 +46,12 @@ export function AvatarUpload({ name, avatarPath }: { name: string; avatarPath: s
       <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" aria-label="Choose profile picture" disabled={busy}
         className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-xl file:border file:bg-background file:px-3 file:py-2 file:font-medium"
         onChange={async e => {
-          const next = e.target.files?.[0], version=++selection.current; setError(""); setSuccess("");
-          if (!next) return;
+          const picked = e.target.files?.[0], version=++selection.current; setError(""); setSuccess("");
+          if (!picked) return;
+          // Avatars never render above ~96px, so a 512px JPEG is plenty even on
+          // a sharp screen — a few dozen KB instead of a multi-MB phone photo.
+          const next = await shrinkImage(picked, { maxEdge: 512, skipUnderBytes: 0 });
+          if(version!==selection.current) return;
           const valid = await validateAvatar(next);
           if(version!==selection.current) return;
           if (!valid.ok) { setError(valid.error); clear(); return; }

@@ -30,6 +30,8 @@ export function canGroup(a: GroupableMessage | undefined, b: GroupableMessage): 
 export function isNearBottom(top: number, height: number, total: number) { return total - top - height <= 96; }
 /** A link that points straight at a .gif file, so it can render inline. */
 export function isGifUrl(url: string): boolean { return /^https:\/\/[^\s]+\.gif(\?[^\s]*)?$/i.test(url); }
+/** A message preview for lists and notifications: a GIF sent as a link reads as "GIF", not a CDN URL. */
+export function previewText(text: string): string { return isGifUrl(text.trim()) ? "GIF" : text; }
 /** Splice text into a caret position or over a selection, clamped to the text. */
 export function insertAt(text: string, start: number, end: number, insert: string): string {
   const from = Math.max(0, Math.min(start, text.length));

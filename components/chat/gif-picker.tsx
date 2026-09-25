@@ -24,7 +24,17 @@ async function fetchGif(url: string, name: string): Promise<File> {
  * visible to anyone else until you send it — sending copies it into the
  * conversation like any other attachment.
  */
-export function GifPicker({ supabase, meId, onPick }: { supabase: SupabaseClient; meId: string; onPick: (file: File) => void }) {
+export function GifPicker({ supabase, meId, onPick, onPickUrl }: {
+  supabase: SupabaseClient;
+  meId: string;
+  /** A GIF from your private library, attached as a file so others can see it. */
+  onPick: (file: File) => void;
+  /**
+   * A Giphy result, sent as its public link. Giphy's CDN serves it to everyone,
+   * so nothing is copied into our storage or counted against its bandwidth.
+   */
+  onPickUrl?: (url: string) => void;
+}) {
   const [tab, setTab] = useState<"search" | "mine">("search");
   const [gifs, setGifs] = useState<SavedGif[] | null>(null);
   const [found, setFound] = useState<FoundGif[] | null>(null);
@@ -90,7 +100,7 @@ export function GifPicker({ supabase, meId, onPick }: { supabase: SupabaseClient
         })}>×</button>
       </span>)
     : found?.map(gif => <span key={gif.id}>
-        <button type="button" disabled={busy} aria-label={gif.title ? `Send ${gif.title}` : "Send this GIF"} onClick={() => void act(async () => onPick(await fetchGif(gif.url, "giphy.gif")))}><img src={gif.preview} alt={gif.title} loading="lazy"/></button>
+        <button type="button" disabled={busy} aria-label={gif.title ? `Send ${gif.title}` : "Send this GIF"} onClick={() => void act(async () => (onPickUrl ? onPickUrl(gif.url) : onPick(await fetchGif(gif.url, "giphy.gif"))))}><img src={gif.preview} alt={gif.title} loading="lazy"/></button>
         <button type="button" className="cp-gif-save" disabled={busy} aria-label="Save to my GIFs" title="Save to my GIFs" onClick={() => void act(async () => save(await fetchGif(gif.url, "giphy.gif")))}>+</button>
       </span>);
 

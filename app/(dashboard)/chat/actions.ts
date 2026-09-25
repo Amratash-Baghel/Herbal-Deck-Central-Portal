@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUsers } from "@/lib/notifications";
 import { sanitizeAttachments, type Attachment } from "@/lib/chat-attachments";
+import { previewText } from "@/components/chat/chat-model";
 import type { Message } from "@/lib/types";
 
 /**
@@ -120,9 +121,8 @@ export async function sendMessage(
     attachments.length > 0
       ? `📎 ${attachments.length === 1 ? attachments[0].name : `${attachments.length} files`}`
       : "";
-  const previewText = body || attachLabel;
-  const preview =
-    previewText.length > 140 ? `${previewText.slice(0, 140)}…` : previewText;
+  const shown = (body ? previewText(body) : "") || attachLabel;
+  const preview = shown.length > 140 ? `${shown.slice(0, 140)}…` : shown;
   const link = `/chat?c=${conversationId}`;
 
   try { if (convo.type === "dm") {

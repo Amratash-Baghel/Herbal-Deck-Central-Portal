@@ -205,10 +205,38 @@ export function useLiveChat(meId:string, initial:ConversationSummary[], initialD
     return ()=>{cancelled=true;};
   },[supabase,sync]);
   useEffect(() => {
-    let timer:ReturnType<typeof setTimeout> | undefined;
-    const refresh=()=>{ clearTimeout(timer); timer=setTimeout(()=>{void sync();void refreshConversations();},200); };
+    // Realtime already pushes every change, so each one is applied as narrowly
+    // as it allows. A full re-sync of the open thread (its latest page, pins,
+    // reactions and members) re-downloads dozens of rows per participant, so it
+    // is kept for changes that can't be applied piecemeal, for reconnects, and
+    // as a slow safety net — not for every message someone sends.
+    let syncTimer:ReturnType<typeof setTimeout> | undefined;
+    let listTimer:ReturnType<typeof setTimeout> | undefined;
+    let connected=false;
+    let lastFull=0;
+    const queueList=()=>{ clearTimeout(listTimer); listTimer=setTimeout(()=>{void refreshConversations();},200); };
+    const refresh=()=>{ lastFull=Date.now(); clearTimeout(syncTimer); syncTimer=setTimeout(()=>{void sync();},200); queueList(); };
+    const inOpenThread=(row:unknown)=>Boolean(selectedRef.current) && (row as {conversation_id?:string} | null)?.conversation_id===selectedRef.current;
+    // A new message in the open thread arrives complete in the event payload, so
+    // merge it directly. The list (order, preview, unread) follows from the
+    // conversations UPDATE that the message trigger fires alongside it.
+    const mergeIncoming=async(message:Message)=>{
+      if(!inOpenThread(message) || (windowedRef.current && !messagesRef.current.some(m=>m.id===message.id))) return;
+      const rows=await enrich([message]);
+      if(inOpenThread(message)) {syncSequence.current++;setBase(ms=>mergeMessages(ms,rows));}
+    };
     const channel=supabase.channel(`chat-live-${meId}`);
-    for(const table of ["messages","conversation_participants","conversations","message_reactions","conversation_pins"])
+    channel.on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},payload=>{
+      if(inOpenThread(payload.new)) void mergeIncoming(payload.new as Message); else queueList();
+    });
+    // Edits and soft-deletes: re-sync only when they touch the thread on screen.
+    channel.on("postgres_changes",{event:"UPDATE",schema:"public",table:"messages"},payload=>{
+      if(inOpenThread(payload.new)) refresh(); else queueList();
+    });
+    channel.on("postgres_changes",{event:"DELETE",schema:"public",table:"messages"},refresh);
+    channel.on("postgres_changes",{event:"*",schema:"public",table:"conversations"},queueList);
+    // Membership, reactions and pins can't be placed from the event alone.
+    for(const table of ["conversation_participants","message_reactions","conversation_pins"])
       channel.on("postgres_changes",{event:"*",schema:"public",table},refresh);
     channel.on("postgres_changes",{event:"UPDATE",schema:"public",table:"profiles"},()=>{
       void supabase.from("profiles").select("id,full_name,email,deactivated_at,color,avatar_path,post").then(({data,error})=>{
@@ -216,14 +244,27 @@ export function useLiveChat(meId:string, initial:ConversationSummary[], initialD
       });
     });
     channel.subscribe(status=>{
-      setConnection(status==="SUBSCRIBED" ? "Connected" : "Reconnecting");
-      if(status==="SUBSCRIBED") refresh();
+      connected=status==="SUBSCRIBED";
+      setConnection(connected ? "Connected" : "Reconnecting");
+      // Catch up on anything missed while the socket was down.
+      if(connected) refresh();
     });
-    const onReturn=()=>{ if(portalIsFocused()) {refresh();void markRead();} };
-    const interval=setInterval(onReturn,15000);
+    // Coming back to the tab re-syncs only if realtime is down or it has been a
+    // while; alt-tabbing back after a few seconds has missed nothing.
+    const onReturn=()=>{
+      if(!portalIsFocused()) return;
+      if(!connected || Date.now()-lastFull>60_000) refresh();
+      void markRead();
+    };
+    // Polling is a fallback for a dead socket, plus a slow safety net for an
+    // event realtime might drop — not the way changes normally arrive.
+    const interval=setInterval(()=>{
+      if(!portalIsFocused()) return;
+      if(!connected || Date.now()-lastFull>300_000) refresh();
+    },15000);
     window.addEventListener("online",onReturn); window.addEventListener("focus",onReturn); document.addEventListener("visibilitychange",onReturn);
-    return ()=>{clearTimeout(timer);clearInterval(interval);void supabase.removeChannel(channel);window.removeEventListener("online",onReturn);window.removeEventListener("focus",onReturn);document.removeEventListener("visibilitychange",onReturn);};
-  },[supabase,meId,sync,refreshConversations,markRead]);
+    return ()=>{clearTimeout(syncTimer);clearTimeout(listTimer);clearInterval(interval);void supabase.removeChannel(channel);window.removeEventListener("online",onReturn);window.removeEventListener("focus",onReturn);document.removeEventListener("visibilitychange",onReturn);};
+  },[supabase,meId,sync,refreshConversations,markRead,enrich]);
   useEffect(()=>{void markRead();},[base,markRead]);
   useEffect(()=>()=>setActiveConversation(null),[setActiveConversation]);
   const setAtBottom = (value:boolean) => {atBottom.current=value;setActiveConversation(value && !windowedRef.current ? selectedRef.current || null : null);};

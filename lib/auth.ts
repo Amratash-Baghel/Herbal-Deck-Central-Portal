@@ -10,27 +10,31 @@ import type { Profile } from "@/lib/types";
  * Wrapped in React's `cache()` so that within a single request/render pass,
  * calling this any number of times — once from the shared dashboard layout,
  * again from a page's `requireProfile()`/`getUserAccess()`, again from a
- * nested component — issues the underlying `auth.getUser()` + `profiles`
+ * nested component — issues the underlying `auth.getClaims()` + `profiles`
  * query exactly ONCE. Without this, every navigation was re-running the same
  * auth check two or three times (layout + page + any extra caller), which was
  * the single biggest contributor to the delay between clicking a link and the
  * next page rendering. This does not cache across requests/users — React's
  * `cache()` scope is one render pass, so every navigation still gets a fresh,
- * fully-verified session check.
+ * signature-verified session check.
+ *
+ * getClaims() verifies the JWT locally against the project's signing keys
+ * rather than calling the Auth server (the proxy has already refreshed the
+ * session this request). A signed-out-elsewhere session stays valid until its
+ * token expires (≤ 1 hour); a deactivated employee is still refused at once,
+ * because getProfile() checks `deactivated_at` on every request.
  */
 const fetchProfileRow = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
+  const { data } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub;
+  if (!userId) return null;
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
 
   return (profile as Profile) ?? null;

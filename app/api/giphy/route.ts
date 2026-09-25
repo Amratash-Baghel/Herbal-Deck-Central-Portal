@@ -13,8 +13,9 @@ import { createClient } from "@/lib/supabase/server";
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Verified locally (see lib/auth.ts) — this runs on every search keystroke batch.
+  const { data } = await supabase.auth.getClaims();
+  if (!data?.claims) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const key = process.env.GIPHY_KEY;
   if (!key) return NextResponse.json({ error: "GIF search is not configured." }, { status: 503 });
@@ -26,7 +27,9 @@ export async function GET(request: NextRequest) {
   url.searchParams.set("rating", "g");
   if (q) url.searchParams.set("q", q);
 
-  const response = await fetch(url, { cache: "no-store" });
+  // The same search (and the trending list) returns the same GIFs for a while,
+  // so serve repeats from Next's data cache instead of calling Giphy again.
+  const response = await fetch(url, { next: { revalidate: 3600 } });
   if (!response.ok) return NextResponse.json({ error: "Giphy is unavailable." }, { status: 502 });
 
   const body = await response.json();

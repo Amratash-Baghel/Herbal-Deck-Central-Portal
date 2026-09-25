@@ -39,10 +39,14 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // IMPORTANT: do not run code between createServerClient and getUser().
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // IMPORTANT: do not run code between createServerClient and getClaims().
+  // getClaims() refreshes an expired session like getUser() does, but then
+  // verifies the JWT locally against the project's published signing keys
+  // instead of asking the Auth server — one network round trip saved on every
+  // request. (With legacy symmetric keys it falls back to the Auth server, so
+  // it is never slower than getUser().)
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   const { pathname } = request.nextUrl;
   // Public routes: the login screen, the "forgot password" request page, and

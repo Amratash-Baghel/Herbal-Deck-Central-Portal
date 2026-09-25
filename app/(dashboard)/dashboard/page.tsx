@@ -12,6 +12,7 @@ import { time } from "@/lib/perf";
 import { createClient } from "@/lib/supabase/server";
 import { noteColor } from "@/lib/tasks";
 import { daysUntil, formatClockTZ, isoDaysAgo, localDateISO } from "@/lib/time";
+import { previewText } from "@/components/chat/chat-model";
 import type { Conversation, EodReport, EodSummary, Task } from "@/lib/types";
 
 const TZ = "Asia/Kolkata";
@@ -708,7 +709,7 @@ async function Unread({ me }: { me: string }) {
         id: c.id,
         label: c.type === "group" ? c.name || "Group" : other ? other.full_name || other.email : "Chat",
         avatarPath: c.type === "group" ? null : (other?.avatar_path ?? null),
-        preview: c.last_message_preview,
+        preview: c.last_message_preview ? previewText(c.last_message_preview) : null,
         unread: unreadBy.get(c.id) ?? 0,
       };
     })
