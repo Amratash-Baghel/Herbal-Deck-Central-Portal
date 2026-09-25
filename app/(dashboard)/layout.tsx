@@ -65,7 +65,7 @@ export default async function DashboardLayout({
             cap scales with the display: comfortable for reading on a laptop,
             but not leaving half an external monitor empty. */}
         <div className="flex min-h-screen flex-col md:pl-64">
-          <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-5 py-8 md:px-10 md:py-12 tall:max-w-4xl wide:max-w-[min(94vw,calc(100vh*1.7))] ultrawide:max-w-[min(92vw,calc(100vh*2))]">
+          <main className={`${pathname === "/chat" ? "chat-page-frame" : ""} mx-auto flex w-full max-w-6xl flex-1 flex-col px-5 py-8 md:px-10 md:py-12 tall:max-w-4xl wide:max-w-[min(94vw,calc(100vh*1.7))] ultrawide:max-w-[min(92vw,calc(100vh*2))]`}>
             {children}
           </main>
         </div>

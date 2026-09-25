@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { validateAvatar } from "@/lib/avatar-validation";
 
 export interface AvatarState {
   error: string | null;
@@ -14,7 +15,6 @@ export interface NameState {
   success: string | null;
 }
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 /** Update the signed-in user's own display name and (optional) date of birth. */
 export async function updateName(
@@ -68,35 +68,34 @@ export async function updateAvatar(
   if (!(file instanceof File) || file.size === 0) {
     return { error: "Choose an image to upload.", success: null };
   }
-  if (!file.type.startsWith("image/")) {
-    return { error: "That file isn't an image.", success: null };
-  }
-  if (file.size > MAX_BYTES) {
-    return { error: "Image must be under 5 MB.", success: null };
-  }
+  const valid = await validateAvatar(file);
+  if (!valid.ok) return { error: valid.error, success: null };
 
   const supabase = await createClient();
-  const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const path = `${profile.id}/${Date.now()}.${ext || "png"}`;
+  const path = `${profile.id}/${crypto.randomUUID()}.${valid.ext}`;
   const bytes = Buffer.from(await file.arrayBuffer());
 
   const { error: upErr } = await supabase.storage
     .from("avatars")
-    .upload(path, bytes, { contentType: file.type, upsert: false });
+    .upload(path, bytes, { contentType: valid.mime, upsert: false });
   if (upErr) return { error: upErr.message, success: null };
 
   // Point the profile at the new file, then delete the old one.
-  const { error: updErr } = await supabase
+  const { data: updated, error: updErr } = await supabase
     .from("profiles")
     .update({ avatar_path: path })
-    .eq("id", profile.id);
-  if (updErr) return { error: updErr.message, success: null };
+    .eq("id", profile.id).select("id").maybeSingle();
+  if (updErr || !updated) {
+    await supabase.storage.from("avatars").remove([path]);
+    return { error: updErr?.message || "Your profile could not be updated.", success: null };
+  }
 
-  if (profile.avatar_path) {
+  if (profile.avatar_path?.startsWith(`${profile.id}/`)) {
     await supabase.storage.from("avatars").remove([profile.avatar_path]);
   }
 
   revalidatePath("/profile");
+  revalidatePath("/chat");
   revalidatePath("/", "layout"); // refresh the sidebar avatar
   return { error: null, success: "Profile picture updated." };
 }
@@ -108,10 +107,13 @@ export async function removeAvatar(): Promise<AvatarState> {
   if (!profile.avatar_path) return { error: null, success: null };
 
   const supabase = await createClient();
-  await supabase.storage.from("avatars").remove([profile.avatar_path]);
-  await supabase.from("profiles").update({ avatar_path: null }).eq("id", profile.id);
+  const { data, error } = await supabase.from("profiles").update({ avatar_path: null })
+    .eq("id", profile.id).eq("avatar_path", profile.avatar_path).select("id").maybeSingle();
+  if (error || !data) return {error: error?.message || "Your picture changed. Refresh and try again.", success:null};
+  if (profile.avatar_path.startsWith(`${profile.id}/`)) await supabase.storage.from("avatars").remove([profile.avatar_path]);
 
   revalidatePath("/profile");
+  revalidatePath("/chat");
   revalidatePath("/", "layout");
   return { error: null, success: "Profile picture removed." };
 }

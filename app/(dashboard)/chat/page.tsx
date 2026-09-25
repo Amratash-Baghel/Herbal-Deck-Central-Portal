@@ -1,7 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { PageHeader } from "@/components/page-header";
-import { ChatClient } from "@/components/chat/chat-client";
+import { LiveChat } from "@/components/chat/live-chat";
 import { time } from "@/lib/perf";
 import type { DirectoryEntry, ConversationSummary } from "@/components/chat/types";
 import type { Conversation, ConversationType, Profile } from "@/lib/types";
@@ -26,7 +25,7 @@ export default async function ChatPage({
   const { data: people } = await time("chat:directory", () =>
     supabase
       .from("profiles")
-      .select("id, full_name, email, deactivated_at")
+      .select("id, full_name, email, deactivated_at, color, avatar_path, post")
       .order("full_name", { nullsFirst: false }),
   );
   const directory: DirectoryEntry[] = (people ?? []).map((p) => {
@@ -36,6 +35,9 @@ export default async function ChatPage({
       name: row.full_name || row.email,
       email: row.email,
       active: !row.deactivated_at,
+      color: p.color as string | null,
+      avatarPath: p.avatar_path as string | null,
+      post: p.post as string | null,
     };
   });
 
@@ -91,11 +93,7 @@ export default async function ChatPage({
 
   return (
     <>
-      <PageHeader
-        title="Chat"
-        description="Direct messages and group conversations, in real time."
-      />
-      <ChatClient
+      <LiveChat
         me={{ id: meId, name: profile.full_name || profile.email }}
         directory={directory}
         conversations={conversations}

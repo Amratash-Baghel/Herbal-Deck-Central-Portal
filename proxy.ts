@@ -1,11 +1,15 @@
 import { type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { NextResponse } from "next/server";
 
 /**
  * Next.js 16 "proxy" convention (formerly `middleware`). Runs before requests
  * to keep the Supabase session fresh and enforce coarse route protection.
  */
 export async function proxy(request: NextRequest) {
+  if (process.env.NODE_ENV === "development" && request.nextUrl.pathname === "/preview/chat") {
+    return NextResponse.next();
+  }
   return await updateSession(request);
 }
 

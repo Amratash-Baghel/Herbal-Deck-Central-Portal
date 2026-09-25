@@ -159,6 +159,10 @@ export interface MessageAttachment {
 
 /** A message row from `public.messages`. */
 export interface Message {
+  reply_to_id?: string | null;
+  edited_at?: string | null;
+  deleted_at?: string | null;
+  client_request_id?: string | null;
   id: string;
   conversation_id: string;
   sender_id: string;

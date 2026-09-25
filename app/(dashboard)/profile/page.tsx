@@ -55,7 +55,7 @@ export default async function ProfilePage() {
         <section className="rounded-2xl border bg-card p-6 shadow-sm">
           <h2 className="text-base font-semibold tracking-tight">Profile picture</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Shown in the sidebar, on your tasks, and to your team.
+            Help your team recognise you at a glance.
           </p>
           <div className="mt-5">
             <AvatarUpload name={name} avatarPath={profile.avatar_path} />

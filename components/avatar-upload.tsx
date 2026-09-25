@@ -1,73 +1,66 @@
 "use client";
 
-import { useActionState, useRef } from "react";
-import { useFormStatus } from "react-dom";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/avatar";
-import { updateAvatar, type AvatarState } from "@/app/(dashboard)/profile/actions";
+import { updateAvatar, removeAvatar } from "@/app/(dashboard)/profile/actions";
+import { validateAvatar } from "@/lib/avatar-validation";
 
-const initial: AvatarState = { error: null, success: null };
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition hover:opacity-90 disabled:opacity-60"
-    >
-      {pending ? "Uploading…" : "Upload"}
-    </button>
-  );
-}
-
-/**
- * Profile-picture uploader. Shows the current avatar and lets the user pick a
- * new image; the server action stores it in the `avatars` bucket and updates
- * the profile. On success the page revalidates and the new picture appears
- * here and in the sidebar.
- */
-export function AvatarUpload({
-  name,
-  avatarPath,
-}: {
-  name: string;
-  avatarPath: string | null;
-}) {
-  const [state, formAction] = useActionState(updateAvatar, initial);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  return (
-    <form action={formAction} className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
-      <Avatar
-        name={name}
-        path={avatarPath}
-        className="h-20 w-20 rounded-full border"
-        fallbackClassName="bg-accent text-primary text-xl font-semibold"
-      />
-      <div className="flex flex-col gap-2">
-        <input
-          ref={fileRef}
-          type="file"
-          name="avatar"
-          accept="image/*"
-          required
-          className="block text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-accent"
-        />
-        <div className="flex items-center gap-3">
-          <SubmitButton />
-          <span className="text-xs text-muted-foreground">JPG or PNG, under 5 MB.</span>
-        </div>
-        {state.error && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {state.error}
-          </p>
-        )}
-        {state.success && (
-          <p role="status" className="text-sm text-primary">
-            {state.success}
-          </p>
-        )}
+export function AvatarUpload({ name, avatarPath }: { name: string; avatarPath: string | null }) {
+  const router = useRouter();
+  const input = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const selection = useRef(0);
+  useEffect(()=>()=>{if(preview) URL.revokeObjectURL(preview);},[preview]);
+  function clear() {
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(""); setFile(null); if (input.current) input.current.value = "";
+  }
+  async function save(remove = false) {
+    if (busy || (!remove && !file)) return;
+    if (remove && !window.confirm("Remove your profile picture? Your initials will be shown instead.")) return;
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      const data = new FormData();
+      if (file) data.set("avatar", file);
+      const result = remove ? await removeAvatar() : await updateAvatar({error:null, success:null}, data);
+      if (result.error) setError(result.error);
+      else { setSuccess(result.success || "Picture updated."); clear(); router.refresh(); }
+    } catch { setError("Could not save your picture. Check your connection and try again."); }
+    finally { setBusy(false); }
+  }
+  return <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+    <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-4 border-background shadow-sm ring-1 ring-border">
+      {file && preview ?
+        // eslint-disable-next-line @next/next/no-img-element -- Local image preview.
+        <img src={preview} alt="Selected profile picture preview" className="h-full w-full object-cover"/>
+        : <Avatar name={name} path={avatarPath} className="h-full w-full rounded-full" fallbackClassName="bg-accent text-primary text-2xl font-semibold"/>}
+    </div>
+    <div className="min-w-0 flex-1 space-y-3">
+      <p className="text-sm text-muted-foreground">Your photo becomes your icon in chats, the sidebar and across the portal.</p>
+      <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" aria-label="Choose profile picture" disabled={busy}
+        className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-xl file:border file:bg-background file:px-3 file:py-2 file:font-medium"
+        onChange={async e => {
+          const next = e.target.files?.[0], version=++selection.current; setError(""); setSuccess("");
+          if (!next) return;
+          const valid = await validateAvatar(next);
+          if(version!==selection.current) return;
+          if (!valid.ok) { setError(valid.error); clear(); return; }
+          if (preview) URL.revokeObjectURL(preview);
+          setFile(next); setPreview(URL.createObjectURL(next));
+        }}/>
+      <p className="text-xs text-muted-foreground">JPG, PNG or WebP · up to 5 MB. A square photo works best.</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy || !file} onClick={() => void save()} className="min-h-11 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50">{busy ? "Saving…" : avatarPath ? "Replace picture" : "Save picture"}</button>
+        {file && <button type="button" disabled={busy} onClick={clear} className="min-h-11 rounded-xl border px-4 text-sm">Cancel</button>}
+        {avatarPath && <button type="button" disabled={busy} onClick={() => void save(true)} className="min-h-11 rounded-xl border px-4 text-sm text-muted-foreground">Remove picture</button>}
       </div>
-    </form>
-  );
+      {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {success && <p role="status" className="text-sm text-primary">{success}</p>}
+    </div>
+  </div>;
 }

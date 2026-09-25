@@ -44,6 +44,7 @@ export async function sendMessage(
   rawBody: string,
   mentionIds: string[] = [],
   rawAttachments: Attachment[] = [],
+  options?: { replyToId?: string; clientRequestId: string },
 ): Promise<SendResult> {
   const access = await getUserAccess();
   if (!access) return { ok: false, error: "You are not signed in." };
@@ -64,6 +65,13 @@ export async function sendMessage(
 
   const supabase = await createClient();
   const me = access.profile.id;
+  if (options && !/^[0-9a-f-]{36}$/i.test(options.clientRequestId)) return {ok:false,error:"Invalid send request."};
+  if (options) {
+    const {data: previous} = await supabase.from("messages").select("*")
+      .eq("sender_id", me).eq("client_request_id", options.clientRequestId).maybeSingle();
+    if (previous) return previous.conversation_id === conversationId
+      ? {ok:true, message:previous as Message} : {ok:false,error:"Request belongs to another conversation."};
+  }
 
   // Reading the conversation doubles as the membership check (RLS only returns
   // it to participants).
@@ -92,11 +100,17 @@ export async function sendMessage(
       body,
       mentions,
       attachments,
+      ...(options ? {reply_to_id: options.replyToId || null, client_request_id: options.clientRequestId} : {}),
     })
     .select("*")
     .single();
 
   if (error || !inserted) {
+    if (error?.code === "23505" && options) {
+      const {data: previous} = await supabase.from("messages").select("*")
+        .eq("sender_id",me).eq("client_request_id",options.clientRequestId).eq("conversation_id",conversationId).maybeSingle();
+      if (previous) return {ok:true, message:previous as Message};
+    }
     return { ok: false, error: error?.message ?? "Could not send the message." };
   }
 
@@ -111,7 +125,7 @@ export async function sendMessage(
     previewText.length > 140 ? `${previewText.slice(0, 140)}…` : previewText;
   const link = `/chat?c=${conversationId}`;
 
-  if (convo.type === "dm") {
+  try { if (convo.type === "dm") {
     const other = participantIds.find((id) => id !== me);
     if (other) {
       await notifyUsers([
@@ -139,7 +153,43 @@ export async function sendMessage(
     );
   }
 
+  } catch { console.warn("Chat message saved; notification delivery failed."); }
   return { ok: true, message: inserted as Message };
+}
+
+/** New mutations always run with the signed-in user's RLS-scoped client. */
+export async function editChatMessage(messageId: string, body: string): Promise<SendResult> {
+  if (!await getUserAccess()) return {ok:false,error:"You are not signed in."};
+  const supabase = await createClient();
+  const {data,error} = await supabase.rpc("edit_chat_message", {message_id:messageId,body});
+  return error ? {ok:false,error:error.message} : {ok:true,message:data as Message};
+}
+export async function deleteChatMessage(messageId: string): Promise<SendResult> {
+  if (!await getUserAccess()) return {ok:false,error:"You are not signed in."};
+  const supabase = await createClient();
+  const {data,error} = await supabase.rpc("delete_chat_message", {message_id:messageId});
+  return error ? {ok:false,error:error.message} : {ok:true,message:data as Message};
+}
+export async function setMessageReaction(messageId: string, emoji: string, enabled: boolean): Promise<ActionResult> {
+  const access = await getUserAccess();
+  if (!access) return {ok:false,error:"You are not signed in."};
+  if (!["👍","❤️","🎉","👀","✅","🙏"].includes(emoji)) return {ok:false,error:"Unsupported reaction."};
+  const supabase = await createClient();
+  const result = enabled
+    ? await supabase.from("message_reactions").upsert({message_id:messageId,profile_id:access.profile.id,emoji},{onConflict:"message_id,profile_id,emoji",ignoreDuplicates:true})
+    : await supabase.from("message_reactions").delete().eq("message_id",messageId).eq("profile_id",access.profile.id).eq("emoji",emoji);
+  return result.error ? {ok:false,error:result.error.message} : {ok:true};
+}
+export async function setMessagePin(messageId: string, enabled: boolean): Promise<ActionResult> {
+  const access = await getUserAccess();
+  if (!access) return {ok:false,error:"You are not signed in."};
+  const supabase = await createClient();
+  const result = enabled
+    ? await supabase.from("conversation_pins").upsert({message_id:messageId,pinned_by:access.profile.id},{onConflict:"message_id",ignoreDuplicates:true})
+    : await supabase.from("conversation_pins").delete().eq("message_id",messageId).select("message_id");
+  if (result.error) return {ok:false,error:result.error.message};
+  if (!enabled && !result.data?.length) return {ok:false,error:"Only the person who pinned this message or a group admin can unpin it."};
+  return {ok:true};
 }
 
 export interface ConversationResult {

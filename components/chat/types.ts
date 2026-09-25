@@ -7,6 +7,9 @@ export interface DirectoryEntry {
   email: string;
   /** False for soft-removed employees — shown for history, not pickable. */
   active: boolean;
+  avatarPath?: string | null;
+  color?: string | null;
+  post?: string | null;
 }
 
 /** A conversation as the chat client tracks it (a row + derived display data). */
