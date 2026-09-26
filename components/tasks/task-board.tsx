@@ -183,6 +183,12 @@ export function TaskBoard({
     getHistoryOpen,
     getHistoryOpenOnServer,
   );
+  // The collapsed History panel is clipped to zero height and inert, so its
+  // notes are only rendered once it has been opened (then kept, so closing
+  // still animates). Nothing visible changes; the board ships and hydrates
+  // up to 50 fewer notes.
+  const [historyRendered, setHistoryRendered] = useState(false);
+  const showHistoryNotes = historyOpen || historyRendered;
 
   const nameOf = useMemo(() => {
     const m = new Map(people.map((p) => [p.id, p.name]));
@@ -580,7 +586,10 @@ export function TaskBoard({
         <h2>
           <button
             type="button"
-            onClick={() => setHistoryOpen(!historyOpen)}
+            onClick={() => {
+              if (historyOpen) setHistoryRendered(true);
+              setHistoryOpen(!historyOpen);
+            }}
             aria-expanded={historyOpen}
             aria-controls="task-history-panel"
             className={`flex min-h-11 w-full items-center gap-2.5 border border-dashed bg-muted/30 px-4 py-2.5 text-left text-muted-foreground transition hover:bg-accent hover:text-foreground ${
@@ -620,7 +629,7 @@ export function TaskBoard({
                   Tasks finished more than a week ago land here.
                 </p>
               )}
-              {history.map((task) => {
+              {showHistoryNotes && history.map((task) => {
                 const dept = deptOf(task.department_id);
                 const canRestore =
                   canManage ||
