@@ -128,7 +128,9 @@ export default async function ClearingPage({
     }
   });
 
-  // Resolve names + signed URLs (service-role: server-side, read-only).
+  // Resolve names + signed URLs (service-role: server-side, read-only). None of
+  // these four lookups depends on another, so they go out together — they
+  // used to run one after the other, four round trips on every filter click.
   const admin = createAdminClient();
   const personIds = Array.from(
     new Set(
@@ -137,58 +139,56 @@ export default async function ClearingPage({
       ),
     ),
   );
-  const profilesRes = personIds.length
-    ? await admin.from("profiles").select("id, full_name, email").in("id", personIds)
-    : { data: [] as { id: string; full_name: string | null; email: string }[] };
+  const withFiles = invoices.filter((i) => i.file_path);
+  // Payment proofs live in a separate private bucket — sign those too.
+  const withProof = invoices.filter((i) => i.payment_proof_path);
+  const [profilesRes, fileSigned, proofSigned, sigSigned] = await time(
+    "billing/clearing:names+signed-urls",
+    () =>
+      Promise.all([
+        personIds.length
+          ? admin.from("profiles").select("id, full_name, email").in("id", personIds)
+          : { data: [] as { id: string; full_name: string | null; email: string }[] },
+        // One batched call per bucket for every attached file instead of one
+        // per invoice.
+        withFiles.length
+          ? admin.storage.from("invoices").createSignedUrls(
+              withFiles.map((i) => i.file_path as string),
+              3600,
+            )
+          : null,
+        withProof.length
+          ? admin.storage.from("payment-proofs").createSignedUrls(
+              withProof.map((i) => i.payment_proof_path as string),
+              3600,
+            )
+          : null,
+        // Signatures have no column to filter on — the path is derived from
+        // the id — so we ask for all of them at once. Unsigned invoices simply
+        // come back with a null url, which the `if` below skips.
+        invoices.length
+          ? admin.storage.from("invoices").createSignedUrls(
+              invoices.map((i) => signaturePath(i.id)),
+              3600,
+            )
+          : null,
+      ]),
+  );
   const nameById = new Map(
     (profilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
   );
-
-  // One batched call for every attached file instead of one per invoice.
-  const withFiles = invoices.filter((i) => i.file_path);
   const signedUrl = new Map<string, string>();
-  if (withFiles.length > 0) {
-    const { data: signed } = await time("billing/clearing:signed-urls", () =>
-      admin.storage.from("invoices").createSignedUrls(
-        withFiles.map((i) => i.file_path as string),
-        3600,
-      ),
-    );
-    signed?.forEach((s, idx) => {
-      if (s.signedUrl) signedUrl.set(withFiles[idx].id, s.signedUrl);
-    });
-  }
-
-  // Payment proofs live in a separate private bucket — sign those too.
-  const withProof = invoices.filter((i) => i.payment_proof_path);
+  fileSigned?.data?.forEach((s, idx) => {
+    if (s.signedUrl) signedUrl.set(withFiles[idx].id, s.signedUrl);
+  });
   const proofUrl = new Map<string, string>();
-  if (withProof.length > 0) {
-    const { data: signed } = await admin.storage
-      .from("payment-proofs")
-      .createSignedUrls(
-        withProof.map((i) => i.payment_proof_path as string),
-        3600,
-      );
-    signed?.forEach((s, idx) => {
-      if (s.signedUrl) proofUrl.set(withProof[idx].id, s.signedUrl);
-    });
-  }
-
-  // Signatures have no column to filter on — the path is derived from the id —
-  // so we ask for all of them at once. Unsigned invoices simply come back with
-  // a null url, which the `if` below skips.
+  proofSigned?.data?.forEach((s, idx) => {
+    if (s.signedUrl) proofUrl.set(withProof[idx].id, s.signedUrl);
+  });
   const sigUrl = new Map<string, string>();
-  if (invoices.length > 0) {
-    const { data: signed } = await admin.storage
-      .from("invoices")
-      .createSignedUrls(
-        invoices.map((i) => signaturePath(i.id)),
-        3600,
-      );
-    signed?.forEach((s, idx) => {
-      if (s.signedUrl) sigUrl.set(invoices[idx].id, s.signedUrl);
-    });
-  }
+  sigSigned?.data?.forEach((s, idx) => {
+    if (s.signedUrl) sigUrl.set(invoices[idx].id, s.signedUrl);
+  });
 
   const statusCount = (s: InvoiceStatus) => all.filter((i) => i.status === s).length;
   const allCount = all.length;

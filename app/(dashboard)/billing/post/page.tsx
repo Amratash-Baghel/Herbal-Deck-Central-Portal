@@ -59,37 +59,36 @@ export default async function PostInvoicePage() {
   const mine = (mineRes.data as Invoice[]) ?? [];
   const deptName = new Map(departments.map((d) => [d.id, d.name]));
 
-  // Signed URLs for any attached files — one batched call instead of one
-  // network round trip per file.
+  // Signed URLs for any attached files, and for payment proofs (once cleared —
+  // the poster can view them): one batched call per bucket instead of one
+  // round trip per file, and the two buckets signed at the same time.
   const admin = createAdminClient();
   const withFiles = mine.filter((i) => i.file_path);
-  const signedUrl = new Map<string, string>();
-  if (withFiles.length > 0) {
-    const { data: signed } = await time("billing/post:signed-urls", () =>
-      admin.storage.from("invoices").createSignedUrls(
-        withFiles.map((i) => i.file_path as string),
-        3600,
-      ),
-    );
-    signed?.forEach((s, idx) => {
-      if (s.signedUrl) signedUrl.set(withFiles[idx].id, s.signedUrl);
-    });
-  }
-
-  // Payment proofs (once cleared) — the poster can view them.
   const withProof = mine.filter((i) => i.payment_proof_path);
+  const [fileSigned, proofSigned] = await time("billing/post:signed-urls", () =>
+    Promise.all([
+      withFiles.length
+        ? admin.storage.from("invoices").createSignedUrls(
+            withFiles.map((i) => i.file_path as string),
+            3600,
+          )
+        : null,
+      withProof.length
+        ? admin.storage.from("payment-proofs").createSignedUrls(
+            withProof.map((i) => i.payment_proof_path as string),
+            3600,
+          )
+        : null,
+    ]),
+  );
+  const signedUrl = new Map<string, string>();
+  fileSigned?.data?.forEach((s, idx) => {
+    if (s.signedUrl) signedUrl.set(withFiles[idx].id, s.signedUrl);
+  });
   const proofUrl = new Map<string, string>();
-  if (withProof.length > 0) {
-    const { data: signed } = await admin.storage
-      .from("payment-proofs")
-      .createSignedUrls(
-        withProof.map((i) => i.payment_proof_path as string),
-        3600,
-      );
-    signed?.forEach((s, idx) => {
-      if (s.signedUrl) proofUrl.set(withProof[idx].id, s.signedUrl);
-    });
-  }
+  proofSigned?.data?.forEach((s, idx) => {
+    if (s.signedUrl) proofUrl.set(withProof[idx].id, s.signedUrl);
+  });
 
   return (
     <>

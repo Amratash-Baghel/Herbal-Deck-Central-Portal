@@ -3,9 +3,15 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
+type DeptRow = { id: string; slug: string };
+
 /**
  * Fetches the raw profile row for the signed-in user (or null), including
- * deactivated accounts — callers decide how to treat that.
+ * deactivated accounts — callers decide how to treat that — together with the
+ * departments they belong to. Both come back from ONE query (the memberships
+ * are embedded in the profile select), because every page needs the profile
+ * and most need the departments: fetching them one after the other was a full
+ * database round trip added to every single navigation.
  *
  * Wrapped in React's `cache()` so that within a single request/render pass,
  * calling this any number of times — once from the shared dashboard layout,
@@ -24,21 +30,39 @@ import type { Profile } from "@/lib/types";
  * token expires (≤ 1 hour); a deactivated employee is still refused at once,
  * because getProfile() checks `deactivated_at` on every request.
  */
-const fetchProfileRow = cache(async (): Promise<Profile | null> => {
-  const supabase = await createClient();
+const fetchProfileRow = cache(
+  async (): Promise<{ profile: Profile; departments: DeptRow[] } | null> => {
+    const supabase = await createClient();
 
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims?.sub;
-  if (!userId) return null;
+    const { data } = await supabase.auth.getClaims();
+    const userId = data?.claims?.sub;
+    if (!userId) return null;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
+    const { data: row } = await supabase
+      .from("profiles")
+      .select("*, profile_departments(departments(id, slug))")
+      .eq("id", userId)
+      .single();
+    if (!row) return null;
 
-  return (profile as Profile) ?? null;
-});
+    // Split the embed back out, so `profile` stays exactly the profiles row
+    // (it is handed to client components as-is).
+    const { profile_departments: memberships, ...profile } = row as Profile & {
+      profile_departments?: Array<{ departments: DeptRow | DeptRow[] | null }> | null;
+    };
+    // A foreign-key embed returns a single related row at runtime, though the
+    // generated types model it as an array — handle both shapes defensively.
+    const departments = (memberships ?? [])
+      .map((m) => {
+        const d = m.departments;
+        if (!d) return undefined;
+        return Array.isArray(d) ? d[0] : d;
+      })
+      .filter((d): d is DeptRow => Boolean(d));
+
+    return { profile: profile as Profile, departments };
+  },
+);
 
 /**
  * Returns the signed-in user's profile, or null if not signed in / no profile.
@@ -47,8 +71,8 @@ const fetchProfileRow = cache(async (): Promise<Profile | null> => {
 export async function getProfile(): Promise<Profile | null> {
   const row = await fetchProfileRow();
   // A deactivated (soft-removed) employee has no access.
-  if (!row || row.deactivated_at) return null;
-  return row;
+  if (!row || row.profile.deactivated_at) return null;
+  return row.profile;
 }
 
 /**
@@ -119,43 +143,17 @@ export function signaturePath(invoiceId: string): string {
   return `${invoiceId}/signature.png`;
 }
 
-/** The departments (id + slug) a profile belongs to. Cached per-request. */
-const fetchDepartments = cache(
-  async (userId: string): Promise<{ id: string; slug: string }[]> => {
-    const supabase = await createClient();
-
-    const { data: memberships } = await supabase
-      .from("profile_departments")
-      .select("departments(id, slug)")
-      .eq("profile_id", userId);
-
-    // A foreign-key embed returns a single related row at runtime, though the
-    // generated types model it as an array — handle both shapes defensively.
-    type DeptRow = { id: string; slug: string };
-    const rows = (memberships ?? []) as Array<{
-      departments: DeptRow | DeptRow[] | null;
-    }>;
-    return rows
-      .map((m) => {
-        const d = m.departments;
-        if (!d) return undefined;
-        return Array.isArray(d) ? d[0] : d;
-      })
-      .filter((d): d is DeptRow => Boolean(d));
-  },
-);
-
 /**
  * Resolves the signed-in user's access. Cached per-request (see
  * `fetchProfileRow` above) — the dashboard layout, individual pages, and any
- * guard (`requireUserManager`, `requireBillingManager`) all share one result.
+ * guard (`requireUserManager`, `requireBillingManager`) all share one result,
+ * and the departments arrive with the profile rather than in a second query.
  */
 export const getUserAccess = cache(async (): Promise<UserAccess | null> => {
   const row = await fetchProfileRow();
-  if (!row || row.deactivated_at) return null;
-  const profile = row;
+  if (!row || row.profile.deactivated_at) return null;
+  const { profile, departments } = row;
 
-  const departments = await fetchDepartments(profile.id);
   const departmentSlugs = departments.map((d) => d.slug);
   const departmentIds = departments.map((d) => d.id);
 

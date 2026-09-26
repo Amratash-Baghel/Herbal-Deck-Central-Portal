@@ -57,16 +57,6 @@ export default async function DayReportPage({
   const isFuture = date > today;
   const sunday = isSunday(date);
 
-  const supabase = await createClient();
-
-  // Events on this day, visible to the viewer (RLS).
-  const { data: eventRows } = await supabase
-    .from("calendar_events")
-    .select("*")
-    .eq("event_date", date)
-    .order("event_time", { ascending: true, nullsFirst: true });
-  const events = (eventRows ?? []) as CalendarEvent[];
-
   const canViewTeam = access.canViewReports;
 
   const longDate = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", {
@@ -100,32 +90,9 @@ export default async function DayReportPage({
         }
       />
 
-      {/* Events */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-base font-semibold tracking-tight">Events</h2>
-        {events.length === 0 ? (
-          <p className="rounded-xl border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            No events on this day.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {events.map((e) => (
-              <li key={e.id} className="rounded-xl border bg-card px-4 py-3">
-                <p className="text-sm font-medium">{e.title}</p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
-                  <span className={`rounded-full px-2 py-0.5 font-medium ${EVENT_TYPE_META[e.event_type].badge}`}>
-                    {EVENT_TYPE_META[e.event_type].label}
-                  </span>
-                  {e.event_time && <span>{fmtTime(e.event_time)}</span>}
-                </p>
-                {e.description && (
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/80">{e.description}</p>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* Events — its own async component so its query runs alongside the
+          attendance section's instead of before it. */}
+      <DayEvents date={date} />
 
       {!isFuture && !sunday && (
         canViewTeam ? (
@@ -135,6 +102,45 @@ export default async function DayReportPage({
         )
       )}
     </>
+  );
+}
+
+/** The day's events, visible to the viewer (RLS). */
+async function DayEvents({ date }: { date: string }) {
+  const supabase = await createClient();
+  const { data: eventRows } = await supabase
+    .from("calendar_events")
+    .select("*")
+    .eq("event_date", date)
+    .order("event_time", { ascending: true, nullsFirst: true });
+  const events = (eventRows ?? []) as CalendarEvent[];
+
+  return (
+    <section className="mb-8">
+      <h2 className="mb-3 text-base font-semibold tracking-tight">Events</h2>
+      {events.length === 0 ? (
+        <p className="rounded-xl border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
+          No events on this day.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {events.map((e) => (
+            <li key={e.id} className="rounded-xl border bg-card px-4 py-3">
+              <p className="text-sm font-medium">{e.title}</p>
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+                <span className={`rounded-full px-2 py-0.5 font-medium ${EVENT_TYPE_META[e.event_type].badge}`}>
+                  {EVENT_TYPE_META[e.event_type].label}
+                </span>
+                {e.event_time && <span>{fmtTime(e.event_time)}</span>}
+              </p>
+              {e.description && (
+                <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/80">{e.description}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
