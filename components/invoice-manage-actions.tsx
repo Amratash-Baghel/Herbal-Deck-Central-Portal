@@ -80,6 +80,7 @@ export function InvoiceManageActions({
   const proofInputRef = useRef<HTMLInputElement>(null);
   const clearFormRef = useRef<HTMLFormElement>(null);
   const [clearState, clearAction] = useActionState(clearInvoice, clearInitial);
+  const [uploadState, uploadAction] = useActionState(uploadSignedInvoice, clearInitial);
 
   return (
     <div className="flex flex-col items-end gap-1.5">
@@ -98,7 +99,7 @@ export function InvoiceManageActions({
         {canManage && (
           <>
             {/* Upload signed PDF — submits as soon as a file is chosen. */}
-            <form ref={uploadFormRef} action={uploadSignedInvoice}>
+            <form ref={uploadFormRef} action={uploadAction}>
               <input type="hidden" name="invoice_id" value={invoiceId} />
               <input
                 ref={fileInputRef}
@@ -162,9 +163,9 @@ export function InvoiceManageActions({
         )}
       </div>
 
-      {clearState.error && (
+      {(clearState.error || uploadState.error) && (
         <p role="alert" className="text-xs text-red-600 dark:text-red-400">
-          {clearState.error}
+          {clearState.error || uploadState.error}
         </p>
       )}
     </div>

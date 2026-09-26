@@ -7,6 +7,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUsers, getManagementUserIds } from "@/lib/notifications";
 import { formatMoney, type CurrencyCode } from "@/lib/money";
 
+/** Matches the `invoices` / `payment-proofs` bucket limits (migration 0031). */
+const MAX_BILLING_FILE_BYTES = 6 * 1024 * 1024;
+
+/** Why a billing upload would be refused, or null if it's acceptable. Checked
+ *  before anything is written, so a bad file never leaves a half-done invoice. */
+function billingFileProblem(file: File): string | null {
+  const okType = file.type.startsWith("image/") || file.type === "application/pdf";
+  if (!okType) return "The file must be a PDF or an image.";
+  if (file.size > MAX_BILLING_FILE_BYTES) return "The file must be 6 MB or smaller.";
+  return null;
+}
+
 export interface PostInvoiceState {
   error: string | null;
   success: string | null;
@@ -40,6 +52,11 @@ export async function createPostedInvoice(
   if (!reason) return { error: "Add a short reason for posting.", success: null };
   if (!Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid amount.", success: null };
+  }
+  const hasFile = file instanceof File && file.size > 0;
+  if (hasFile) {
+    const problem = billingFileProblem(file);
+    if (problem) return { error: problem, success: null };
   }
 
   const supabase = await createClient();
@@ -79,7 +96,8 @@ export async function createPostedInvoice(
   }
 
   // Attach the uploaded file, if any.
-  if (file instanceof File && file.size > 0) {
+  let attachFailed = false;
+  if (hasFile) {
     const admin = createAdminClient();
     const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
     const path = `${inserted.id}/source-${Date.now()}.${ext}`;
@@ -90,9 +108,8 @@ export async function createPostedInvoice(
         contentType: file.type || "application/pdf",
         upsert: true,
       });
-    if (!upErr) {
-      await admin.from("invoices").update({ file_path: path }).eq("id", inserted.id);
-    }
+    if (upErr) attachFailed = true;
+    else await admin.from("invoices").update({ file_path: path }).eq("id", inserted.id);
   }
 
   // Alert management (admins + HR & Management) that an invoice needs clearing.
@@ -114,6 +131,12 @@ export async function createPostedInvoice(
 
   revalidatePath("/billing/post");
   revalidatePath("/billing/clearing");
+  if (attachFailed) {
+    return {
+      error: "The invoice was posted, but its file couldn't be attached. A billing manager can upload it from Clearing.",
+      success: null,
+    };
+  }
   return { error: null, success: "Posted. It's now pending clearing." };
 }
 
@@ -153,11 +176,8 @@ export async function clearInvoice(
   if (!(file instanceof File) || file.size === 0) {
     return { error: "Payment proof is required to clear an invoice.", success: null };
   }
-  const okType =
-    file.type.startsWith("image/") || file.type === "application/pdf";
-  if (!okType) {
-    return { error: "Payment proof must be an image or a PDF.", success: null };
-  }
+  const problem = billingFileProblem(file);
+  if (problem) return { error: `Payment proof: ${problem.charAt(0).toLowerCase()}${problem.slice(1)}`, success: null };
 
   const admin = createAdminClient();
   const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
@@ -207,11 +227,18 @@ export async function rejectInvoice(formData: FormData): Promise<void> {
  * Upload (or replace) the invoice PDF for a record (billing managers only).
  * Stored in the private `invoices` bucket via the service-role client.
  */
-export async function uploadSignedInvoice(formData: FormData): Promise<void> {
+export async function uploadSignedInvoice(
+  _prev: ClearState,
+  formData: FormData,
+): Promise<ClearState> {
   await requireBillingManager();
   const id = String(formData.get("invoice_id") ?? "");
   const file = formData.get("file");
-  if (!id || !(file instanceof File) || file.size === 0) return;
+  if (!id || !(file instanceof File) || file.size === 0) {
+    return { error: "Choose a file to upload.", success: null };
+  }
+  const problem = billingFileProblem(file);
+  if (problem) return { error: problem, success: null };
 
   const admin = createAdminClient();
   const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
@@ -221,10 +248,11 @@ export async function uploadSignedInvoice(formData: FormData): Promise<void> {
     contentType: file.type || "application/pdf",
     upsert: true,
   });
-  if (error) return;
+  if (error) return { error: "Could not upload the signed copy. Try again.", success: null };
 
   await admin.from("invoices").update({ file_path: path }).eq("id", id);
   revalidatePath("/billing/clearing");
+  return { error: null, success: "Signed copy uploaded." };
 }
 
 /**
