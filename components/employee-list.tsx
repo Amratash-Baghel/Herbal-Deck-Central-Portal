@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   deactivateEmployee,
   reactivateEmployee,
+  setEmployeePassword,
   setUserRole,
 } from "@/app/(dashboard)/employees/actions";
 import { EditUserDepartments } from "@/components/edit-user-departments";
@@ -42,11 +43,14 @@ export function EmployeeList({
   departments,
   currentUserId,
   isAdmin,
+  canSetPasswords = false,
 }: {
   employees: EmployeeRow[];
   departments: Department[];
   currentUserId: string;
   isAdmin: boolean;
+  /** Only the ceo@herbaldeck.com account (re-checked on the server). */
+  canSetPasswords?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const deptName = useMemo(
@@ -187,6 +191,22 @@ export function EmployeeList({
                           <option value="admin">Admin</option>
                         </select>
                       </form>
+                    )}
+                    {canSetPasswords && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const pw = window.prompt(
+                            `New password for ${e.fullName || e.email} (at least 8 characters):`,
+                          );
+                          if (!pw) return;
+                          const result = await setEmployeePassword(e.id, pw);
+                          window.alert(result.error ?? result.success ?? "");
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+                      >
+                        Set password
+                      </button>
                     )}
                     {canRemove(e) && (
                       <form action={deactivateEmployee}>

@@ -65,6 +65,7 @@ export default async function EmployeesPage() {
           departments={departments}
           currentUserId={access.profile.id}
           isAdmin={access.isAdmin}
+          canSetPasswords={access.profile.email?.toLowerCase() === "ceo@herbaldeck.com"}
         />
       </div>
     </>

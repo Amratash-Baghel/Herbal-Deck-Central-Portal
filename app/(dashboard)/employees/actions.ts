@@ -242,3 +242,31 @@ export async function reactivateEmployee(formData: FormData): Promise<void> {
 
   revalidatePath("/employees");
 }
+
+/** The only account allowed to set other people's passwords (temporary, while
+ *  self-service password change is being fixed). */
+const PASSWORD_ADMIN_EMAIL = "ceo@herbaldeck.com";
+
+/**
+ * Server Action: set another employee's password. Restricted to the
+ * ceo@herbaldeck.com account — checked here on the server from the verified
+ * session, never trusted from the client.
+ */
+export async function setEmployeePassword(
+  userId: string,
+  password: string,
+): Promise<MutationState> {
+  const access = await requireUserManager();
+  if (access.profile.email?.toLowerCase() !== PASSWORD_ADMIN_EMAIL) {
+    return { error: "Only the CEO account can set passwords.", success: null };
+  }
+  if (!userId) return { error: "Missing employee.", success: null };
+  if (password.length < 8) {
+    return { error: "The password must be at least 8 characters.", success: null };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(userId, { password });
+  if (error) return { error: error.message, success: null };
+  return { error: null, success: "Password updated." };
+}
