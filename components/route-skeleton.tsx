@@ -3,8 +3,8 @@
 import { usePathname } from "next/navigation";
 
 /**
- * The instant placeholder for the portal's heavy pages (My Board, Billing →
- * Clear), rendered by their `loading.tsx`. Those pages take a few hundred
+ * The instant placeholder for the portal's heavier pages (My Board, Billing →
+ * Clear, Dashboard, Chat, Reporting, Employee Management), rendered by their `loading.tsx`. Those pages take a few hundred
  * milliseconds to arrive and draw, and a click used to leave the old page
  * frozen for all of it. Their loading boundary is
  * prefetched with the link, so this appears on the frame of the click and the
@@ -24,10 +24,23 @@ import { usePathname } from "next/navigation";
  */
 export function RouteSkeleton() {
   const pathname = usePathname();
+  if (pathname.startsWith("/chat")) {
+    return (
+      <div className="route-skeleton flex flex-1 flex-col" aria-busy="true" aria-label="Loading">
+        <ChatSkeleton />
+      </div>
+    );
+  }
   return (
     <div className="route-skeleton" aria-busy="true" aria-label="Loading">
       <HeaderSkeleton />
-      {pathname === "/tasks" ? <BoardSkeleton /> : <ListSkeleton />}
+      {pathname === "/tasks" ? (
+        <BoardSkeleton />
+      ) : pathname === "/employees" ? (
+        <TwoColumnSkeleton />
+      ) : (
+        <ListSkeleton />
+      )}
     </div>
   );
 }
@@ -69,6 +82,46 @@ function BoardSkeleton() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Chat: the conversation list beside an empty thread, filling the frame. */
+function ChatSkeleton() {
+  return (
+    <div className="flex min-h-[70vh] flex-1 flex-col" aria-hidden="true">
+      <Bar className="mb-4 h-7 w-40 rounded-lg" />
+      <div className="grid flex-1 grid-cols-1 gap-4 md:grid-cols-[minmax(240px,320px)_1fr]">
+        <div className="space-y-3 rounded-2xl border bg-card p-4">
+          <Bar className="h-9 rounded-xl" />
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex items-center gap-3">
+              <Bar className="h-9 w-9 shrink-0 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Bar className="h-3 w-1/2 rounded-md" />
+                <Bar className="h-3 w-3/4 rounded-md" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden rounded-2xl border bg-card md:block" />
+      </div>
+    </div>
+  );
+}
+
+/** Employee Management: the add-employee form beside the team list. */
+function TwoColumnSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-hidden="true">
+      {[5, 6].map((rows, col) => (
+        <div key={col} className="space-y-3 rounded-2xl border bg-card p-5">
+          <Bar className="h-5 w-1/3 rounded-md" />
+          {Array.from({ length: rows }, (_, i) => (
+            <Bar key={i} className="h-10 rounded-xl" />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
