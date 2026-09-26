@@ -9,6 +9,7 @@ import { Avatar } from "@/components/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { LogoutIcon } from "@/components/icons";
+import { NavPending } from "@/components/nav-pending";
 import type { Profile } from "@/lib/types";
 
 export function Sidebar({
@@ -78,7 +79,7 @@ export function Sidebar({
                   href={item.href}
                   onClick={() => setOpen(false)}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                  className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                     active
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -86,6 +87,7 @@ export function Sidebar({
                 >
                   <Icon className="h-[18px] w-[18px]" />
                   {item.label}
+                  <NavPending />
                 </Link>
               );
             })}

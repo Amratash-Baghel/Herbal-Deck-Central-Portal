@@ -447,6 +447,56 @@ body {
   }
 }
 
+/* Route loading placeholders (components/route-skeleton.tsx) ease in rather
+ * than snap, so a fast load that shows one for a few frames reads as a soft
+ * beat instead of a flash. */
+.route-skeleton {
+  animation: route-skeleton-in 160ms ease-out both;
+}
+@keyframes route-skeleton-in {
+  from { opacity: 0; }
+}
+
+/* The sidebar's pending-navigation dot (components/nav-pending.tsx): out of
+ * the flow, in the item's right padding (so it can never push or overlap the
+ * label), invisible until a navigation has been pending for 100 ms, then a
+ * gentle pulse in the link's own colour. */
+.link-pending {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  margin-top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0;
+  visibility: hidden;
+}
+.link-pending.is-pending {
+  visibility: visible;
+  animation-name: link-pending-in, link-pending-pulse;
+  animation-duration: 200ms, 1s;
+  animation-delay: 100ms, 100ms;
+  animation-timing-function: ease, ease-in-out;
+  animation-iteration-count: 1, infinite;
+  animation-fill-mode: forwards, none;
+}
+@keyframes link-pending-in {
+  to { opacity: 0.6; }
+}
+@keyframes link-pending-pulse {
+  50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-skeleton { animation: none; }
+  .link-pending.is-pending {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 /* Rich-text (task descriptions): Tailwind's preflight strips list styling, so
  * restore it for the editor and rendered content. */
 .rich-text ul,
