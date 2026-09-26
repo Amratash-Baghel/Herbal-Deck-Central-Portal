@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { notifyUsers } from "@/lib/notifications";
@@ -62,54 +63,49 @@ async function canAssignTo(
   return false;
 }
 
-/** Notify an assignee (when it's someone other than the actor). */
-async function notifyAssignee(
+/**
+ * Notify an assignee (when it's someone other than the actor). Sent after the
+ * response (`after()`), so the actor's save isn't held up by a write that is
+ * only for someone else — notifyUsers never fails the action either way.
+ */
+function notifyAssignee(
   assigneeId: string | null | undefined,
   actor: { id: string; full_name: string | null; email: string },
   taskId: string,
   title: string,
 ) {
   if (!assigneeId || assigneeId === actor.id) return;
-  await notifyUsers([
-    {
-      recipientId: assigneeId,
-      type: "task_assigned",
-      title: `${displayName(actor)} assigned you a task`,
-      body: title,
-      link: "/tasks",
-      data: { taskId },
-    },
-  ]);
+  after(() =>
+    notifyUsers([
+      {
+        recipientId: assigneeId,
+        type: "task_assigned",
+        title: `${displayName(actor)} assigned you a task`,
+        body: title,
+        link: "/tasks",
+        data: { taskId },
+      },
+    ]),
+  );
 }
 
 /**
  * The department a new task belongs to: an explicit one the caller actually
  * belongs to, else their first. Mirrors the department check in the tasks
- * INSERT policy so a bad pick fails here with a readable message.
+ * INSERT policy so a bad pick fails here with a readable message. The caller's
+ * memberships already came with their profile (getUserAccess), so this reads
+ * them from there instead of querying profile_departments again.
  */
-async function resolveDepartment(
+function resolveDepartment(
   access: NonNullable<Awaited<ReturnType<typeof getUserAccess>>>,
-  supabase: Awaited<ReturnType<typeof createClient>>,
   explicit?: string,
-): Promise<{ id: string } | { error: string }> {
-  if (explicit && !access.isAdmin) {
-    const { data: membership } = await supabase
-      .from("profile_departments")
-      .select("department_id")
-      .eq("profile_id", access.profile.id)
-      .eq("department_id", explicit)
-      .maybeSingle();
-    if (!membership) return { error: "Pick a department you belong to." };
+): { id: string } | { error: string } {
+  if (explicit && !access.isAdmin && !access.departmentIds.includes(explicit)) {
+    return { error: "Pick a department you belong to." };
   }
   if (explicit) return { id: explicit };
 
-  const { data: first } = await supabase
-    .from("profile_departments")
-    .select("department_id")
-    .eq("profile_id", access.profile.id)
-    .limit(1)
-    .maybeSingle();
-  const id = first?.department_id as string | undefined;
+  const id = access.departmentIds[0];
   return id
     ? { id }
     : { error: "You're not in a department yet — ask an admin to add you." };
@@ -134,7 +130,7 @@ export async function logDone(title: string): Promise<TaskResult> {
   if (trimmed.length > 200) return { ok: false, error: "Keep it under 200 characters." };
 
   const supabase = await createClient();
-  const dept = await resolveDepartment(access, supabase);
+  const dept = resolveDepartment(access);
   if ("error" in dept) return { ok: false, error: dept.error };
 
   const { data, error } = await supabase
@@ -182,7 +178,7 @@ export async function createTask(input: CreateTaskInput): Promise<TaskResult> {
 
   const supabase = await createClient();
 
-  const dept = await resolveDepartment(access, supabase, input.departmentId);
+  const dept = resolveDepartment(access, input.departmentId);
   if ("error" in dept) return { ok: false, error: dept.error };
   const departmentId = dept.id;
 
@@ -217,7 +213,7 @@ export async function createTask(input: CreateTaskInput): Promise<TaskResult> {
     return { ok: false, error: error?.message ?? "Could not create the task." };
   }
 
-  await notifyAssignee(assignedTo, access.profile, data.id, title);
+  notifyAssignee(assignedTo, access.profile, data.id, title);
   revalidatePath("/tasks");
   return { ok: true, task: data as Task };
 }
@@ -327,16 +323,8 @@ export async function updateTask(
   }
   if (input.deadline !== undefined) patch.deadline = input.deadline || null;
   if (input.departmentId !== undefined) {
-    if (!access.isAdmin) {
-      const { data: membership } = await supabase
-        .from("profile_departments")
-        .select("department_id")
-        .eq("profile_id", access.profile.id)
-        .eq("department_id", input.departmentId)
-        .maybeSingle();
-      if (!membership) {
-        return { ok: false, error: "Pick a department you belong to." };
-      }
+    if (!access.isAdmin && !access.departmentIds.includes(input.departmentId)) {
+      return { ok: false, error: "Pick a department you belong to." };
     }
     patch.department_id = input.departmentId;
   }
@@ -355,7 +343,7 @@ export async function updateTask(
   }
 
   if (input.assignedTo !== undefined) {
-    await notifyAssignee(input.assignedTo, access.profile, data.id, data.title);
+    notifyAssignee(input.assignedTo, access.profile, data.id, data.title);
   }
   revalidatePath("/tasks");
   return { ok: true, task: data as Task };
@@ -459,16 +447,13 @@ export async function bulkMoveTasks(
       t.assigned_to === access.profile.id,
   );
 
-  const updated: Task[] = [];
-  for (const t of movable) {
-    const { data } = await supabase
-      .from("tasks")
-      .update({ status })
-      .eq("id", t.id)
-      .select("*")
-      .single();
-    if (data) updated.push(data as Task);
-  }
+  // Independent row updates — sent together rather than one round trip each.
+  const results = await Promise.all(
+    movable.map((t) =>
+      supabase.from("tasks").update({ status }).eq("id", t.id).select("*").single(),
+    ),
+  );
+  const updated: Task[] = results.flatMap(({ data }) => (data ? [data as Task] : []));
 
   revalidatePath("/tasks");
   return { ok: true, tasks: updated, skipped: ids.length - updated.length };
@@ -530,22 +515,23 @@ export async function saveEodNote(note: string): Promise<ActionResult> {
   const supabase = await createClient();
   const today = localDateISO();
 
-  // Snapshot the counts from the activity log via the SECURITY DEFINER helper.
-  const { data: summary } = await supabase.rpc("eod_summary", {
-    emp: access.profile.id,
-    d: today,
-  });
-
-  // The live "pending" tile counts all outstanding tasks, but a finalised EOD
-  // report only records pending work that has a deadline — undated pending
-  // tasks aren't a same-day concern and shouldn't clutter the historical record.
-  const { count: pendingWithDeadline } = await supabase
-    .from("tasks")
-    .select("id", { count: "exact", head: true })
-    .eq("assigned_to", access.profile.id)
-    .neq("status", "done")
-    .eq("archived", false)
-    .not("deadline", "is", null);
+  const [{ data: summary }, { count: pendingWithDeadline }] = await Promise.all([
+    // Snapshot the counts from the activity log via the SECURITY DEFINER helper.
+    supabase.rpc("eod_summary", {
+      emp: access.profile.id,
+      d: today,
+    }),
+    // The live "pending" tile counts all outstanding tasks, but a finalised EOD
+    // report only records pending work that has a deadline — undated pending
+    // tasks aren't a same-day concern and shouldn't clutter the historical record.
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("assigned_to", access.profile.id)
+      .neq("status", "done")
+      .eq("archived", false)
+      .not("deadline", "is", null),
+  ]);
 
   const snapshot = {
     ...((summary as Record<string, unknown>) ?? {}),

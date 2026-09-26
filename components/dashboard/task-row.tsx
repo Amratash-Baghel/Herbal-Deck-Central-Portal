@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { moveTask } from "@/app/(dashboard)/tasks/actions";
 import type { TaskStatus } from "@/lib/types";
 
@@ -14,6 +13,9 @@ import type { TaskStatus } from "@/lib/types";
  * The button is always visible and sized for a thumb rather than revealed on
  * hover — on a phone there is no hover, and this is the one control that makes
  * the row worth reading.
+ *
+ * `moveTask` revalidates, so its response already carries the re-rendered
+ * dashboard — no router.refresh() (which rendered it a second time).
  */
 export function TaskRow({ id, title, dotClass, to, actionLabel, meta, href }: {
   id: string; title: string;
@@ -21,7 +23,6 @@ export function TaskRow({ id, title, dotClass, to, actionLabel, meta, href }: {
   dotClass: string; to: TaskStatus; actionLabel: string;
   meta?: string | null; href: string;
 }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -29,8 +30,7 @@ export function TaskRow({ id, title, dotClass, to, actionLabel, meta, href }: {
     setError(null);
     startTransition(async () => {
       const res = await moveTask(id, to);
-      if (res.ok) router.refresh();
-      else setError(res.error ?? "Could not update this task.");
+      if (!res.ok) setError(res.error ?? "Could not update this task.");
     });
   }
 

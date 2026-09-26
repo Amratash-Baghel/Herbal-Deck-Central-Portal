@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { getUserAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -67,26 +68,31 @@ export async function sendMessage(
   const supabase = await createClient();
   const me = access.profile.id;
   if (options && !/^[0-9a-f-]{36}$/i.test(options.clientRequestId)) return {ok:false,error:"Invalid send request."};
-  if (options) {
-    const {data: previous} = await supabase.from("messages").select("*")
-      .eq("sender_id", me).eq("client_request_id", options.clientRequestId).maybeSingle();
-    if (previous) return previous.conversation_id === conversationId
-      ? {ok:true, message:previous as Message} : {ok:false,error:"Request belongs to another conversation."};
-  }
 
-  // Reading the conversation doubles as the membership check (RLS only returns
-  // it to participants).
-  const { data: convo } = await supabase
-    .from("conversations")
-    .select("id, type, name")
-    .eq("id", conversationId)
-    .single();
+  // The retry check, the conversation and its members are three independent
+  // reads, so they go out together (they were three round trips in a row);
+  // the checks below still apply in the same order.
+  const [{ data: previous }, { data: convo }, { data: parts }] = await Promise.all([
+    options
+      ? supabase.from("messages").select("*")
+          .eq("sender_id", me).eq("client_request_id", options.clientRequestId).maybeSingle()
+      : { data: null },
+    // Reading the conversation doubles as the membership check (RLS only
+    // returns it to participants).
+    supabase
+      .from("conversations")
+      .select("id, type, name")
+      .eq("id", conversationId)
+      .single(),
+    supabase
+      .from("conversation_participants")
+      .select("profile_id")
+      .eq("conversation_id", conversationId),
+  ]);
+  if (previous) return previous.conversation_id === conversationId
+    ? {ok:true, message:previous as Message} : {ok:false,error:"Request belongs to another conversation."};
   if (!convo) return { ok: false, error: "Conversation not found." };
 
-  const { data: parts } = await supabase
-    .from("conversation_participants")
-    .select("profile_id")
-    .eq("conversation_id", conversationId);
   const participantIds = (parts ?? []).map((p) => p.profile_id as string);
 
   const mentions = [...new Set(mentionIds)].filter(
@@ -115,7 +121,10 @@ export async function sendMessage(
     return { ok: false, error: error?.message ?? "Could not send the message." };
   }
 
-  // Notifications (best-effort; never fail the send).
+  // Notifications (best-effort; never fail the send). Written after the
+  // response: the sender's message is saved and returned without waiting on a
+  // row that is only for the recipient, who gets the message itself through
+  // realtime either way.
   const sender = displayName(access.profile);
   const attachLabel =
     attachments.length > 0
@@ -125,7 +134,7 @@ export async function sendMessage(
   const preview = shown.length > 140 ? `${shown.slice(0, 140)}…` : shown;
   const link = `/chat?c=${conversationId}`;
 
-  try { if (convo.type === "dm") {
+  after(async () => { try { if (convo.type === "dm") {
     const other = participantIds.find((id) => id !== me);
     if (other) {
       await notifyUsers([
@@ -153,7 +162,7 @@ export async function sendMessage(
     );
   }
 
-  } catch { console.warn("Chat message saved; notification delivery failed."); }
+  } catch { console.warn("Chat message saved; notification delivery failed."); } });
   return { ok: true, message: inserted as Message };
 }
 

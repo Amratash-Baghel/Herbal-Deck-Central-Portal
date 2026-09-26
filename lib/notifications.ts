@@ -60,34 +60,37 @@ export async function getManagementUserIds(excludeId?: string): Promise<string[]
   try {
     const admin = createAdminClient();
 
-    const { data: admins } = await admin
-      .from("profiles")
-      .select("id")
-      .eq("role", "admin")
-      .is("deactivated_at", null);
-
-    const { data: dept } = await admin
-      .from("departments")
-      .select("id")
-      .eq("slug", "hr-management")
-      .maybeSingle();
+    // The admins and the HR department don't depend on each other.
+    const [{ data: admins }, { data: dept }] = await Promise.all([
+      admin
+        .from("profiles")
+        .select("id")
+        .eq("role", "admin")
+        .is("deactivated_at", null),
+      admin
+        .from("departments")
+        .select("id")
+        .eq("slug", "hr-management")
+        .maybeSingle(),
+    ]);
 
     const ids = new Set<string>((admins ?? []).map((a) => a.id as string));
 
     if (dept) {
+      // Each member's deactivated_at comes embedded, so soft-removed accounts
+      // are dropped without a second lookup.
+      type ProfileState = { deactivated_at: string | null };
       const { data: members } = await admin
         .from("profile_departments")
-        .select("profile_id")
+        .select("profile_id, profiles(deactivated_at)")
         .eq("department_id", dept.id);
-      const memberIds = (members ?? []).map((m) => m.profile_id as string);
-      if (memberIds.length > 0) {
+      for (const m of (members ?? []) as unknown as {
+        profile_id: string;
+        profiles: ProfileState | ProfileState[] | null;
+      }[]) {
+        const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
         // Keep only active members (exclude soft-removed accounts).
-        const { data: active } = await admin
-          .from("profiles")
-          .select("id")
-          .in("id", memberIds)
-          .is("deactivated_at", null);
-        for (const p of active ?? []) ids.add(p.id as string);
+        if (p && !p.deactivated_at) ids.add(m.profile_id);
       }
     }
 
