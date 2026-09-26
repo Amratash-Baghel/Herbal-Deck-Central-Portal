@@ -10,6 +10,7 @@ import { InvoiceSignaturePad } from "@/components/invoice-signature-pad";
 import { deptNoteColor, noteSwatch } from "@/lib/tasks";
 import { formatMoney, type CurrencyCode } from "@/lib/money";
 import { time } from "@/lib/perf";
+import { dateFormat } from "@/lib/time";
 import { INVOICE_LIST_COLUMNS, type Invoice, type InvoiceStatus } from "@/lib/types";
 
 /** Departments carry a `slug` (it picks their note colour); categories don't. */
@@ -34,11 +35,11 @@ function formatDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-GB", {
+  return dateFormat("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  });
+  }).format(d);
 }
 
 function hrefWith(base: Search, overrides: Search): string {

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { SearchIcon } from "@/components/icons";
 import { formatMoney, type CurrencyCode } from "@/lib/money";
+import { dateFormat } from "@/lib/time";
 import type { InvoiceStatus } from "@/lib/types";
 
 export interface DeptInvoiceRow {
@@ -32,7 +33,7 @@ function formatDate(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    : dateFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(d);
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { dayRangeUTC, formatClockTZ } from "@/lib/time";
+import { dateFormat, dayRangeUTC, formatClockTZ } from "@/lib/time";
 import { statusLabel } from "@/lib/tasks";
 import type { EodReport, EodSummary, TaskActivity } from "@/lib/types";
 
@@ -12,12 +12,12 @@ function fmtDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleDateString(undefined, {
+    : dateFormat(undefined, {
         weekday: "short",
         day: "numeric",
         month: "short",
         year: "numeric",
-      });
+      }).format(d);
 }
 
 function activityLabel(a: TaskActivity): string {

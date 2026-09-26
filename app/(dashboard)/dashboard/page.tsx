@@ -11,7 +11,7 @@ import { formatMoney } from "@/lib/money";
 import { time } from "@/lib/perf";
 import { createClient } from "@/lib/supabase/server";
 import { noteColor } from "@/lib/tasks";
-import { daysUntil, formatClockTZ, isoDaysAgo, localDateISO } from "@/lib/time";
+import { dateFormat, daysUntil, formatClockTZ, isoDaysAgo, localDateISO } from "@/lib/time";
 import { previewText } from "@/components/chat/chat-model";
 import type { Conversation, EodReport, EodSummary, Task } from "@/lib/types";
 
@@ -143,16 +143,14 @@ export default async function DashboardPage() {
  *  the clock where the office actually is rather than the browser's guess. */
 function Greeting({ name }: { name: string }) {
   const now = new Date();
-  const weekday = new Intl.DateTimeFormat("en-IN", { weekday: "long", timeZone: TZ }).format(now);
-  const dateLine = new Intl.DateTimeFormat("en-IN", {
+  const weekday = dateFormat("en-IN", { weekday: "long", timeZone: TZ }).format(now);
+  const dateLine = dateFormat("en-IN", {
     day: "numeric",
     month: "long",
     timeZone: TZ,
   }).format(now);
   const hour =
-    Number(
-      new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: TZ }).format(now),
-    ) % 24;
+    Number(dateFormat("en-GB", { hour: "numeric", hour12: false, timeZone: TZ }).format(now)) % 24;
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (

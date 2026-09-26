@@ -15,6 +15,7 @@ import { ChatAvatar } from "./chat-avatar";
 import { GroupBadge } from "./group-badges";
 import { canGroup, isNearBottom, formatConversationDate, messageTextParts, insertAt, isGifUrl, previewText, PICKER_EMOJI } from "./chat-model";
 import { detectShareLinks, checkFile, uploadChatAttachment, ATTACHMENT_ACCEPT, MAX_ATTACHMENTS_PER_MESSAGE, type Attachment } from "@/lib/chat-attachments";
+import { dateFormat } from "@/lib/time";
 
 import type { ConversationSummary, DirectoryEntry } from "./types";
 import "./chat-base.css";
@@ -24,8 +25,10 @@ type Person = DirectoryEntry & { color?: string | null; avatarPath?: string | nu
 type LocalFile = { name: string; mime: string; size: number; url: string; file: File; uploaded?: Attachment; progress?: number };
 type PreviewMessage = LiveMessage;
 const EMOJI = ["👍", "❤️", "🎉", "👀", "✅", "🙏"];
-const clock = (date: string) => new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const day = (date: string) => new Date(date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+// Cached formatters: identical output to toLocale{Time,Date}String([], …), which
+// build a new Intl formatter on every call — twice per message per render.
+const clock = (date: string) => dateFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(date));
+const day = (date: string) => dateFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(date));
 const paths: Record<string, ReactNode> = {
   search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></>,
   plus: <path d="M12 5v14M5 12h14"/>, back: <path d="m14 5-7 7 7 7"/>, close: <path d="m6 6 12 12M18 6 6 18"/>,

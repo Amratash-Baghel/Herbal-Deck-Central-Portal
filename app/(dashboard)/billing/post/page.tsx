@@ -7,17 +7,18 @@ import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { InvoiceManageActions } from "@/components/invoice-manage-actions";
 import { formatMoney, type CurrencyCode } from "@/lib/money";
 import { time } from "@/lib/perf";
+import { dateFormat } from "@/lib/time";
 import { INVOICE_LIST_COLUMNS, type Invoice } from "@/lib/types";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-GB", {
+  return dateFormat("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  });
+  }).format(d);
 }
 
 type Named = { id: string; name: string };

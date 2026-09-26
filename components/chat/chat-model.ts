@@ -1,8 +1,12 @@
 // Typed into the message body, so unlike reactions this is not capped by the database check constraint.
 export const PICKER_EMOJI = ["😀","😃","😄","😁","😅","😂","🙂","😉","😊","😇","🥰","😍","😘","😋","😎","🤩","🤔","🤗","🙃","😴","😐","😢","😭","😤","😱","🤯","🥳","😬","🙄","😷","👍","👎","👌","🙏","👏","🙌","💪","🤝","👋","✌️","❤️","🧡","💚","💙","💜","🔥","✨","⭐","🎉","🎊","💯","✅","❌","⚠️","📌","📎","📅","⏰","☕","🌿","🌱","🍀","🚀","💡"];
 export type GroupableMessage = { id: string; sender_id: string; conversation_id: string; created_at: string };
+// Built once: constructing an Intl formatter costs ~50x more than using one, and
+// the conversation list formats a date per row on every render. (Self-contained
+// rather than imported from lib/time so node's test runner can load this file.)
+const CONVERSATION_DATE = new Intl.DateTimeFormat("en-IN", {month:"short",day:"numeric",timeZone:"Asia/Kolkata"});
 export function formatConversationDate(date:string):string {
-  return new Date(date).toLocaleDateString("en-IN", {month:"short",day:"numeric",timeZone:"Asia/Kolkata"});
+  return CONVERSATION_DATE.format(new Date(date));
 }
 export function messageTextParts(body:string, mentions:string[]):{text:string;kind:"text"|"link"|"mention"}[] {
   const names=mentions.filter(Boolean).sort((a,b)=>b.length-a.length);
