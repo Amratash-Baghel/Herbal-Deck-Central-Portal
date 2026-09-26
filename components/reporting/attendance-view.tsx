@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { formatClockTZ, formatMs } from "@/lib/time";
+import { dateFormat, formatClockTZ, formatMs } from "@/lib/time";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import {
   buildAttendance,
@@ -26,8 +26,8 @@ const selectClass =
 function fmtDayLabel(dateISO: string): { weekday: string; day: string } {
   const d = new Date(`${dateISO}T00:00:00Z`);
   return {
-    weekday: d.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" }),
-    day: d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }),
+    weekday: dateFormat("en-GB", { weekday: "short", timeZone: "UTC" }).format(d),
+    day: dateFormat("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }).format(d),
   };
 }
 

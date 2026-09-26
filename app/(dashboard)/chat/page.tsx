@@ -21,12 +21,23 @@ export default async function ChatPage({
   const supabase = await createClient();
   const meId = profile.id;
 
-  // Company directory (names for labels + the people pickers).
-  const { data: people } = await time("chat:directory", () =>
-    supabase
-      .from("profiles")
-      .select("id, full_name, email, deactivated_at, color, avatar_path, post")
-      .order("full_name", { nullsFirst: false }),
+  // The company directory (names for labels + the people pickers), the user's
+  // memberships and their unread counts don't depend on one another, so they
+  // are read together rather than one after the other.
+  const [{ data: people }, { data: myParts }, { data: unread }] = await time(
+    "chat:directory+memberships+unread",
+    () =>
+      Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, full_name, email, deactivated_at, color, avatar_path, post")
+          .order("full_name", { nullsFirst: false }),
+        supabase
+          .from("conversation_participants")
+          .select("conversation_id, is_admin")
+          .eq("profile_id", meId),
+        supabase.rpc("unread_counts"),
+      ]),
   );
   const directory: DirectoryEntry[] = (people ?? []).map((p) => {
     const row = p as Pick<Profile, "id" | "full_name" | "email" | "deactivated_at">;
@@ -42,10 +53,6 @@ export default async function ChatPage({
   });
 
   // The user's conversations.
-  const { data: myParts } = await supabase
-    .from("conversation_participants")
-    .select("conversation_id, is_admin")
-    .eq("profile_id", meId);
   const adminOf = new Map(
     (myParts ?? []).map((p) => [p.conversation_id as string, Boolean(p.is_admin)]),
   );
@@ -53,17 +60,17 @@ export default async function ChatPage({
 
   let conversations: ConversationSummary[] = [];
   if (convIds.length > 0) {
-    const [{ data: convRows }, { data: allParts }, { data: unread }] =
-      await time("chat:conversations+participants+unread", () =>
+    const [{ data: convRows }, { data: allParts }] = await time(
+      "chat:conversations+participants",
+      () =>
         Promise.all([
           supabase.from("conversations").select("*").in("id", convIds),
           supabase
             .from("conversation_participants")
             .select("conversation_id, profile_id")
             .in("conversation_id", convIds),
-          supabase.rpc("unread_counts"),
         ]),
-      );
+    );
 
     const participantsByConv = new Map<string, string[]>();
     for (const row of allParts ?? []) {

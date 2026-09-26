@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { deletePettyCashEntry } from "@/app/(dashboard)/billing/actions";
 import { SearchIcon, TrashIcon } from "@/components/icons";
 import { formatMoney } from "@/lib/money";
+import { dateFormat } from "@/lib/time";
 import type { MiscPayment } from "@/lib/types";
 
 type SortKey = "date_desc" | "date_asc" | "amount_desc" | "amount_asc";
@@ -18,11 +19,11 @@ const SORTS: { value: SortKey; label: string }[] = [
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-GB", {
+  return dateFormat("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  });
+  }).format(d);
 }
 
 /**

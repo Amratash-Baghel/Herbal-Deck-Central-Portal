@@ -235,6 +235,28 @@ export const TASK_LIST_COLUMNS =
   "id, title, description, status, created_by, assigned_to, department_id, deadline, archived, color, started_at, completed_at, created_at, updated_at";
 
 /**
+ * The read-only task lists (/tasks/team, /tasks/manage) show one line per task
+ * and never the description, creator or start time — and they load every task
+ * in scope, so those columns were most of their payload. They select this.
+ */
+export const TASK_ROW_COLUMNS =
+  "id, title, status, assigned_to, department_id, deadline, archived, color, completed_at, created_at, updated_at";
+export type TaskRow = Pick<
+  Task,
+  | "id"
+  | "title"
+  | "status"
+  | "assigned_to"
+  | "department_id"
+  | "deadline"
+  | "archived"
+  | "color"
+  | "completed_at"
+  | "created_at"
+  | "updated_at"
+>;
+
+/**
  * An append-only activity row from `public.task_activity` — the task history
  * log (powers EOD). `task_id` becomes null if the task is later deleted;
  * `task_title` / `department_id` are denormalised so the row still makes sense.

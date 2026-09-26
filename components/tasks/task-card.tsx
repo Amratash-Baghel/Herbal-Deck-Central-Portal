@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import { noteColor, noteSwatch, deptNoteColor, adjacentStatus } from "@/lib/tasks";
 import { daysUntil, formatDayShort, formatHM, localDateISO } from "@/lib/time";
 import { ChevronLeftIcon, ChevronRightIcon, CalendarIcon } from "@/components/icons";
@@ -64,8 +64,13 @@ function DeadlinePill({ deadline }: { deadline: string | null }) {
  * the department as a corner tag rather than a footer row. Editable cards drag
  * between columns, nudge with the ◀ ▶ controls, and open the full editor —
  * where the creator and the lifecycle timestamps live.
+ *
+ * Memoised, and its callbacks take the task id rather than closing over it, so
+ * the board can hand every card the SAME function objects. A board holds
+ * hundreds of notes; without this, any state change on the board (opening the
+ * editor, ticking a checkbox) re-rendered every one of them.
  */
-export function TaskCard({
+export const TaskCard = memo(function TaskCard({
   task,
   assigneeName,
   deptName,
@@ -98,10 +103,10 @@ export function TaskCard({
   selected?: boolean;
   /** Completed on an earlier day — dimmed so it recedes behind live work. */
   faded?: boolean;
-  onToggleSelect?: () => void;
-  onOpen: () => void;
-  onMove?: (status: TaskStatus) => void;
-  onAssign?: (assigneeId: string | null) => void;
+  onToggleSelect?: (taskId: string) => void;
+  onOpen: (taskId: string) => void;
+  onMove?: (taskId: string, status: TaskStatus) => void;
+  onAssign?: (taskId: string, assigneeId: string | null) => void;
 }) {
   const prev = adjacentStatus(task.status, "prev");
   const next = adjacentStatus(task.status, "next");
@@ -158,14 +163,14 @@ export function TaskCard({
         <input
           type="checkbox"
           checked={selected}
-          onChange={onToggleSelect}
+          onChange={() => onToggleSelect?.(task.id)}
           aria-label={`Select ${task.title}`}
           className="absolute left-2 top-2 h-4 w-4 accent-primary"
         />
       )}
       <button
         type="button"
-        onClick={selectable ? onToggleSelect : onOpen}
+        onClick={() => (selectable ? onToggleSelect?.(task.id) : onOpen(task.id))}
         className={`block w-full text-left text-foreground ${selectable ? "pl-6" : ""}`}
       >
         <p className="text-sm font-semibold leading-snug">{task.title}</p>
@@ -202,7 +207,7 @@ export function TaskCard({
                 <button
                   type="button"
                   onClick={() => {
-                    onAssign(null);
+                    onAssign(task.id, null);
                     close();
                   }}
                   className="block w-full px-3 py-1.5 text-left text-xs text-muted-foreground transition hover:bg-accent"
@@ -214,7 +219,7 @@ export function TaskCard({
                     key={p.id}
                     type="button"
                     onClick={() => {
-                      onAssign(p.id);
+                      onAssign(task.id, p.id);
                       close();
                     }}
                     className={`block w-full px-3 py-1.5 text-left text-xs transition hover:bg-accent ${
@@ -256,7 +261,7 @@ export function TaskCard({
           {prev && (
             <button
               type="button"
-              onClick={() => onMove(prev)}
+              onClick={() => onMove(task.id, prev)}
               aria-label="Move left"
               className="inline-flex h-[21px] w-[21px] items-center justify-center rounded-md bg-foreground/10 transition hover:brightness-90"
             >
@@ -266,7 +271,7 @@ export function TaskCard({
           {next && (
             <button
               type="button"
-              onClick={() => onMove(next)}
+              onClick={() => onMove(task.id, next)}
               aria-label="Move right"
               className="inline-flex h-[21px] w-[21px] items-center justify-center rounded-md bg-foreground/10 transition hover:brightness-90"
             >
@@ -277,4 +282,4 @@ export function TaskCard({
       )}
     </div>
   );
-}
+});

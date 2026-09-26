@@ -1,9 +1,9 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Local attachment preview URLs. */
 
-import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { useLiveChat, type LiveMessage } from "./use-live-chat";
+import { useLiveChat, type LiveMessage, type Participant } from "./use-live-chat";
 import { sendMessage, editChatMessage, deleteChatMessage, setMessageReaction, setMessagePin, startDirectMessage, createGroup, renameGroup, addGroupMembers, removeGroupMember, leaveGroup } from "@/app/(dashboard)/chat/actions";
 import { MessageAttachments } from "./message-attachments";
 import { LinkPreviewCards } from "./link-preview";
@@ -15,7 +15,9 @@ import { ChatAvatar } from "./chat-avatar";
 import { GroupBadge } from "./group-badges";
 import { canGroup, isNearBottom, formatConversationDate, messageTextParts, insertAt, isGifUrl, previewText, PICKER_EMOJI } from "./chat-model";
 import { detectShareLinks, checkFile, uploadChatAttachment, ATTACHMENT_ACCEPT, MAX_ATTACHMENTS_PER_MESSAGE, type Attachment } from "@/lib/chat-attachments";
+import { dateFormat } from "@/lib/time";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ConversationSummary, DirectoryEntry } from "./types";
 import "./chat-base.css";
 import "./chat.css";
@@ -24,8 +26,10 @@ type Person = DirectoryEntry & { color?: string | null; avatarPath?: string | nu
 type LocalFile = { name: string; mime: string; size: number; url: string; file: File; uploaded?: Attachment; progress?: number };
 type PreviewMessage = LiveMessage;
 const EMOJI = ["👍", "❤️", "🎉", "👀", "✅", "🙏"];
-const clock = (date: string) => new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const day = (date: string) => new Date(date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+// Cached formatters: identical output to toLocale{Time,Date}String([], …), which
+// build a new Intl formatter on every call — twice per message per render.
+const clock = (date: string) => dateFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(date));
+const day = (date: string) => dateFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(date));
 const paths: Record<string, ReactNode> = {
   search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></>,
   plus: <path d="M12 5v14M5 12h14"/>, back: <path d="m14 5-7 7 7 7"/>, close: <path d="m6 6 12 12M18 6 6 18"/>,
@@ -44,6 +48,139 @@ const paths: Record<string, ReactNode> = {
 };
 function Icon({ name }: { name: string }) { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] ?? paths.chat}</svg>; }
 function Tool({ label, icon, onClick, active }: { label: string; icon: string; onClick: () => void; active?: boolean }) { return <button type="button" className={`cp-tool ${active ? "is-active" : ""}`} title={label} aria-label={label} aria-pressed={active} onClick={onClick}><Icon name={icon}/></button>; }
+
+/**
+ * Everything the thread needs to turn an id into a person, built once per
+ * directory change. `person()` was a linear `find` per call — several calls per
+ * message per render.
+ */
+type Lookup = { name: (id: string) => string; person: (id: string) => Person | undefined };
+function avatarFor(lookup: Lookup, id: string, group = false, size: "row" | "header" | "message" | "detail" = "row") {
+  const p = lookup.person(id);
+  return <ChatAvatar id={id} name={lookup.name(id)} kind={group ? "group" : "person"} avatarPath={p?.avatarPath} color={p?.color} size={size} />;
+}
+
+/** What a message row can ask the chat to do. Stable for the life of the chat. */
+type ThreadHandlers = {
+  jump: (id: string) => void;
+  react: (messageId: string, emoji: string, add: boolean) => void;
+  pin: (messageId: string, pinned: boolean) => void;
+  reply: (m: LiveMessage) => void;
+  edit: (m: LiveMessage) => void;
+  remove: (messageId: string) => void;
+  copy: (body: string) => void;
+  toggleMenu: (messageId: string) => void;
+  closeMenu: () => void;
+  pointerDown: (event: ReactPointerEvent<HTMLElement>, m: LiveMessage) => void;
+  pointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
+  cancelLongPress: () => void;
+};
+
+/**
+ * Wraps a set of callbacks that close over the latest render's state in one
+ * object whose functions never change identity, so memoised children can take
+ * them as props without re-rendering. Each call goes to the newest callback.
+ */
+function useStableHandlers<T extends Record<string, (...args: never[]) => void>>(handlers: T): T {
+  const latest = useRef(handlers);
+  useLayoutEffect(() => { latest.current = handlers; });
+  const [stable] = useState(() => {
+    const out: Record<string, (...args: never[]) => void> = {};
+    for (const key of Object.keys(handlers)) out[key] = (...args: never[]) => latest.current[key](...args);
+    return out as T;
+  });
+  return stable;
+}
+
+/**
+ * A clock for the one thing in the thread that depends on the time: whether a
+ * message is still inside its 15-minute edit window. It ticks only while a
+ * message's action menu is open (the only place that reads it), starting from
+ * the moment the menu was opened, instead of re-rendering the whole thread
+ * every second.
+ */
+function useNow(start: number) {
+  const [now, setNow] = useState(start);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
+}
+function EditDeleteItems({ m, openedAt, handlers }: { m: LiveMessage; openedAt: number; handlers: ThreadHandlers }) {
+  const now = useNow(openedAt);
+  const canEdit = now > 0 && now - Date.parse(m.created_at) <= 900_000;
+  if (!canEdit) return null;
+  return <><button onClick={() => handlers.edit(m)}>Edit message</button><button className="cp-danger" onClick={() => handlers.remove(m.id)}>Delete message</button></>;
+}
+
+/**
+ * One message. Memoised: typing, scrolling, a new message arriving or someone's
+ * read receipt re-render only the rows whose props actually change, not the
+ * whole thread (which at a few thousand loaded messages took seconds).
+ */
+const MessageRow = memo(function MessageRow({ m, meId, first, last, dayLabelText, unreadMarker, quoted, highlighted, menuOpen, menuAt, advanced, actionBusy, canUnpinOthers, readLabel, lookup, supabase, handlers }: {
+  m: LiveMessage; meId: string; first: boolean; last: boolean; dayLabelText: string | null; unreadMarker: boolean; quoted: LiveMessage | undefined;
+  highlighted: boolean; menuOpen: boolean; menuAt: number; advanced: boolean; actionBusy: boolean; canUnpinOthers: boolean; readLabel: string | null;
+  lookup: Lookup; supabase: SupabaseClient; handlers: ThreadHandlers;
+}) {
+  const mine = m.sender_id === meId;
+  const { name, person } = lookup;
+  const links = m.deleted ? [] : detectShareLinks(m.body);
+  return <>{unreadMarker && <div className="cp-date cp-unread"><span>Unread messages</span></div>}{dayLabelText !== null && <div className="cp-date"><span>{dayLabelText}</span></div>}<article tabIndex={-1} onPointerDown={event => handlers.pointerDown(event, m)} onPointerMove={handlers.pointerMove} onPointerUp={handlers.cancelLongPress} onPointerCancel={handlers.cancelLongPress} id={`message-${m.id}`} className={`cp-message ${mine ? "mine" : "incoming"} ${first ? "first" : ""} ${last ? "last" : ""} ${highlighted ? "highlight" : ""}`}>
+      <div className="cp-message-avatar">{!mine && first && avatarFor(lookup, m.sender_id, false, "message")}</div>
+      <div className="cp-message-content">{first && !mine && <div className="cp-sender">{name(m.sender_id)}</div>}
+        <div className="cp-bubble" style={!mine ? { "--sender": person(m.sender_id)?.color || "var(--primary)" } as CSSProperties : undefined}>
+          {m.reply && !quoted && !m.deleted && <button className="cp-quote" onClick={()=>handlers.jump(m.reply!)}><strong>Reply</strong><span>View original message</span></button>}{quoted && !m.deleted && <button className="cp-quote" onClick={() => handlers.jump(quoted.id)}><strong>{name(quoted.sender_id)}</strong><span>{quoted.deleted ? "Message deleted" : quoted.body || "Attachment"}</span></button>}
+          {m.deleted ? <p className="cp-deleted">This message was deleted</p> : <><p className="cp-body">{messageTextParts(m.body,(m.mentions || []).map(name)).map((part,j)=>part.kind==="link" ? <a key={j} href={part.text} target="_blank" rel="noreferrer">{isGifUrl(part.text) ? <img className="cp-gif-inline" src={part.text} alt="GIF" loading="lazy"/> : part.text.length>90 ? `${part.text.slice(0,87)}…`:part.text}</a> : part.kind==="mention" ? <span key={j} className="cp-mention">{part.text}</span> : part.text)}</p>{m.attachments?.length > 0 && <MessageAttachments supabase={supabase} attachments={m.attachments}/>}{links.length > 0 && <LinkPreviewCards links={links}/>}</>}
+        </div>
+        {!!m.reactions?.length && !m.deleted && <div className="cp-reactions">{EMOJI.filter(emoji=>m.reactions?.some(r=>r.emoji===emoji)).map(emoji=>{
+          const rs=m.reactions!.filter(r=>r.emoji===emoji), reacted=rs.some(r=>r.profile_id===meId);
+          return <button key={emoji} disabled={actionBusy} title={rs.map(r=>name(r.profile_id)).join(", ")} aria-label={`${emoji}: ${rs.map(r=>name(r.profile_id)).join(", ")}. ${reacted ? "Remove" : "Add"} your reaction`} aria-pressed={reacted} onClick={()=>handlers.react(m.id,emoji,!reacted)}>{emoji}<span>{rs.length}</span></button>;
+        })}</div>}
+        {last && <div className="cp-message-meta">{m.pinned && <Icon name="pin"/>}{m.edited && "Edited · "}{clock(m.created_at)}{mine && <><Icon name="check"/><span>{readLabel}</span></>}</div>}
+      </div>
+      {!m.deleted && <div className={`cp-message-actions ${menuOpen ? "open" : ""}`}>{advanced && <Tool label={`Reply to message from ${name(m.sender_id)}`} icon="reply" onClick={() => handlers.reply(m)}/>}<Tool label="Message actions" icon="more" active={menuOpen} onClick={() => handlers.toggleMenu(m.id)}/>{menuOpen && <MessageActionPopover onClose={handlers.closeMenu}>{advanced && <div className="cp-emoji">{EMOJI.map(emoji => <button key={emoji} aria-label={`React ${emoji}`} disabled={actionBusy} onClick={() => { handlers.react(m.id,emoji,!m.reactions?.some(r=>r.emoji===emoji && r.profile_id===meId)); handlers.closeMenu(); }}>{emoji}</button>)}</div>}{advanced && (!m.pinned || m.pinnedBy===meId || canUnpinOthers) && <button disabled={actionBusy} onClick={() => { handlers.pin(m.id,!m.pinned); handlers.closeMenu(); }}>{m.pinned ? "Unpin message" : "Pin message"}</button>}<button onClick={() => handlers.copy(m.body)}>Copy text</button>{advanced && mine && <EditDeleteItems m={m} openedAt={menuAt} handlers={handlers}/>}</MessageActionPopover>}</div>}
+    </article></>;
+});
+
+/**
+ * The loaded messages of the open conversation. Memoised on its props, so the
+ * composer, the conversation list, panels and notices can all update without
+ * touching the thread; within it, only rows whose inputs changed re-render.
+ */
+const MessageList = memo(function MessageList({ messages, meId, advanced, actionBusy, highlight, menu, menuAt, unreadAfter, participants, isDm, amAdmin, lookup, supabase, handlers }: {
+  messages: LiveMessage[]; meId: string; advanced: boolean; actionBusy: boolean; highlight: string | null; menu: string | null; menuAt: number;
+  unreadAfter: string | null; participants: Participant[]; isDm: boolean; amAdmin: boolean; lookup: Lookup; supabase: SupabaseClient; handlers: ThreadHandlers;
+}) {
+  const byId = useMemo(() => new Map(messages.map(m => [m.id, m])), [messages]);
+  const days = useMemo(() => messages.map(m => day(m.created_at)), [messages]);
+  const others = useMemo(() => participants.filter(p => p.profile_id !== meId), [participants, meId]);
+  const unreadIndex = unreadAfter ? messages.findIndex(m => m.sender_id !== meId && !m.deleted && m.created_at > unreadAfter) : -1;
+  return <>{messages.map((m, i) => {
+    const prev = messages[i - 1]; const next = messages[i + 1];
+    const last = !next || !canGroup(m, next);
+    const menuOpen = menu === m.id;
+    let readLabel: string | null = null;
+    if (last && m.sender_id === meId) {
+      const seen = others.filter(p => p.joined_at <= m.created_at && p.last_read_at >= m.created_at).length;
+      readLabel = seen > 0 ? isDm ? "Read" : `Seen by ${seen}` : "Sent";
+    }
+    return <MessageRow key={m.id} m={m} meId={meId}
+      first={!canGroup(prev, m)} last={last}
+      dayLabelText={!prev || days[i - 1] !== days[i] ? days[i] : null}
+      unreadMarker={i === unreadIndex}
+      quoted={m.reply ? byId.get(m.reply) : undefined}
+      highlighted={highlight === m.id}
+      menuOpen={menuOpen} menuAt={menuOpen ? menuAt : 0}
+      advanced={advanced}
+      // Only rows that show an enabled/disabled control care about this flag.
+      actionBusy={actionBusy && (menuOpen || !!m.reactions?.length)}
+      canUnpinOthers={amAdmin}
+      readLabel={readLabel}
+      lookup={lookup} supabase={supabase} handlers={handlers}/>;
+  })}</>;
+});
 
 export function LiveChat({ me, directory: initialDirectory, conversations: initialConversations, initialConversationId }: { me: { id: string; name: string }; directory: Person[]; conversations: ConversationSummary[]; initialConversationId?: string }) {
   const live = useLiveChat(me.id,initialConversations,initialDirectory,initialConversationId);
@@ -83,7 +220,8 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
   const [matchIndex, setMatchIndex] = useState(0);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [storageError, setStorageError] = useState(false);
-  const [now, setNow] = useState(0);
+  /** When the open message menu was opened — the edit-window clock starts there. */
+  const [menuAt, setMenuAt] = useState(0);
   const thread = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const longPress = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
@@ -93,8 +231,12 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
   const objectUrls = useRef<string[]>([]);
   const storeKey = `herbal-chat-drafts-v1:${me.id}`;
   const people:Person[] = directory;
-  const person = (id:string) => people.find(p=>p.id===id);
-  const name = (id:string) => id===me.id ? me.name : person(id)?.name || "Former employee";
+  const lookup = useMemo<Lookup>(() => {
+    const byId = new Map<string, Person>(directory.map(p => [p.id, p]));
+    const person = (id:string) => byId.get(id);
+    return { person, name: (id:string) => id===me.id ? me.name : person(id)?.name || "Former employee" };
+  }, [directory, me.id, me.name]);
+  const { person, name } = lookup;
   const all=[...conversations].sort((a,b)=>(b.lastMessageAt || "").localeCompare(a.lastMessageAt || "") || a.id.localeCompare(b.id));
   const current = all.find(c=>c.id===selected) || {id:"",type:"dm" as const,name:null,participantIds:[],amAdmin:false,unread:0,lastMessageAt:null,lastMessagePreview:null};
   const title = (c:ConversationSummary) => !c.id ? "Your conversations" : c.type==="group" ? c.name || "Group" : name(c.participantIds.find(id=>id!==me.id) || me.id);
@@ -137,12 +279,6 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
   useEffect(() => {
     if (input.current) { input.current.style.height = "auto"; input.current.style.height = `${Math.min(input.current.scrollHeight, 160)}px`; }
   }, [text]);
-  useEffect(() => {
-    const tick = () => setNow(Date.now());
-    queueMicrotask(tick);
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
-  }, []);
   useEffect(() => {
     const update = () => setOffline(!navigator.onLine);
     const urls = objectUrls.current;
@@ -188,8 +324,7 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
   }, [panel]);
   function cancelLongPress() { if (longPress.current) clearTimeout(longPress.current.timer); longPress.current = null; }
   function avatar(id: string, group = false, size: "row" | "header" | "message" | "detail" = "row") {
-    const p = person(id);
-    return <ChatAvatar id={id} name={name(id)} kind={group ? "group" : "person"} avatarPath={p?.avatarPath} color={p?.color} size={size} />;
+    return avatarFor(lookup, id, group, size);
   }
   // The picker is a modal dialog, so the textarea is blurred while it is open: the
   // caret is tracked in a ref and restored once the picker closes.
@@ -322,7 +457,25 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
     await live.loadOlder();
     requestAnimationFrame(()=>{if(el) el.scrollTop=top+(el.scrollHeight-height);});
   }
-  const unreadIndex=live.unreadAfter ? merged.findIndex(m=>m.sender_id!==me.id && !m.deleted && m.created_at>live.unreadAfter!) : -1;
+  function openMenu(id:string|null) { setMenu(id); if(id) setMenuAt(Date.now()); }
+  const threadHandlers = useStableHandlers<ThreadHandlers>({
+    jump: id => { void jump(id); },
+    react: (id, emoji, add) => { void mutate(()=>setMessageReaction(id,emoji,add)); },
+    pin: (id, pinned) => { void mutate(()=>setMessagePin(id,pinned)); },
+    reply: m => { setReply(m); setEditing(null); input.current?.focus(); },
+    edit: m => { setEditing(m); setEditText(m.body); setReply(null); setMenu(null); input.current?.focus(); },
+    remove: id => { if(window.confirm("Delete this message for everyone? A deleted-message marker will remain.")) void mutate(()=>deleteChatMessage(id)); setMenu(null); },
+    copy: body => { void (async () => { try { await navigator.clipboard.writeText(body); setNotice("Message copied."); } catch { setNotice("Clipboard unavailable. Select the message text to copy it."); } setMenu(null); })(); },
+    toggleMenu: id => openMenu(menu === id ? null : id),
+    closeMenu: () => setMenu(null),
+    pointerDown: (event, m) => {
+      if (event.pointerType === "mouse" || m.deleted || (event.target as HTMLElement).closest("button,a")) return;
+      cancelLongPress(); const element = event.currentTarget;
+      longPress.current = { x:event.clientX, y:event.clientY, timer:setTimeout(() => { element.focus({preventScroll:true}); openMenu(m.id); longPress.current = null; },450) };
+    },
+    pointerMove: event => { const press = longPress.current; if (press && Math.hypot(event.clientX - press.x,event.clientY - press.y) > 10) cancelLongPress(); },
+    cancelLongPress: () => cancelLongPress(),
+  });
   return <section className={`cp-page ${panel ? "has-panel" : ""}`} aria-label="Team chat">
     <div className="cp-page-heading"><div><h1><span className="cp-brand-mark"><GroupBadge name="leaf"/></span>Chat<span className="cp-heading-divider"/>Herbal Deck</h1></div><div className="cp-heading-controls"><Link href="/profile" className="cp-profile-link" title="Change your profile picture">{avatar(me.id,false,"message")}<span>My picture</span></Link><div className="cp-theme"><ThemeToggle/></div></div></div>
     {storageError && <p role="alert">Browser storage is full or unavailable. Changes will last until this page is closed.</p>}
@@ -346,34 +499,9 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
           {loading && <div className="cp-small-empty" role="status">Loading your conversation…</div>}
           {loadError && <div className="cp-small-empty" role="alert"><strong>{loadError}</strong><button onClick={() => void live.sync()}>Try again</button></div>}
           {!loading && !loadError && merged.length === 0 && <div className="cp-empty-thread"><span className="cp-empty-art"><GroupBadge name="leaf"/><span><Icon name="chat"/></span></span><h3>A new conversation starts here.</h3><p>Say hello, share an idea, or bring your team together.</p></div>}
-          {!loading && merged.map((m, i) => {
-            const mine = m.sender_id === me.id;
-            const prev = merged[i - 1]; const next = merged[i + 1];
-            const newDay = !prev || day(prev.created_at) !== day(m.created_at);
-            const first = !canGroup(prev, m);
-            const last = !next || !canGroup(m, next);
-            const quoted = merged.find(x => x.id === m.reply);
-            const canEdit = advanced && mine && now > 0 && now - Date.parse(m.created_at) <= 900_000;
-            return <Fragment key={m.id}>{i === unreadIndex && <div className="cp-date cp-unread"><span>Unread messages</span></div>}{newDay && <div className="cp-date"><span>{day(m.created_at)}</span></div>}<article tabIndex={-1} onPointerDown={event => {
-                if (event.pointerType === "mouse" || m.deleted || (event.target as HTMLElement).closest("button,a")) return;
-                cancelLongPress(); const element = event.currentTarget;
-                longPress.current = { x:event.clientX, y:event.clientY, timer:setTimeout(() => { element.focus({preventScroll:true}); setMenu(m.id); longPress.current = null; },450) };
-              }} onPointerMove={event => { const press = longPress.current; if (press && Math.hypot(event.clientX - press.x,event.clientY - press.y) > 10) cancelLongPress(); }} onPointerUp={cancelLongPress} onPointerCancel={cancelLongPress} id={`message-${m.id}`} className={`cp-message ${mine ? "mine" : "incoming"} ${first ? "first" : ""} ${last ? "last" : ""} ${highlight === m.id ? "highlight" : ""}`}>
-              <div className="cp-message-avatar">{!mine && first && avatar(m.sender_id, false, "message")}</div>
-              <div className="cp-message-content">{first && !mine && <div className="cp-sender">{name(m.sender_id)}</div>}
-                <div className="cp-bubble" style={!mine ? { "--sender": person(m.sender_id)?.color || "var(--primary)" } as CSSProperties : undefined}>
-                  {m.reply && !quoted && !m.deleted && <button className="cp-quote" onClick={()=>void jump(m.reply!)}><strong>Reply</strong><span>View original message</span></button>}{quoted && !m.deleted && <button className="cp-quote" onClick={() => jump(quoted.id)}><strong>{name(quoted.sender_id)}</strong><span>{quoted.deleted ? "Message deleted" : quoted.body || "Attachment"}</span></button>}
-                  {m.deleted ? <p className="cp-deleted">This message was deleted</p> : <><p className="cp-body">{messageTextParts(m.body,(m.mentions || []).map(name)).map((part,j)=>part.kind==="link" ? <a key={j} href={part.text} target="_blank" rel="noreferrer">{isGifUrl(part.text) ? <img className="cp-gif-inline" src={part.text} alt="GIF" loading="lazy"/> : part.text.length>90 ? `${part.text.slice(0,87)}…`:part.text}</a> : part.kind==="mention" ? <span key={j} className="cp-mention">{part.text}</span> : part.text)}</p>{m.attachments?.length > 0 && <MessageAttachments supabase={supabase} attachments={m.attachments}/>}{detectShareLinks(m.body).length > 0 && <LinkPreviewCards links={detectShareLinks(m.body)}/>}</>}
-                </div>
-                {!!m.reactions?.length && !m.deleted && <div className="cp-reactions">{EMOJI.filter(emoji=>m.reactions?.some(r=>r.emoji===emoji)).map(emoji=>{
-                  const rs=m.reactions!.filter(r=>r.emoji===emoji), mine=rs.some(r=>r.profile_id===me.id);
-                  return <button key={emoji} disabled={actionBusy} title={rs.map(r=>name(r.profile_id)).join(", ")} aria-label={`${emoji}: ${rs.map(r=>name(r.profile_id)).join(", ")}. ${mine ? "Remove" : "Add"} your reaction`} aria-pressed={mine} onClick={()=>void mutate(()=>setMessageReaction(m.id,emoji,!mine))}>{emoji}<span>{rs.length}</span></button>;
-                })}</div>}
-                {last && <div className="cp-message-meta">{m.pinned && <Icon name="pin"/>}{m.edited && "Edited · "}{clock(m.created_at)}{mine && <><Icon name="check"/><span>{live.participants.some(p=>p.profile_id!==me.id && p.joined_at<=m.created_at && p.last_read_at>=m.created_at) ? current.type==="dm" ? "Read" : `Seen by ${live.participants.filter(p=>p.profile_id!==me.id && p.joined_at<=m.created_at && p.last_read_at>=m.created_at).length}` : "Sent"}</span></>}</div>}
-              </div>
-              {!m.deleted && <div className={`cp-message-actions ${menu === m.id ? "open" : ""}`}>{advanced && <Tool label={`Reply to message from ${name(m.sender_id)}`} icon="reply" onClick={() => { setReply(m); setEditing(null); input.current?.focus(); }}/>}<Tool label="Message actions" icon="more" active={menu === m.id} onClick={() => setMenu(menu === m.id ? null : m.id)}/>{menu === m.id && <MessageActionPopover onClose={() => setMenu(null)}>{advanced && <div className="cp-emoji">{EMOJI.map(emoji => <button key={emoji} aria-label={`React ${emoji}`} disabled={actionBusy} onClick={() => { void mutate(()=>setMessageReaction(m.id,emoji,!m.reactions?.some(r=>r.emoji===emoji && r.profile_id===me.id))); setMenu(null); }}>{emoji}</button>)}</div>}{advanced && (!m.pinned || m.pinnedBy===me.id || current.amAdmin) && <button disabled={actionBusy} onClick={() => { void mutate(()=>setMessagePin(m.id,!m.pinned)); setMenu(null); }}>{m.pinned ? "Unpin message" : "Pin message"}</button>}<button onClick={async () => { try { await navigator.clipboard.writeText(m.body); setNotice("Message copied."); } catch { setNotice("Clipboard unavailable. Select the message text to copy it."); } setMenu(null); }}>Copy text</button>{canEdit && <><button onClick={() => { setEditing(m); setEditText(m.body); setReply(null); setMenu(null); input.current?.focus(); }}>Edit message</button><button className="cp-danger" onClick={() => { if(window.confirm("Delete this message for everyone? A deleted-message marker will remain.")) void mutate(()=>deleteChatMessage(m.id)); setMenu(null); }}>Delete message</button></>}</MessageActionPopover>}</div>}
-            </article></Fragment>;
-          })}
+          {!loading && <MessageList messages={merged} meId={me.id} advanced={advanced} actionBusy={actionBusy} highlight={highlight} menu={menu} menuAt={menuAt}
+            unreadAfter={live.unreadAfter} participants={live.participants} isDm={current.type==="dm"} amAdmin={current.amAdmin}
+            lookup={lookup} supabase={supabase} handlers={threadHandlers}/>}
         </div>
         {(away || live.windowed) && <button className="cp-jump" onClick={async () => { if(live.windowed) await live.latest(); scrollBottom.current = true; live.setAtBottom(true); thread.current?.scrollTo({ top: thread.current.scrollHeight, behavior: "smooth" }); setAway(false); }}>Back to latest <Icon name="down"/></button>}
         {selected && <div className="cp-composer-wrap">

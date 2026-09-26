@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { TaskList } from "@/components/tasks/task-list";
 import { localDateISO, isoDaysAgo } from "@/lib/time";
 import { time } from "@/lib/perf";
-import { TASK_LIST_COLUMNS, type Task } from "@/lib/types";
+import { TASK_ROW_COLUMNS, type TaskRow } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
 
 type ProfileRow = { id: string; full_name: string | null; email: string; note_color: string | null };
@@ -52,12 +52,12 @@ export default async function ManageTasksPage() {
     { data: depts },
   ] = await time("tasks/manage:all-queries", () =>
     Promise.all([
-      supabase.from("tasks").select(TASK_LIST_COLUMNS).eq("archived", false),
+      supabase.from("tasks").select(TASK_ROW_COLUMNS).eq("archived", false),
       // The History filter: completed work archived off the boards after a
       // week by the nightly cron. Bounded — it only ever grows.
       supabase
         .from("tasks")
-        .select(TASK_LIST_COLUMNS)
+        .select(TASK_ROW_COLUMNS)
         .eq("archived", true)
         .eq("status", "done")
         .order("completed_at", { ascending: false })
@@ -79,8 +79,8 @@ export default async function ManageTasksPage() {
   );
 
   const tasks = [
-    ...((tasksData ?? []) as Task[]),
-    ...((historyData ?? []) as Task[]),
+    ...((tasksData ?? []) as TaskRow[]),
+    ...((historyData ?? []) as TaskRow[]),
   ];
   const people = ((profs ?? []) as ProfileRow[]).map(toPerson);
   const departments = (depts ?? []) as DeptRef[];

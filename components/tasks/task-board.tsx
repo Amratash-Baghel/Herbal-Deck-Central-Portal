@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
 import {
@@ -67,6 +74,67 @@ function setHistoryOpen(open: boolean) {
 }
 
 /**
+ * The blank "Write a note…" sticky at the top of To Do. It owns the draft title,
+ * so typing re-renders this one note rather than the whole board — on a board
+ * of a few hundred notes that was ~3,000 components per keystroke.
+ */
+function QuickAddNote({
+  noDept,
+  onOpenFull,
+  onCreated,
+}: {
+  noDept: boolean;
+  onOpenFull: () => void;
+  onCreated: (task: Task) => void;
+}) {
+  const [quickTitle, setQuickTitle] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  async function handleQuickAdd() {
+    const title = quickTitle.trim();
+    if (!title || adding || noDept) return;
+    setAdding(true);
+    const res = await createTask({ title });
+    setAdding(false);
+    if (res.ok && res.task) {
+      onCreated(res.task as Task);
+      setQuickTitle("");
+    }
+  }
+
+  return (
+    <div className="addnote relative mb-3 rounded-xl px-3 py-2.5">
+      <button
+        type="button"
+        onClick={onOpenFull}
+        disabled={noDept}
+        aria-label="New task with full details"
+        title="New task — set assignee, deadline, colour and description up front"
+        className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-lg border bg-card text-muted-foreground transition hover:border-primary hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none disabled:opacity-50"
+      >
+        <PlusIcon className="h-4 w-4" />
+      </button>
+      <input
+        value={quickTitle}
+        onChange={(e) => setQuickTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void handleQuickAdd();
+          }
+        }}
+        disabled={noDept}
+        placeholder="Write a note…"
+        className="w-full bg-transparent pr-7 text-sm font-semibold outline-none placeholder:font-medium placeholder:text-muted-foreground disabled:opacity-50"
+      />
+      <p className="mt-1 text-[10.5px] text-muted-foreground">
+        Enter to pin it up
+      </p>
+    </div>
+  );
+}
+
+/**
  * "My Board" — a personal kanban of the tasks you created or were assigned.
  * Quick-add a sticky note (type a title, hit enter), drag between columns or use
  * the ◀ ▶ controls, and open a card for the full editor. State is optimistic;
@@ -101,8 +169,6 @@ export function TaskBoard({
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [history, setHistory] = useState<Task[]>(initialHistory);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [quickTitle, setQuickTitle] = useState("");
-  const [adding, setAdding] = useState(false);
   /** The full create dialog, opened from the + button beside the quick-add box. */
   const [creating, setCreating] = useState(false);
   const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
@@ -117,6 +183,12 @@ export function TaskBoard({
     getHistoryOpen,
     getHistoryOpenOnServer,
   );
+  // The collapsed History panel is clipped to zero height and inert, so its
+  // notes are only rendered once it has been opened (then kept, so closing
+  // still animates). Nothing visible changes; the board ships and hydrates
+  // up to 50 fewer notes.
+  const [historyRendered, setHistoryRendered] = useState(false);
+  const showHistoryNotes = historyOpen || historyRendered;
 
   const nameOf = useMemo(() => {
     const m = new Map(people.map((p) => [p.id, p.name]));
@@ -135,21 +207,23 @@ export function TaskBoard({
 
   const noDept = departments.length === 0;
 
-  function replaceTask(updated: Task) {
-    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-  }
+  // The committed task list, for the optimistic handlers below to roll back
+  // to. Read through a ref so those handlers can keep one identity for the
+  // life of the board — which is what lets every memoised card skip renders.
+  const tasksRef = useRef(tasks);
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
-  async function handleQuickAdd() {
-    const title = quickTitle.trim();
-    if (!title || adding || noDept) return;
-    setAdding(true);
-    const res = await createTask({ title });
-    setAdding(false);
-    if (res.ok && res.task) {
-      setTasks((prev) => [res.task as Task, ...prev]);
-      setQuickTitle("");
-    }
-  }
+  const replaceTask = useCallback((updated: Task) => {
+    setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+  }, []);
+
+  const handleCreated = useCallback((task: Task) => {
+    setTasks((prev) => [task, ...prev]);
+  }, []);
+
+  const openCreate = useCallback(() => setCreating(true), []);
 
   /** Create with the full form (assignee, deadline, colour, description) in one pass. */
   async function handleCreate(patch: UpdateTaskInput) {
@@ -167,15 +241,22 @@ export function TaskBoard({
     return res;
   }
 
-  async function handleMove(taskId: string, status: TaskStatus) {
-    const before = tasks;
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status } : t)),
-    );
-    const res = await moveTask(taskId, status);
-    if (!res.ok) setTasks(before);
-    else if (res.task) replaceTask(res.task);
-  }
+  const handleMove = useCallback(
+    async (taskId: string, status: TaskStatus) => {
+      const before = tasksRef.current;
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status } : t)),
+      );
+      const res = await moveTask(taskId, status);
+      if (!res.ok) setTasks(before);
+      else if (res.task) replaceTask(res.task);
+    },
+    [replaceTask],
+  );
+  const moveCard = useCallback(
+    (taskId: string, status: TaskStatus) => void handleMove(taskId, status),
+    [handleMove],
+  );
 
   async function handleSave(taskId: string, patch: UpdateTaskInput) {
     const res = await updateTask(taskId, patch);
@@ -183,20 +264,27 @@ export function TaskBoard({
     return res;
   }
 
-  async function handleAssign(taskId: string, assigneeId: string | null) {
-    const before = tasks;
-    setActionError(null);
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, assigned_to: assigneeId } : t)),
-    );
-    const res = await updateTask(taskId, { assignedTo: assigneeId });
-    if (!res.ok) {
-      setTasks(before);
-      setActionError(res.error ?? "Could not reassign this task.");
-    } else if (res.task) {
-      replaceTask(res.task);
-    }
-  }
+  const handleAssign = useCallback(
+    async (taskId: string, assigneeId: string | null) => {
+      const before = tasksRef.current;
+      setActionError(null);
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, assigned_to: assigneeId } : t)),
+      );
+      const res = await updateTask(taskId, { assignedTo: assigneeId });
+      if (!res.ok) {
+        setTasks(before);
+        setActionError(res.error ?? "Could not reassign this task.");
+      } else if (res.task) {
+        replaceTask(res.task);
+      }
+    },
+    [replaceTask],
+  );
+  const assignCard = useCallback(
+    (taskId: string, assigneeId: string | null) => void handleAssign(taskId, assigneeId),
+    [handleAssign],
+  );
 
   async function handleArchive(taskId: string) {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
@@ -224,14 +312,14 @@ export function TaskBoard({
     await deleteTask(taskId);
   }
 
-  function toggleSelect(id: string) {
+  const toggleSelect = useCallback((id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }
+  }, []);
 
   function exitSelect() {
     setSelectMode(false);
@@ -277,6 +365,28 @@ export function TaskBoard({
     null;
   const openIsHistory = openTask !== null && !tasks.includes(openTask);
 
+  // Each column's notes, newest first, with Done split into today's (fresh)
+  // and the older pile. Only recomputed when the tasks themselves change.
+  const columns = useMemo(
+    () =>
+      STATUS_COLUMNS.map((col) => {
+        const items = tasks
+          .filter((t) => t.status === col.value)
+          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+        // Done splits in two: today's wins stay full size, everything older
+        // collapses into the pile below them.
+        const piled =
+          col.value === "done"
+            ? items.filter((t) => isAgedDone(t, todayISO))
+            : [];
+        const fresh = piled.length
+          ? items.filter((t) => !isAgedDone(t, todayISO))
+          : items;
+        return { col, items, piled, fresh };
+      }),
+    [tasks, todayISO],
+  );
+
   /** One board note. Shared by the live columns and the collapsed Done pile. */
   function renderCard(task: Task) {
     const dept = deptOf(task.department_id);
@@ -305,16 +415,10 @@ export function TaskBoard({
         selectable={selectMode}
         selected={selected.has(task.id)}
         faded={isAgedDone(task, todayISO)}
-        onToggleSelect={() => toggleSelect(task.id)}
-        onOpen={() => setOpenId(task.id)}
-        onMove={
-          !selectMode && canMove ? (s) => void handleMove(task.id, s) : undefined
-        }
-        onAssign={
-          !selectMode && canReassign
-            ? (id) => void handleAssign(task.id, id)
-            : undefined
-        }
+        onToggleSelect={toggleSelect}
+        onOpen={setOpenId}
+        onMove={!selectMode && canMove ? moveCard : undefined}
+        onAssign={!selectMode && canReassign ? assignCard : undefined}
       />
     );
   }
@@ -383,19 +487,7 @@ export function TaskBoard({
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {STATUS_COLUMNS.map((col) => {
-          const items = tasks
-            .filter((t) => t.status === col.value)
-            .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-          // Done splits in two: today's wins stay full size, everything older
-          // collapses into the pile below them.
-          const piled =
-            col.value === "done"
-              ? items.filter((t) => isAgedDone(t, todayISO))
-              : [];
-          const fresh = piled.length
-            ? items.filter((t) => !isAgedDone(t, todayISO))
-            : items;
+        {columns.map(({ col, items, piled, fresh }) => {
           return (
             <div
               key={col.value}
@@ -427,34 +519,11 @@ export function TaskBoard({
                   it straightens it; Enter pins it up. The + corner opens the
                   full form for when a title alone won't do. */}
               {col.value === "todo" && (
-                <div className="addnote relative mb-3 rounded-xl px-3 py-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setCreating(true)}
-                    disabled={noDept}
-                    aria-label="New task with full details"
-                    title="New task — set assignee, deadline, colour and description up front"
-                    className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-lg border bg-card text-muted-foreground transition hover:border-primary hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    <PlusIcon className="h-4 w-4" />
-                  </button>
-                  <input
-                    value={quickTitle}
-                    onChange={(e) => setQuickTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        void handleQuickAdd();
-                      }
-                    }}
-                    disabled={noDept}
-                    placeholder="Write a note…"
-                    className="w-full bg-transparent pr-7 text-sm font-semibold outline-none placeholder:font-medium placeholder:text-muted-foreground disabled:opacity-50"
-                  />
-                  <p className="mt-1 text-[10.5px] text-muted-foreground">
-                    Enter to pin it up
-                  </p>
-                </div>
+                <QuickAddNote
+                  noDept={noDept}
+                  onOpenFull={openCreate}
+                  onCreated={handleCreated}
+                />
               )}
 
               <div
@@ -517,7 +586,10 @@ export function TaskBoard({
         <h2>
           <button
             type="button"
-            onClick={() => setHistoryOpen(!historyOpen)}
+            onClick={() => {
+              if (historyOpen) setHistoryRendered(true);
+              setHistoryOpen(!historyOpen);
+            }}
             aria-expanded={historyOpen}
             aria-controls="task-history-panel"
             className={`flex min-h-11 w-full items-center gap-2.5 border border-dashed bg-muted/30 px-4 py-2.5 text-left text-muted-foreground transition hover:bg-accent hover:text-foreground ${
@@ -557,7 +629,7 @@ export function TaskBoard({
                   Tasks finished more than a week ago land here.
                 </p>
               )}
-              {history.map((task) => {
+              {showHistoryNotes && history.map((task) => {
                 const dept = deptOf(task.department_id);
                 const canRestore =
                   canManage ||
@@ -575,7 +647,7 @@ export function TaskBoard({
                       editable={false}
                       assigneeNoteColor={noteColorOf(task.assigned_to)}
                       faded
-                      onOpen={() => setOpenId(task.id)}
+                      onOpen={setOpenId}
                     />
                     {canRestore && (
                       <div className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">

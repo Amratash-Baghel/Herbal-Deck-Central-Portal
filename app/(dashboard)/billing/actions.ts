@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { getUserAccess, requireBillingManager, signaturePath } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -61,17 +62,10 @@ export async function createPostedInvoice(
 
   const supabase = await createClient();
 
-  // A non-admin may only post to a department they belong to.
-  if (!access.isAdmin) {
-    const { data: membership } = await supabase
-      .from("profile_departments")
-      .select("department_id")
-      .eq("profile_id", access.profile.id)
-      .eq("department_id", departmentId)
-      .maybeSingle();
-    if (!membership) {
-      return { error: "You can only post to a department you belong to.", success: null };
-    }
+  // A non-admin may only post to a department they belong to. (Their
+  // memberships came with their profile; RLS re-checks on insert.)
+  if (!access.isAdmin && !access.departmentIds.includes(departmentId)) {
+    return { error: "You can only post to a department you belong to.", success: null };
   }
 
   const { data: inserted, error } = await supabase
@@ -112,11 +106,14 @@ export async function createPostedInvoice(
     else await admin.from("invoices").update({ file_path: path }).eq("id", inserted.id);
   }
 
-  // Alert management (admins + HR & Management) that an invoice needs clearing.
-  const managers = await getManagementUserIds(access.profile.id);
-  if (managers.length > 0) {
-    const amountText = formatMoney(amount, currency as CurrencyCode);
-    const poster = access.profile.full_name || access.profile.email;
+  // Alert management (admins + HR & Management) that an invoice needs
+  // clearing — after the response, since finding them takes a few lookups the
+  // poster shouldn't wait on (both helpers log instead of throwing).
+  const amountText = formatMoney(amount, currency as CurrencyCode);
+  const poster = access.profile.full_name || access.profile.email;
+  after(async () => {
+    const managers = await getManagementUserIds(access.profile.id);
+    if (managers.length === 0) return;
     await notifyUsers(
       managers.map((recipientId) => ({
         recipientId,
@@ -127,7 +124,7 @@ export async function createPostedInvoice(
         data: { invoiceId: inserted.id },
       })),
     );
-  }
+  });
 
   revalidatePath("/billing/post");
   revalidatePath("/billing/clearing");

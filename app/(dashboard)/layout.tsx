@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/sidebar";
 import { NotificationsProvider } from "@/components/notifications/notifications-provider";
 import { NotificationToaster } from "@/components/notifications/notification-toaster";
+import { DashboardMain } from "@/components/dashboard-main";
 import { time } from "@/lib/perf";
 import type { Notification } from "@/lib/types";
 
@@ -40,6 +41,8 @@ export default async function DashboardLayout({
   // Passive activity ("attendance") logging. Runs AFTER the response is sent
   // via after(), so it adds no latency to the page. record_activity() keys off
   // the session (auth.uid()), so a user can only ever stamp their own row.
+  // Note: a layout is not re-rendered on client-side navigation, so this runs
+  // on full page loads only — clicks between tabs are not recorded.
   const pathname = (await headers()).get("x-pathname") ?? "";
   after(async () => {
     try {
@@ -65,9 +68,9 @@ export default async function DashboardLayout({
             cap scales with the display: comfortable for reading on a laptop,
             but not leaving half an external monitor empty. */}
         <div className="flex min-h-screen flex-col md:pl-64">
-          <main className={`${pathname === "/chat" ? "chat-page-frame" : ""} mx-auto flex w-full max-w-6xl flex-1 flex-col px-5 py-8 md:px-10 md:py-12 tall:max-w-4xl wide:max-w-[min(94vw,calc(100vh*1.7))] ultrawide:max-w-[min(92vw,calc(100vh*2))]`}>
+          <DashboardMain className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-5 py-8 md:px-10 md:py-12 tall:max-w-4xl wide:max-w-[min(94vw,calc(100vh*1.7))] ultrawide:max-w-[min(92vw,calc(100vh*2))]">
             {children}
-          </main>
+          </DashboardMain>
         </div>
         <NotificationToaster />
       </div>

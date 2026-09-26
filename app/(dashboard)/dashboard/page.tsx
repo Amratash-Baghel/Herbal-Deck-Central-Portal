@@ -11,7 +11,7 @@ import { formatMoney } from "@/lib/money";
 import { time } from "@/lib/perf";
 import { createClient } from "@/lib/supabase/server";
 import { noteColor } from "@/lib/tasks";
-import { daysUntil, formatClockTZ, isoDaysAgo, localDateISO } from "@/lib/time";
+import { dateFormat, daysUntil, formatClockTZ, isoDaysAgo, localDateISO } from "@/lib/time";
 import { previewText } from "@/components/chat/chat-model";
 import type { Conversation, EodReport, EodSummary, Task } from "@/lib/types";
 
@@ -143,16 +143,14 @@ export default async function DashboardPage() {
  *  the clock where the office actually is rather than the browser's guess. */
 function Greeting({ name }: { name: string }) {
   const now = new Date();
-  const weekday = new Intl.DateTimeFormat("en-IN", { weekday: "long", timeZone: TZ }).format(now);
-  const dateLine = new Intl.DateTimeFormat("en-IN", {
+  const weekday = dateFormat("en-IN", { weekday: "long", timeZone: TZ }).format(now);
+  const dateLine = dateFormat("en-IN", {
     day: "numeric",
     month: "long",
     timeZone: TZ,
   }).format(now);
   const hour =
-    Number(
-      new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: TZ }).format(now),
-    ) % 24;
+    Number(dateFormat("en-GB", { hour: "numeric", hour12: false, timeZone: TZ }).format(now)) % 24;
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
@@ -667,30 +665,29 @@ async function Unread({ me }: { me: string }) {
   if (rows.length === 0) return null;
 
   const ids = rows.map((r) => r.conversation_id);
+  // Each participant's name and picture come embedded with the membership
+  // rows, rather than from a third query that had to wait for these two.
   const [{ data: convRows }, { data: partRows }] = await time("dashboard:unread-detail", () =>
     Promise.all([
       supabase.from("conversations").select("id, type, name, last_message_preview").in("id", ids),
       supabase
         .from("conversation_participants")
-        .select("conversation_id, profile_id")
+        .select("conversation_id, profile_id, profiles(id, full_name, email, avatar_path)")
         .in("conversation_id", ids),
     ]),
   );
 
-  const parts = (partRows ?? []) as { conversation_id: string; profile_id: string }[];
-  const otherIds = [...new Set(parts.map((p) => p.profile_id))].filter((id) => id !== me);
-  const { data: profRows } = otherIds.length
-    ? await supabase
-        .from("profiles")
-        .select("id, full_name, email, avatar_path")
-        .in("id", otherIds)
-    : { data: [] };
-
-  const people = new Map(
-    ((profRows ?? []) as { id: string; full_name: string | null; email: string; avatar_path: string | null }[]).map(
-      (p) => [p.id, p],
-    ),
-  );
+  type PersonRow = { id: string; full_name: string | null; email: string; avatar_path: string | null };
+  const parts = (partRows ?? []) as unknown as {
+    conversation_id: string;
+    profile_id: string;
+    profiles: PersonRow | PersonRow[] | null;
+  }[];
+  const people = new Map<string, PersonRow>();
+  for (const p of parts) {
+    const person = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
+    if (p.profile_id !== me && person) people.set(p.profile_id, person);
+  }
   const unreadBy = new Map(rows.map((r) => [r.conversation_id, Number(r.unread)]));
   const otherIn = new Map<string, string>();
   for (const p of parts) {

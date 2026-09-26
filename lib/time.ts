@@ -3,6 +3,34 @@
  * both the notification list and the chat thread can share them.
  */
 
+/**
+ * Building an `Intl.DateTimeFormat` is expensive (~60 µs, far more in a
+ * throttled browser) while formatting with one is ~1 µs — and the same few
+ * formats are used over and over: the task board formats ~10 dates per card on
+ * every render, the chat thread two per message. So every formatter is built
+ * once per (locale, options) and reused. Formatters are immutable, so sharing
+ * one across renders — or across requests on the server — is safe. The number
+ * of distinct formats is small and fixed by the code, so the cache stays tiny.
+ *
+ * `toLocaleDateString(locale, options)` / `toLocaleTimeString(...)` build a
+ * fresh formatter on every call too; with explicit date (or time) fields they
+ * are exactly `new Intl.DateTimeFormat(locale, options).format(date)`, so hot
+ * callers use this instead.
+ */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+export function dateFormat(
+  locale?: string,
+  options?: Intl.DateTimeFormatOptions,
+): Intl.DateTimeFormat {
+  const key = `${locale ?? ""}|${options ? JSON.stringify(options) : ""}`;
+  let f = formatters.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, options);
+    formatters.set(key, f);
+  }
+  return f;
+}
+
 /** A compact relative time, e.g. "now", "5m", "3h", "2d", or a date. */
 export function timeAgo(iso: string): string {
   const then = new Date(iso).getTime();
@@ -15,7 +43,7 @@ export function timeAgo(iso: string): string {
   if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d`;
-  return new Date(iso).toLocaleDateString();
+  return dateFormat().format(new Date(iso));
 }
 
 /** ISO timestamp for N days before now (UTC). Kept here so Server Components
@@ -77,7 +105,7 @@ export function dayRangeUTC(
 export function minutesInTZ(iso: string, tz = "Asia/Kolkata"): number | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("en-GB", {
+  const parts = dateFormat("en-GB", {
     timeZone: tz,
     hour: "2-digit",
     minute: "2-digit",
@@ -93,7 +121,7 @@ export function minutesInTZ(iso: string, tz = "Asia/Kolkata"): number | null {
 export function hourInTZ(iso: string, tz = "Asia/Kolkata"): number | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  const h = new Intl.DateTimeFormat("en-GB", {
+  const h = dateFormat("en-GB", {
     timeZone: tz,
     hour: "2-digit",
     hour12: false,
@@ -106,11 +134,11 @@ export function hourInTZ(iso: string, tz = "Asia/Kolkata"): number | null {
 export function formatClockTZ(iso: string, tz = "Asia/Kolkata"): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("en-US", {
+  return dateFormat("en-US", {
     timeZone: tz,
     hour: "numeric",
     minute: "2-digit",
-  });
+  }).format(d);
 }
 
 /**
@@ -120,7 +148,7 @@ export function formatClockTZ(iso: string, tz = "Asia/Kolkata"): string {
 export function formatHM(iso: string, tz = "Asia/Kolkata"): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat("en-GB", {
+  return dateFormat("en-GB", {
     timeZone: tz,
     hour: "2-digit",
     minute: "2-digit",
@@ -132,7 +160,7 @@ export function formatHM(iso: string, tz = "Asia/Kolkata"): string {
 export function formatClock(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return dateFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(d);
 }
 
 /**
@@ -142,7 +170,7 @@ export function formatClock(iso: string): string {
  */
 export function localDateISO(tz = "Asia/Kolkata", date: Date = new Date()): string {
   // en-CA formats as YYYY-MM-DD.
-  return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(date);
+  return dateFormat("en-CA", { timeZone: tz }).format(date);
 }
 
 /**
@@ -158,7 +186,7 @@ export function formatDayShort(
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   const sameYear = localDateISO(tz, d).slice(0, 4) === todayISO.slice(0, 4);
-  return new Intl.DateTimeFormat("en-GB", {
+  return dateFormat("en-GB", {
     timeZone: tz,
     day: "numeric",
     month: "short",
@@ -192,5 +220,5 @@ export function dayLabel(iso: string): string {
     a.getDate() === b.getDate();
   if (sameDay(d, today)) return "Today";
   if (sameDay(d, yesterday)) return "Yesterday";
-  return d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  return dateFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(d);
 }

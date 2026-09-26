@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { TaskList } from "@/components/tasks/task-list";
 import { localDateISO } from "@/lib/time";
-import { TASK_LIST_COLUMNS, type Task } from "@/lib/types";
+import { TASK_ROW_COLUMNS, type TaskRow } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
 
 type ProfileRow = { id: string; full_name: string | null; email: string; note_color: string | null };
@@ -27,29 +27,17 @@ export default async function TeamTasksPage() {
   const myDeptIds = access.departmentIds;
   const supabase = await createClient();
 
-  const [{ data: allDepts }, { data: profs }] = await Promise.all([
-    supabase.from("departments").select("id, name, slug").order("name"),
-    supabase
-      .from("profiles")
-      .select("id, full_name, email, note_color")
-      .is("deactivated_at", null)
-      .order("full_name", { nullsFirst: false }),
-  ]);
-  const allDepartments = (allDepts ?? []) as DeptRef[];
-  const myDepartments = allDepartments.filter((d) => myDeptIds.includes(d.id));
-  const people = ((profs ?? []) as ProfileRow[]).map(toPerson);
-
   // Build the query per role. (RLS returns only what each role may see anyway,
   // so this is the UI matching the data boundary — not the only enforcement.)
   let query = supabase
     .from("tasks")
-    .select(TASK_LIST_COLUMNS)
+    .select(TASK_ROW_COLUMNS)
     .eq("archived", false);
   // The same scope again for the History filter: completed work the nightly
   // cron archived off the boards after a week. Bounded — it only ever grows.
   let historyQuery = supabase
     .from("tasks")
-    .select(TASK_LIST_COLUMNS)
+    .select(TASK_ROW_COLUMNS)
     .eq("archived", true)
     .eq("status", "done");
   if (access.canManageUsers) {
@@ -61,13 +49,24 @@ export default async function TeamTasksPage() {
     query = query.or(`created_by.eq.${me},assigned_to.eq.${me}`);
     historyQuery = historyQuery.or(`created_by.eq.${me},assigned_to.eq.${me}`);
   }
-  const [{ data }, { data: historyData }] = await Promise.all([
-    query.order("created_at", { ascending: false }),
-    historyQuery.order("completed_at", { ascending: false }).limit(200),
-  ]);
+  // None of these depends on another, so all four go out together.
+  const [{ data: allDepts }, { data: profs }, { data }, { data: historyData }] =
+    await Promise.all([
+      supabase.from("departments").select("id, name, slug").order("name"),
+      supabase
+        .from("profiles")
+        .select("id, full_name, email, note_color")
+        .is("deactivated_at", null)
+        .order("full_name", { nullsFirst: false }),
+      query.order("created_at", { ascending: false }),
+      historyQuery.order("completed_at", { ascending: false }).limit(200),
+    ]);
+  const allDepartments = (allDepts ?? []) as DeptRef[];
+  const myDepartments = allDepartments.filter((d) => myDeptIds.includes(d.id));
+  const people = ((profs ?? []) as ProfileRow[]).map(toPerson);
   const tasks = [
-    ...((data ?? []) as Task[]),
-    ...((historyData ?? []) as Task[]),
+    ...((data ?? []) as TaskRow[]),
+    ...((historyData ?? []) as TaskRow[]),
   ];
 
   const description = access.canManageUsers

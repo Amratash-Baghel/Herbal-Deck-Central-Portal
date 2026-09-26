@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { PlusIcon } from "@/components/icons";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
 import { createTask } from "@/app/(dashboard)/tasks/actions";
@@ -21,6 +20,10 @@ import type { DeptRef, Person } from "@/components/tasks/types";
  *
  * Renders as the top row of the plate card — no box of its own, so the card
  * reads as one surface rather than a frame around another frame.
+ *
+ * No router.refresh() after creating: `createTask` calls revalidatePath, and
+ * a revalidating Server Action already sends the re-rendered dashboard back in
+ * its own response. Refreshing on top rendered the whole dashboard twice.
  */
 export function QuickAdd({
   me,
@@ -29,7 +32,6 @@ export function QuickAdd({
   me: Person;
   canAssignOthers: boolean;
 }) {
-  const router = useRouter();
   const [title, setTitle] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +50,6 @@ export function QuickAdd({
       const res = await createTask({ title: trimmed });
       if (res.ok) {
         setTitle("");
-        router.refresh();
       } else {
         setError(res.error ?? "Could not add that task.");
       }
@@ -117,7 +118,6 @@ export function QuickAdd({
     });
     if (res.ok) {
       setTitle("");
-      router.refresh();
     }
     return res;
   }

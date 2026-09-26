@@ -1,4 +1,4 @@
-import { daysUntil, formatDuration, formatMs } from "@/lib/time";
+import { dateFormat, daysUntil, formatDuration, formatMs } from "@/lib/time";
 import { completedOnTime, type TaskLite, type TaskStats } from "@/lib/reporting";
 
 /** A single headline metric. */
@@ -95,7 +95,7 @@ function fmtShortDate(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? "—"
-    : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+    : dateFormat("en-GB", { day: "2-digit", month: "short" }).format(d);
 }
 
 /**

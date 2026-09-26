@@ -13,6 +13,7 @@ import {
   formatClockTZ,
   formatDuration,
   hourInTZ,
+  dateFormat,
 } from "@/lib/time";
 import type { ActivityLog, EodReport } from "@/lib/types";
 
@@ -20,7 +21,7 @@ const WINDOW_DAYS = 45;
 const TZ = "Asia/Kolkata";
 
 function istMinutes(iso: string): number | null {
-  const parts = new Intl.DateTimeFormat("en-GB", {
+  const parts = dateFormat("en-GB", {
     timeZone: TZ,
     hour: "2-digit",
     minute: "2-digit",
@@ -54,7 +55,7 @@ function fmtDay(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    : dateFormat(undefined, { weekday: "short", day: "numeric", month: "short" }).format(d);
 }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {

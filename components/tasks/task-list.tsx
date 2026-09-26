@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { statusLabel, noteColor, noteSwatch } from "@/lib/tasks";
 import { localDateISO, daysUntil } from "@/lib/time";
 import { ChevronDownIcon } from "@/components/icons";
-import type { Task, TaskStatus } from "@/lib/types";
+import type { TaskRow, TaskStatus } from "@/lib/types";
 import type { Person, DeptRef } from "@/components/tasks/types";
 
 function StatusBadge({ status }: { status: TaskStatus }) {
@@ -46,10 +46,10 @@ const GROUPS: { key: GroupBy; label: string }[] = [
   { key: "flat", label: "No grouping" },
 ];
 
-const isOpen = (t: Task) => t.status !== "done";
+const isOpen = (t: TaskRow) => t.status !== "done";
 
 /** Each lens as a predicate. `weekAgoISO` is derived from the caller's today. */
-function lensTests(weekAgoISO: string): Record<Exclude<Lens, "">, (t: Task) => boolean> {
+function lensTests(weekAgoISO: string): Record<Exclude<Lens, "">, (t: TaskRow) => boolean> {
   const dayOf = (iso: string) => localDateISO("Asia/Kolkata", new Date(iso));
   return {
     overdue: (t) => isOpen(t) && (daysUntil(t.deadline) ?? 1) < 0,
@@ -65,7 +65,7 @@ function lensTests(weekAgoISO: string): Record<Exclude<Lens, "">, (t: Task) => b
  * work, and finished work last. Creation order says nothing about what needs
  * attention — a three-week-old blocker should not sit under a note from lunch.
  */
-function urgency(t: Task): number {
+function urgency(t: TaskRow): number {
   if (t.status === "done") return 300_000;
   const d = daysUntil(t.deadline);
   return d === null ? 200_000 : d;
@@ -87,7 +87,7 @@ export function TaskList({
   todayISO,
   filters = {},
 }: {
-  tasks: Task[];
+  tasks: TaskRow[];
   people: Person[];
   departments: DeptRef[];
   todayISO: string;
@@ -162,7 +162,7 @@ export function TaskList({
 
   const groups = useMemo(() => {
     if (groupBy === "flat") return [];
-    const m = new Map<string, Task[]>();
+    const m = new Map<string, TaskRow[]>();
     for (const t of filtered) {
       const id = groupBy === "dept" ? t.department_id : t.assigned_to ?? "unassigned";
       const bucket = m.get(id);
@@ -201,7 +201,7 @@ export function TaskList({
   // Nothing to collapse, or you've asked a pointed question — show the answer.
   const autoOpen = groups.length === 1 || lens !== "";
 
-  function renderRow(t: Task) {
+  function renderRow(t: TaskRow) {
     const d = deptOf(t.department_id);
     const days = daysUntil(t.deadline);
     return (

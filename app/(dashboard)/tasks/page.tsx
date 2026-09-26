@@ -35,36 +35,48 @@ export default async function TasksPage() {
   const supabase = await createClient();
   const me = profile.id;
   const today = localDateISO();
+  // The caller's departments already came with their profile (getUserAccess).
+  const myDeptIds = access.departmentIds;
+  const canManage = access.canManageUsers;
+  const leadsTeam = !canManage && access.isTeamLead && myDeptIds.length > 0;
 
-  // Bring any scheduled tasks due today onto the board before we read it, so a
-  // recurring task shows up the moment its owner opens their board (idempotent).
-  await supabase.rpc("materialize_my_scheduled_tasks").then(
-    () => {},
-    () => {},
-  );
+  const boardTasks = () =>
+    supabase
+      .from("tasks")
+      .select(TASK_LIST_COLUMNS)
+      .or(`created_by.eq.${me},assigned_to.eq.${me}`)
+      .eq("archived", false)
+      .order("created_at", { ascending: false });
 
+  // Bring any scheduled tasks due today onto the board (idempotent), so a
+  // recurring task shows up the moment its owner opens their board. It runs
+  // alongside the reads rather than before them: it returns how many tasks it
+  // created, and on the rare load where that isn't zero (the first board open
+  // of the day for someone with a schedule) the board is read again after it.
   const [
-    { data: pdRows },
-    { data: allDepts },
-    { data: profs },
-    { data: taskRows },
-    { data: historyRows },
-    { data: todayReport },
-  ] = await time("tasks:board-queries", () =>
+    created,
+    [
+      { data: allDepts },
+      { data: profs },
+      { data: firstTaskRows },
+      { data: historyRows },
+      { data: todayReport },
+      { data: memberRows },
+    ],
+  ] = await Promise.all([
+    supabase.rpc("materialize_my_scheduled_tasks").then(
+      ({ data }) => Number(data) || 0,
+      () => 0,
+    ),
+    time("tasks:board-queries", () =>
       Promise.all([
-        supabase.from("profile_departments").select("department_id").eq("profile_id", me),
         supabase.from("departments").select("id, name, slug").order("name"),
         supabase
           .from("profiles")
           .select("id, full_name, email, avatar_path, note_color")
           .is("deactivated_at", null)
           .order("full_name", { nullsFirst: false }),
-        supabase
-          .from("tasks")
-          .select(TASK_LIST_COLUMNS)
-          .or(`created_by.eq.${me},assigned_to.eq.${me}`)
-          .eq("archived", false)
-          .order("created_at", { ascending: false }),
+        boardTasks(),
         // The History column: completed tasks the nightly cron archived off the
         // board after a week. Bounded — this only ever grows.
         supabase
@@ -83,10 +95,18 @@ export default async function TasksPage() {
           .eq("employee_id", me)
           .eq("report_date", today)
           .maybeSingle(),
+        // A team lead can assign to anyone in their department(s).
+        leadsTeam
+          ? supabase
+              .from("profile_departments")
+              .select("profile_id")
+              .in("department_id", myDeptIds)
+          : Promise.resolve({ data: null }),
       ]),
-    );
+    ),
+  ]);
+  const taskRows = created > 0 ? (await boardTasks()).data : firstTaskRows;
 
-  const myDeptIds = (pdRows ?? []).map((r) => r.department_id as string);
   const allDepartments: DeptRef[] = (allDepts ?? []) as DeptRef[];
   const myDepartments = allDepartments.filter((d) => myDeptIds.includes(d.id));
 
@@ -94,17 +114,12 @@ export default async function TasksPage() {
 
   // Who can this person assign tasks to?
   //   admin / HR → anyone;  team lead → their department(s);  employee → self.
-  const canManage = access.canManageUsers;
   let assignable: Person[];
   if (canManage) {
     assignable = people;
-  } else if (access.isTeamLead && myDeptIds.length > 0) {
+  } else if (leadsTeam) {
     const ids = new Set<string>([me]);
-    const { data: memberRows } = await supabase
-      .from("profile_departments")
-      .select("profile_id")
-      .in("department_id", myDeptIds);
-    for (const r of memberRows ?? []) ids.add(r.profile_id as string);
+    for (const r of (memberRows ?? []) as { profile_id: string }[]) ids.add(r.profile_id);
     assignable = people.filter((p) => ids.has(p.id));
   } else {
     // Regular employees can only create tasks for themselves.
