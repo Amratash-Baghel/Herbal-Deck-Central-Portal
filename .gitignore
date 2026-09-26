@@ -43,3 +43,6 @@ next-env.d.ts
 
 # python bytecode — the design skills' search script regenerates this on every query
 __pycache__/
+
+# Claude Code agent worktrees (temporary, per-agent)
+.claude/worktrees/
