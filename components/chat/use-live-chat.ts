@@ -148,15 +148,17 @@ export function useLiveChat(meId:string, initial:ConversationSummary[], initialD
       if (result.error) throw new Error("Could not load messages. Your draft is safe.");
       let rows = (result.data || []) as Message[];
       // Refresh old loaded IDs too: edits/deletions do not change created_at.
+      // (One chunk at a time on purpose: a deep history is dozens of chunks,
+      // and firing them all at once would burst the small PostgREST pool.)
       const latestIds = new Set(rows.map(n=>n.id));
       const oldIds = initialLoad ? [] : messagesRef.current.filter(m=>m.conversation_id===id && !latestIds.has(m.id)).map(m=>m.id);
-      const chunks = (list:string[]) => Array.from({length:Math.ceil(list.length/100)},(_,i)=>list.slice(i*100,i*100+100));
-      const older = await Promise.all(chunks(oldIds).map(ids=>supabase.from("messages").select("*").eq("conversation_id",id).in("id",ids)));
-      for (const chunk of older) {
-        if (chunk.error) throw new Error("Could not refresh history.");
-        rows=rows.concat(chunk.data || []);
+      for (let i=0;i<oldIds.length;i+=100) {
+        const older = await supabase.from("messages").select("*").eq("conversation_id",id).in("id",oldIds.slice(i,i+100));
+        if (older.error) throw new Error("Could not refresh history.");
+        rows=rows.concat(older.data || []);
       }
-      const enriched:LiveMessage[]=(await Promise.all(Array.from({length:Math.ceil(rows.length/100)},(_,i)=>enrich(rows.slice(i*100,i*100+100))))).flat();
+      const enriched:LiveMessage[]=[];
+      for(let i=0;i<rows.length;i+=100) enriched.push(...await enrich(rows.slice(i,i+100)));
       if (!valid()) return;
       setBase(mergeMessages([],enriched)); setLoadError("");
       if (initialLoad) setHasOlder((result.data?.length || 0)===50);

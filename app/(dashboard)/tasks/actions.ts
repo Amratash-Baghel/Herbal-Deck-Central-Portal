@@ -447,13 +447,19 @@ export async function bulkMoveTasks(
       t.assigned_to === access.profile.id,
   );
 
-  // Independent row updates — sent together rather than one round trip each.
-  const results = await Promise.all(
-    movable.map((t) =>
-      supabase.from("tasks").update({ status }).eq("id", t.id).select("*").single(),
-    ),
-  );
-  const updated: Task[] = results.flatMap(({ data }) => (data ? [data as Task] : []));
+  // Independent row updates: a few at a time rather than one round trip each
+  // (still bounded, so a big selection doesn't flood the database pool).
+  const updated: Task[] = [];
+  for (let i = 0; i < movable.length; i += 5) {
+    const results = await Promise.all(
+      movable
+        .slice(i, i + 5)
+        .map((t) =>
+          supabase.from("tasks").update({ status }).eq("id", t.id).select("*").single(),
+        ),
+    );
+    for (const { data } of results) if (data) updated.push(data as Task);
+  }
 
   revalidatePath("/tasks");
   return { ok: true, tasks: updated, skipped: ids.length - updated.length };
