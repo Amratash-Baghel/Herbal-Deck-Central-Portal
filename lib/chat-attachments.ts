@@ -138,6 +138,16 @@ export function sanitizeAttachments(
  * surface progress). RLS on the bucket enforces that only a participant of the
  * conversation can write here. Resolves to the stored `Attachment`.
  */
+/** Chat files go to Google Drive instead of Supabase Storage when this is set
+ *  (see lib/google-drive.ts and app/api/chat-files). Older files keep working
+ *  either way: each stored path says where it lives. */
+const USE_DRIVE = process.env.NEXT_PUBLIC_CHAT_STORAGE === "gdrive";
+
+/** True for an attachment path stored in Google Drive. */
+export function isDrivePath(path: string): boolean {
+  return /^[^/]+\/gdrive\//.test(path);
+}
+
 export function uploadChatAttachment(opts: {
   conversationId: string;
   file: File;
@@ -149,6 +159,7 @@ export function uploadChatAttachment(opts: {
   signal?: AbortSignal;
 }): Promise<Attachment> {
   const { conversationId, file, accessToken, ext, mime, kind, onProgress, signal } = opts;
+  if (USE_DRIVE) return uploadToDriveRoute({ conversationId, file, mime, kind, onProgress, signal });
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const path = `${conversationId}/${crypto.randomUUID()}.${ext}`;
@@ -189,6 +200,45 @@ export function uploadChatAttachment(opts: {
   });
 }
 
+/** Upload through /api/chat-files (Google Drive), with real progress. */
+function uploadToDriveRoute(opts: {
+  conversationId: string;
+  file: File;
+  mime: string;
+  kind: AttachmentKind;
+  onProgress?: (pct: number) => void;
+  signal?: AbortSignal;
+}): Promise<Attachment> {
+  const { conversationId, file, mime, kind, onProgress, signal } = opts;
+  return new Promise<Attachment>((resolve, reject) => {
+    const form = new FormData();
+    form.set("conversationId", conversationId);
+    form.set("file", file);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/chat-files");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      let body: { path?: string; error?: string } = {};
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        // fall through to the generic error
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && body.path) {
+        resolve({ path: body.path, name: file.name.slice(0, 200), mime, size: file.size, kind });
+      } else {
+        reject(new Error(body.error || "Upload failed. Please try again."));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Upload failed. Please check your connection."));
+    xhr.onabort = () => reject(new Error("Upload cancelled."));
+    if (signal) signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(form);
+  });
+}
+
 /** Mint a short-lived signed URL for a private attachment (participant-gated by
  *  RLS). Cached per path for the session so re-renders don't re-request. */
 const signedUrlCache = new Map<string, Promise<string | null>>();
@@ -197,6 +247,8 @@ export function signedAttachmentUrl(
   supabase: SupabaseClient,
   path: string,
 ): Promise<string | null> {
+  // Drive files are served by our own route, which checks membership itself.
+  if (isDrivePath(path)) return Promise.resolve(`/api/chat-files?path=${encodeURIComponent(path)}`);
   const cached = signedUrlCache.get(path);
   if (cached) return cached;
   const p = supabase.storage
