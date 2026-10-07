@@ -1,34 +1,27 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { checkFile } from "@/lib/chat-attachments";
-import { driveConfigured, uploadToDrive, downloadFromDrive } from "@/lib/google-drive";
+import { checkFile, DIRECT_UPLOAD_BYTES, driveLinks } from "@/lib/chat-attachments";
+import { driveConfigured, uploadToDrive, driveFileFor, downloadFromDrive } from "@/lib/google-drive";
+import { chatParticipant } from "./participant";
 
 /**
  * Chat attachments stored in Google Drive (see lib/google-drive.ts).
  *
- *   POST  form-data { conversationId, file }  → { path }
+ *   POST  form-data { conversationId, file }  → { path }     (files ≤ 4 MB)
  *   GET   ?path=<conversationId>/gdrive/<fileId>.<ext>  → the file
  *
- * Both require a signed-in participant of that conversation — the same rule
- * the Supabase bucket's RLS enforces. Files ≤ 3 MB (checkFile), well inside
- * Vercel's 4.5 MB request limit, so they can pass through this route.
+ * Larger files skip this route: ./session and ./finalize let the browser send
+ * them straight to Google. Every request here requires a signed-in participant
+ * of the conversation — the same rule the Supabase bucket's RLS enforces.
  */
 
-async function participant(conversationId: string): Promise<string | null> {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims?.sub;
-  if (!userId) return null;
-  const { data: row } = await supabase
-    .from("conversation_participants")
-    .select("conversation_id")
-    .eq("conversation_id", conversationId)
-    .eq("profile_id", userId)
-    .maybeSingle();
-  return row ? userId : null;
-}
-
 const UUID = /^[0-9a-f-]{36}$/i;
+
+/** Types a browser may show inline. Anything else (HTML, SVG, scripts…) is
+ *  always a download, so an uploaded file can never run as part of the portal. */
+const INLINE_SAFE = new Set([
+  "image/jpeg", "image/png", "image/gif", "image/webp",
+  "application/pdf", "video/mp4", "video/webm", "audio/mpeg", "audio/mp4", "audio/wav",
+]);
 
 export async function POST(request: NextRequest) {
   if (!driveConfigured()) return NextResponse.json({ error: "File storage is not configured." }, { status: 503 });
@@ -38,10 +31,13 @@ export async function POST(request: NextRequest) {
   if (!UUID.test(conversationId) || !(file instanceof File)) {
     return NextResponse.json({ error: "Bad upload." }, { status: 400 });
   }
+  if (file.size > DIRECT_UPLOAD_BYTES) {
+    return NextResponse.json({ error: "Large files upload straight to Drive. Please refresh and try again." }, { status: 413 });
+  }
   const check = checkFile(file);
   if (!check.ok) return NextResponse.json({ error: check.error }, { status: check.reason === "too_large" ? 413 : 400 });
 
-  const userId = await participant(conversationId);
+  const userId = await chatParticipant(conversationId);
   if (!userId) return NextResponse.json({ error: "You are not in this conversation." }, { status: 403 });
 
   try {
@@ -64,20 +60,26 @@ export async function GET(request: NextRequest) {
   if (!match || !driveConfigured()) return new NextResponse(null, { status: 404 });
   const [, conversationId, fileId] = match;
 
-  if (!(await participant(conversationId))) return new NextResponse(null, { status: 403 });
+  if (!(await chatParticipant(conversationId))) return new NextResponse(null, { status: 403 });
 
   try {
-    const file = await downloadFromDrive(fileId, conversationId);
+    const file = await driveFileFor(fileId, conversationId);
     if (!file) return new NextResponse(null, { status: 404 });
-    return new NextResponse(file.body, {
-      headers: {
-        "content-type": file.mime,
-        "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(file.name)}`,
-        // Files never change once uploaded; let the browser keep them.
-        "cache-control": "private, max-age=86400, immutable",
-        "x-content-type-options": "nosniff",
-      },
-    });
+    // Big files are never streamed through Vercel (it would use up the
+    // monthly transfer allowance); send the member on to Google instead.
+    if (file.size > DIRECT_UPLOAD_BYTES) return NextResponse.redirect(driveLinks(fileId).view, 302);
+
+    const inline = INLINE_SAFE.has(file.mime) && request.nextUrl.searchParams.get("download") !== "1";
+    const headers: Record<string, string> = {
+      "content-type": inline ? file.mime : "application/octet-stream",
+      "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      // Files never change once uploaded; let the browser keep them.
+      "cache-control": "private, max-age=86400, immutable",
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "sandbox; default-src 'none'; img-src 'self'; media-src 'self'",
+    };
+    if (file.size) headers["content-length"] = String(file.size);
+    return new NextResponse(await downloadFromDrive(fileId), { headers });
   } catch {
     return new NextResponse(null, { status: 502 });
   }

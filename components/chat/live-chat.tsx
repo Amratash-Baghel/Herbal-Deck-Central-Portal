@@ -14,7 +14,7 @@ import { shrinkImage } from "@/lib/shrink-image";
 import { ChatAvatar } from "./chat-avatar";
 import { GroupBadge } from "./group-badges";
 import { canGroup, isNearBottom, formatConversationDate, messageTextParts, insertAt, isGifUrl, previewText, PICKER_EMOJI } from "./chat-model";
-import { detectShareLinks, checkFile, uploadChatAttachment, ATTACHMENT_ACCEPT, MAX_ATTACHMENTS_PER_MESSAGE, type Attachment } from "@/lib/chat-attachments";
+import { detectShareLinks, checkFile, uploadChatAttachment, ATTACHMENT_ACCEPT, MAX_ATTACHMENTS_PER_MESSAGE, USE_DRIVE, type Attachment } from "@/lib/chat-attachments";
 import { dateFormat } from "@/lib/time";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -420,10 +420,10 @@ export function LiveChat({ me, directory: initialDirectory, conversations: initi
   async function attach(list: FileList | File[]) {
     if(sendingRef.current || !selected) return;
     requestId.current=null;
-    // Shrink photos before the size check: a 6 MB phone photo becomes a few
-    // hundred KB, so it fits under the 3 MB cap instead of being refused, and
-    // costs a fraction of the storage and bandwidth.
-    const incoming = await Promise.all(Array.from(list).map(file => shrinkImage(file)));
+    // With Google Drive storage, photos are sent untouched so people can
+    // download them at full resolution. On the small Supabase plan they are
+    // still shrunk first, so a phone photo fits under the 3 MB cap.
+    const incoming = USE_DRIVE ? Array.from(list) : await Promise.all(Array.from(list).map(file => shrinkImage(file)));
     if (files.length + incoming.length > MAX_ATTACHMENTS_PER_MESSAGE) { setNotice("You can attach up to six files per message."); return; }
     const invalid = incoming.map(file => ({ file, result: checkFile(file) })).find(({ result }) => !result.ok);
     if (invalid && !invalid.result.ok) { setNotice(invalid.result.error); return; }

@@ -154,7 +154,7 @@ export interface MessageAttachment {
   name: string;
   mime: string;
   size: number;
-  kind: "image" | "document";
+  kind: "image" | "video" | "document";
 }
 
 /** A message row from `public.messages`. */

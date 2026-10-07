@@ -110,15 +110,82 @@ export async function uploadToDrive(opts: {
   return ((await res.json()) as { id: string }).id;
 }
 
-/** Fetch a file's bytes — only if it was uploaded for `conversationId`. */
-export async function downloadFromDrive(
+type DriveMeta = {
+  name: string;
+  mimeType: string;
+  size?: string;
+  appProperties?: { conversationId?: string; uploadedBy?: string };
+};
+
+async function fileMeta(fileId: string): Promise<DriveMeta> {
+  return (await (
+    await drive(`${DRIVE}/files/${encodeURIComponent(fileId)}?fields=name,mimeType,size,appProperties`)
+  ).json()) as DriveMeta;
+}
+
+/** File details — only if it was uploaded for `conversationId`. */
+export async function driveFileFor(
   fileId: string,
   conversationId: string,
-): Promise<{ body: ReadableStream<Uint8Array> | null; mime: string; name: string } | null> {
-  const meta = (await (
-    await drive(`${DRIVE}/files/${encodeURIComponent(fileId)}?fields=name,mimeType,appProperties`)
-  ).json()) as { name: string; mimeType: string; appProperties?: { conversationId?: string } };
+): Promise<{ name: string; mime: string; size: number } | null> {
+  const meta = await fileMeta(fileId);
   if (meta.appProperties?.conversationId !== conversationId) return null;
-  const media = await drive(`${DRIVE}/files/${encodeURIComponent(fileId)}?alt=media`);
-  return { body: media.body, mime: meta.mimeType, name: meta.name };
+  return { name: meta.name, mime: meta.mimeType, size: Number(meta.size ?? 0) };
+}
+
+/** Stream a file's bytes (call driveFileFor first to check it belongs). */
+export async function downloadFromDrive(fileId: string): Promise<ReadableStream<Uint8Array> | null> {
+  return (await drive(`${DRIVE}/files/${encodeURIComponent(fileId)}?alt=media`)).body;
+}
+
+/**
+ * Open a resumable upload session for a large file. Google returns a one-off
+ * upload address that accepts this single file from the browser at `origin`
+ * (the browser then sends the bytes straight to Google, not through Vercel).
+ */
+export async function startResumableUpload(opts: {
+  name: string;
+  mime: string;
+  size: number;
+  conversationId: string;
+  uploadedBy: string;
+  origin: string;
+}): Promise<string> {
+  const res = await drive(`${UPLOAD}/files?uploadType=resumable&fields=id`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json; charset=UTF-8",
+      "x-upload-content-type": opts.mime,
+      "x-upload-content-length": String(opts.size),
+      origin: opts.origin,
+    },
+    body: JSON.stringify({
+      name: opts.name,
+      parents: [await portalFolder()],
+      appProperties: { conversationId: opts.conversationId, uploadedBy: opts.uploadedBy },
+    }),
+  });
+  const url = res.headers.get("location");
+  if (!url) throw new Error("Google did not return an upload address.");
+  return url;
+}
+
+/**
+ * After a large upload: confirm the file is the caller's, for this chat, then
+ * turn on its secret link ("anyone with the link can view", not searchable)
+ * so chat members can open and stream it straight from Google.
+ */
+export async function shareUploadedFile(
+  fileId: string,
+  conversationId: string,
+  uploadedBy: string,
+): Promise<{ name: string; mime: string; size: number } | null> {
+  const meta = await fileMeta(fileId);
+  if (meta.appProperties?.conversationId !== conversationId || meta.appProperties?.uploadedBy !== uploadedBy) return null;
+  await drive(`${DRIVE}/files/${encodeURIComponent(fileId)}/permissions?fields=id`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ role: "reader", type: "anyone", allowFileDiscovery: false }),
+  });
+  return { name: meta.name, mime: meta.mimeType, size: Number(meta.size ?? 0) };
 }
