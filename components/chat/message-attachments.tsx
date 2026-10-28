@@ -103,13 +103,34 @@ function ImageAttachment({ supabase, att }: { supabase: SupabaseClient; att: Mes
   );
 }
 
+/** Public, browser-safe Google API key (restricted to the Drive API and this
+ *  site). With it, a link-shared video streams straight from the uploaded file,
+ *  so it plays the moment the upload finishes instead of waiting for Google's
+ *  player to finish "processing" (which can take many minutes). */
+const GOOGLE_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY ?? "";
+
 function VideoAttachment({ supabase, att }: { supabase: SupabaseClient; att: MessageAttachment }) {
   const urls = useFileUrls(supabase, att);
+  const id = driveFileId(att.path);
+  // If the browser can't play the file directly (e.g. ProRes), fall back to
+  // Google's player, which converts it once processing is done.
+  const [direct, setDirect] = useState(Boolean(GOOGLE_API_KEY));
+  const stream =
+    id && urls?.preview && GOOGLE_API_KEY
+      ? `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${encodeURIComponent(GOOGLE_API_KEY)}`
+      : null;
   return (
     <div className="w-80 max-w-[78vw] overflow-hidden rounded-xl border bg-card shadow-sm">
-      {urls?.preview ? (
-        // Google's player streams large videos at a quality that suits the
-        // connection. Just after upload it may say it is still processing.
+      {stream && direct ? (
+        <video
+          src={stream}
+          controls
+          preload="metadata"
+          playsInline
+          onError={() => setDirect(false)}
+          className="aspect-video w-full bg-black"
+        />
+      ) : urls?.preview ? (
         <iframe
           src={urls.preview}
           title={att.name}
@@ -119,7 +140,7 @@ function VideoAttachment({ supabase, att }: { supabase: SupabaseClient; att: Mes
           className="aspect-video w-full bg-black"
         />
       ) : urls ? (
-        <video src={urls.view} controls preload="metadata" className="aspect-video w-full bg-black" />
+        <video src={urls.view} controls preload="metadata" playsInline className="aspect-video w-full bg-black" />
       ) : (
         <div className="flex aspect-video w-full items-center justify-center text-xs text-muted-foreground">Loading…</div>
       )}
