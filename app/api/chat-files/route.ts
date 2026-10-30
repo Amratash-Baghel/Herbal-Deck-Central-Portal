@@ -20,6 +20,8 @@ const UUID = /^[0-9a-f-]{36}$/i;
  *  always a download, so an uploaded file can never run as part of the portal. */
 const INLINE_SAFE = new Set([
   "image/jpeg", "image/png", "image/gif", "image/webp",
+  // Safe only together with the sandboxing CSP below (blocks any script in it).
+  "image/svg+xml",
   "application/pdf", "video/mp4", "video/webm", "audio/mpeg", "audio/mp4", "audio/wav",
 ]);
 
@@ -76,7 +78,7 @@ export async function GET(request: NextRequest) {
       // Files never change once uploaded; let the browser keep them.
       "cache-control": "private, max-age=86400, immutable",
       "x-content-type-options": "nosniff",
-      "content-security-policy": "sandbox; default-src 'none'; img-src 'self'; media-src 'self'",
+      "content-security-policy": "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; font-src data:; media-src 'self'",
     };
     if (file.size) headers["content-length"] = String(file.size);
     return new NextResponse(await downloadFromDrive(fileId), { headers });

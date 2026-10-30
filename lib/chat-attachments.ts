@@ -69,7 +69,9 @@ export const ATTACHMENT_ACCEPT = USE_DRIVE
   : ".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xlsx,image/jpeg,image/png,image/gif,application/pdf";
 
 /** Images the chat shows inline. Other image types (SVG, HEIC, PSD…) are files. */
-const INLINE_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+// SVG counts: it is only ever drawn through <img> (where scripts never run)
+// and served with a sandboxing CSP, so code inside it can't execute.
+const INLINE_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"]);
 
 /** How a Drive-stored file is shown, from its mime type. */
 export function kindForMime(mime: string): AttachmentKind {

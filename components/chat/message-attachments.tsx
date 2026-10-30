@@ -192,7 +192,8 @@ export function MessageAttachments({
   return (
     <div className="mt-1.5 flex flex-col gap-1.5">
       {attachments.map((att) =>
-        att.kind === "image" ? (
+        // SVGs sent before previews existed were stored as plain files.
+        att.kind === "image" || att.mime === "image/svg+xml" ? (
           <ImageAttachment key={att.path} supabase={supabase} att={att} />
         ) : att.kind === "video" ? (
           <VideoAttachment key={att.path} supabase={supabase} att={att} />
