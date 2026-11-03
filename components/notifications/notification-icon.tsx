@@ -25,6 +25,7 @@ export function NotificationTypeIcon({
     case "group_added":
       return <GroupIcon {...props} />;
     case "task_assigned":
+    case "task_done":
       return <TasksIcon {...props} />;
     case "task_due_soon":
       return <CalendarIcon {...props} />;

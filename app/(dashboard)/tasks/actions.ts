@@ -50,6 +50,18 @@ async function canAssignTo(
   if (!access) return false;
   if (!target || target === access.profile.id) return true;
   if (access.canManageUsers) return true;
+  if (access.isTeamLead) {
+    // Another department's team lead (the database also stops a lead who
+    // received a task from passing it on to a third department).
+    const { data: lead } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", target)
+      .eq("role", "team_lead")
+      .is("deactivated_at", null)
+      .maybeSingle();
+    if (lead) return true;
+  }
   if (access.isTeamLead && access.departmentIds.length > 0) {
     const { data } = await supabase
       .from("profile_departments")

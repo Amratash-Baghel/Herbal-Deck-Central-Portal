@@ -185,6 +185,7 @@ export type NotificationType =
   | "task_assigned"
   | "task_due_soon"
   | "task_overdue"
+  | "task_done"
   | "eod_reminder"
   | "eod_submitted";
 
@@ -224,6 +225,8 @@ export interface Task {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Team leads the task was handed down through (oldest first); it stays on their boards. */
+  handled_by?: string[];
 }
 
 /**
@@ -232,7 +235,7 @@ export interface Task {
  * view's "stalled" lens (nothing has touched the task in a week).
  */
 export const TASK_LIST_COLUMNS =
-  "id, title, description, status, created_by, assigned_to, department_id, deadline, archived, color, started_at, completed_at, created_at, updated_at";
+  "id, title, description, status, created_by, assigned_to, department_id, deadline, archived, color, started_at, completed_at, created_at, updated_at, handled_by";
 
 /**
  * The read-only task lists (/tasks/team, /tasks/manage) show one line per task

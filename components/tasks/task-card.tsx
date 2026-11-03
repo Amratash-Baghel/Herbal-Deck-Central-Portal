@@ -73,6 +73,7 @@ function DeadlinePill({ deadline }: { deadline: string | null }) {
 export const TaskCard = memo(function TaskCard({
   task,
   assigneeName,
+  viaNames,
   deptName,
   deptSlug,
   todayISO,
@@ -89,6 +90,8 @@ export const TaskCard = memo(function TaskCard({
 }: {
   task: Task;
   assigneeName: string | null;
+  /** Team leads the task was handed down through, e.g. "Shreesh Sharma". */
+  viaNames?: string | null;
   deptName: string;
   deptSlug: string | null;
   /** Today in the business timezone — so the date stamp renders the same on
@@ -239,6 +242,11 @@ export const TaskCard = memo(function TaskCard({
           </span>
         ) : (
           <span className="text-[11px] italic text-foreground/50">Unassigned</span>
+        )}
+        {viaNames && (
+          <span className="min-w-0 truncate text-[10px] text-foreground/60" title={`Handed down via ${viaNames}`}>
+            via {viaNames}
+          </span>
         )}
         <DeadlinePill deadline={task.deadline} />
       </div>

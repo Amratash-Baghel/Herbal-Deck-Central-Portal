@@ -15,6 +15,7 @@ type ProfileRow = {
   email: string;
   avatar_path: string | null;
   note_color: string | null;
+  role?: string | null;
 };
 const toPerson = (p: ProfileRow): Person => ({
   id: p.id,
@@ -44,7 +45,7 @@ export default async function TasksPage() {
     supabase
       .from("tasks")
       .select(TASK_LIST_COLUMNS)
-      .or(`created_by.eq.${me},assigned_to.eq.${me}`)
+      .or(`created_by.eq.${me},assigned_to.eq.${me},handled_by.cs.{${me}}`)
       .eq("archived", false)
       .order("created_at", { ascending: false });
 
@@ -73,7 +74,7 @@ export default async function TasksPage() {
         supabase.from("departments").select("id, name, slug").order("name"),
         supabase
           .from("profiles")
-          .select("id, full_name, email, avatar_path, note_color")
+          .select("id, full_name, email, avatar_path, note_color, role")
           .is("deactivated_at", null)
           .order("full_name", { nullsFirst: false }),
         boardTasks(),
@@ -82,7 +83,7 @@ export default async function TasksPage() {
         supabase
           .from("tasks")
           .select(TASK_LIST_COLUMNS)
-          .or(`created_by.eq.${me},assigned_to.eq.${me}`)
+          .or(`created_by.eq.${me},assigned_to.eq.${me},handled_by.cs.{${me}}`)
           .eq("archived", true)
           .eq("status", "done")
           .order("completed_at", { ascending: false })
@@ -120,6 +121,8 @@ export default async function TasksPage() {
   } else if (leadsTeam) {
     const ids = new Set<string>([me]);
     for (const r of (memberRows ?? []) as { profile_id: string }[]) ids.add(r.profile_id);
+    // …and hand a task to any other department's team lead, who passes it on.
+    for (const p of (profs ?? []) as ProfileRow[]) if (p.role === "team_lead") ids.add(p.id);
     assignable = people.filter((p) => ids.has(p.id));
   } else {
     // Regular employees can only create tasks for themselves.

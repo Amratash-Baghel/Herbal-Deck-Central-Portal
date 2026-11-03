@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { TaskCard } from "@/components/tasks/task-card";
+import { createClient } from "@/lib/supabase/client";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
 import {
   createTask,
@@ -168,6 +169,39 @@ export function TaskBoard({
 }) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [history, setHistory] = useState<Task[]>(initialHistory);
+
+  // Live moves for tasks someone else is working on (ones you assigned or
+  // handed down): when the assignee drags it to In Progress or Done, your copy
+  // moves too, without a refresh. Only those task ids are subscribed to, so
+  // other people's edits cost nothing.
+  const watchKey = useMemo(
+    () =>
+      tasks
+        .filter((t) => t.assigned_to && t.assigned_to !== me.id)
+        .map((t) => t.id)
+        .sort()
+        .slice(0, 100)
+        .join(","),
+    [tasks, me.id],
+  );
+  useEffect(() => {
+    if (!watchKey) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`board-watch-${me.id}-${watchKey.length}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "tasks", filter: `id=in.(${watchKey})` },
+        (payload) => {
+          const next = payload.new as Partial<Task> & { id: string };
+          setTasks((prev) => prev.map((t) => (t.id === next.id ? { ...t, ...next } : t)));
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [watchKey, me.id]);
   const [openId, setOpenId] = useState<string | null>(null);
   /** The full create dialog, opened from the + button beside the quick-add box. */
   const [creating, setCreating] = useState(false);
@@ -392,20 +426,24 @@ export function TaskBoard({
     const dept = deptOf(task.department_id);
     // The assignee, a manager, or someone who can assign others (team lead over
     // their dept) may move a task.
+    // A lead who only passed this task on sees it move live but doesn't drag it:
+    // the person doing the work moves it.
+    const handedOn =
+      task.assigned_to !== me.id && task.created_by !== me.id && (task.handled_by ?? []).includes(me.id);
     const canMove =
-      canManage ||
-      canAssignOthers ||
-      task.assigned_to === me.id ||
-      task.assigned_to === null;
+      !handedOn &&
+      (canManage || canAssignOthers || task.assigned_to === me.id || task.assigned_to === null);
     // Reassign: managers + team leads (or an unassigned task) — but never once
     // the task is Done (its assignee is locked).
     const canReassign =
-      (canAssignOthers || task.assigned_to === null) && task.status !== "done";
+      !handedOn && (canAssignOthers || task.assigned_to === null) && task.status !== "done";
+    const via = (task.handled_by ?? []).map((id) => nameOf(id)).filter(Boolean).join(", ");
     return (
       <TaskCard
         key={task.id}
         task={task}
         assigneeName={nameOf(task.assigned_to)}
+        viaNames={via || null}
         deptName={dept?.name ?? "—"}
         deptSlug={dept?.slug ?? null}
         todayISO={todayISO}
