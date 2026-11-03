@@ -49,6 +49,10 @@ const DEPARTMENT_NOTE: Record<string, string> = {
   "graphic-designing": "note-teal",
   "hr-management": "note-indigo",
   ecommerce: "note-lime",
+  meta: "note-orange",
+  operations: "note-slate",
+  "content-writer": "note-green",
+  "social-media": "note-red",
 };
 
 const DEFAULT_NOTE = "note-yellow";
