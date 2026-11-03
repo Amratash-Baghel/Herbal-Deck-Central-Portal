@@ -52,7 +52,6 @@ const DEPARTMENT_NOTE: Record<string, string> = {
   meta: "note-orange",
   operations: "note-slate",
   "content-writer": "note-green",
-  "social-media": "note-red",
 };
 
 const DEFAULT_NOTE = "note-yellow";

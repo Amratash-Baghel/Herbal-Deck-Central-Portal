@@ -1,4 +1,4 @@
--- 0032 — Rename three departments and add four new ones.
+-- 0032 — Rename three departments and add three new ones.
 --
 -- Only display names change; slugs stay, so memberships, tasks, invoices,
 -- note colours and the HR & Management permission checks (slug
@@ -11,6 +11,5 @@ update public.departments set name = 'Web Developers'       where slug = 'tech';
 insert into public.departments (name, slug) values
   ('Meta',           'meta'),
   ('Operations',     'operations'),
-  ('Content Writer', 'content-writer'),
-  ('Social Media',   'social-media')
+  ('Content Writer', 'content-writer')
 on conflict (slug) do update set name = excluded.name;
