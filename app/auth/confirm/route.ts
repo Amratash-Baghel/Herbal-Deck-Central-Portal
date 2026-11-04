@@ -31,5 +31,5 @@ export async function GET(request: NextRequest) {
     if (!error) redirect(next);
   }
 
-  redirect("/forgot-password?error=expired");
+  redirect("/login?reset=1&error=expired");
 }

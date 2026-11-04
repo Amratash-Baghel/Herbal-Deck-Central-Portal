@@ -1,18 +1,18 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export interface LoginState {
   error: string | null;
+  ok?: boolean;
 }
 
 /**
  * Server Action: sign in with email + password via Supabase Auth.
  *
- * On success the session cookie is set and the user is redirected to the
- * dashboard. On failure a friendly error message is returned to the form.
+ * On success the session cookie is set and `{ ok: true }` is returned; the
+ * login page plays its success animation and then moves to the dashboard.
  * There is intentionally no sign-up action — accounts are created by admins.
  */
 export async function login(
@@ -34,5 +34,5 @@ export async function login(
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  return { error: null, ok: true };
 }

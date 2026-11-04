@@ -1,0 +1,150 @@
+/* Studio23 sign-in / reset-password card. Everything is scoped under .s23.
+   Motion only animates transform and opacity so it stays on the GPU. */
+.s23 {
+  --page: #0b0b0c;
+  --paper: #ffffff;
+  --paper-2: #f5f4f2;
+  --ink: #111111;
+  --muted: #6b6b6b;
+  --line: #d6d6d6;
+  --green: #111111;
+  --green-2: #d7182a;
+  --green-hi: #d7182a;
+  --gold: #d7182a;
+  --gold-ink: #c01426;
+  --serif: var(--font-s23-serif), "Times New Roman", serif;
+  --sans: var(--font-s23-sans), "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+.s23, .s23 * { box-sizing: border-box; }
+.s23 {
+  margin: 0; font-family: var(--sans); color: var(--ink);
+  background: radial-gradient(1200px 700px at 50% -10%, #2a0a0e 0%, var(--page) 60%) var(--page);
+  display: grid; place-items: center; min-height: 100dvh;
+  padding-block: 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.s23 .stage { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 18px; align-items: center; }
+.s23 .brand { display: flex; align-items: center; gap: 10px; color: #ffffff; font-weight: 600; letter-spacing: .02em; }
+.s23 .brand img { width: clamp(170px, 40vw, 240px); height: auto; display: block; }
+
+
+.s23 .auth {
+  position: relative; width: 100%; height: 560px; border-radius: 28px; overflow: hidden;
+  background: linear-gradient(135deg, var(--paper) 0%, var(--paper-2) 100%);
+  box-shadow: 0 40px 80px -30px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06);
+}
+
+.s23 { --blade-ease: cubic-bezier(.77,0,.18,1); --blade-time: .85s; }
+.s23 .blade {
+  position: absolute; top: -4%; height: 108%; left: 0; width: 68%; z-index: 3; pointer-events: none;
+  background:
+    radial-gradient(60% 50% at 70% 10%, rgba(255,90,90,.35), transparent 70%),
+    linear-gradient(160deg, #e3202f 0%, #b30f1f 55%, #7a0a15 100%);
+  border-inline: 2px solid #111;
+  transform: translate3d(77.5%,0,0) skewX(12deg);
+  transition: transform var(--blade-time) var(--blade-ease);
+  will-change: transform; backface-visibility: hidden; overflow: hidden;
+}
+.s23 .auth[data-mode="signup"] .blade { transform: translate3d(-32.8%,0,0) skewX(12deg); }
+
+
+.s23 .shine { position: absolute; inset: 0; pointer-events: none; }
+.s23 .shine::after {
+  content: ""; position: absolute; inset: 0; opacity: 0;
+  background: linear-gradient(90deg, transparent 49.6%, rgba(255,255,255,.95) 50%, transparent 50.4%);
+  filter: drop-shadow(0 0 8px rgba(255,255,255,.7)); transform: translate3d(-55%,0,0);
+}
+.s23 .auth.is-success .shine::after { animation: s23-shine 1.1s ease-out .1s both; }
+@keyframes s23-shine { 0% { transform: translate3d(-55%,0,0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate3d(55%,0,0); opacity: 0; } }
+
+
+.s23 .welcome { pointer-events: none; position: absolute; z-index: 5; top: 50%; color: #ffffff; width: 36%;
+  transform: translate3d(0,-38%,0); transition: opacity .3s ease .5s, transform .55s var(--blade-ease) .45s; }
+.s23 .welcome .eyebrow { font-size: 11px; letter-spacing: .32em; color: #fff; opacity: .85; font-weight: 600; }
+.s23 .welcome h2 { font-family: var(--serif); font-weight: 400; font-size: 46px; line-height: 1; margin: 14px 0 18px; letter-spacing: -.01em; }
+.s23 .welcome h2 em { color: #fff; }
+.s23 .welcome-in { left: 58.5%; }
+.s23 .welcome-up { left: 5.5%; }
+.s23 .auth[data-mode="signin"] .welcome-up, .s23 .auth[data-mode="signup"] .welcome-in {
+  opacity: 0; transform: translate3d(0,-30%,0); transition: opacity .15s ease, transform .15s ease; }
+
+
+.s23 .pane { position: absolute; top: 0; bottom: 0; z-index: 1; width: 40%; display: flex; flex-direction: column; justify-content: center; gap: 14px; transition: opacity .35s ease .4s, transform .5s var(--blade-ease) .35s; }
+.s23 .pane-in { left: 5.5%; }
+.s23 .pane-up { right: 5%; }
+.s23 .auth[data-mode="signin"] .pane-up, .s23 .auth[data-mode="signup"] .pane-in { opacity: 0; pointer-events: none; transform: translate3d(0,8px,0); transition: opacity .15s ease, transform .15s ease; }
+.s23 .pane h1 { margin: 0 0 6px; font-size: 26px; font-weight: 600; letter-spacing: -.01em; }
+.s23 .pane h1::after { content: ""; display: block; width: 46px; height: 3px; border-radius: 2px; background: var(--gold-ink); margin-top: 12px; }
+.s23 .field { position: relative; padding-top: 18px; }
+.s23 .field input {
+  width: 100%; border: 0; border-bottom: 1.5px solid var(--line); background: transparent; padding: 8px 30px 9px 0;
+  font: 500 15px var(--sans); color: var(--ink); outline: none; border-radius: 0;
+}
+.s23 .field label { position: absolute; left: 0; top: 26px; font-size: 15px; color: var(--muted); pointer-events: none; transition: all .2s ease; }
+.s23 .field input:focus + label, .s23 .field input:not(:placeholder-shown) + label { top: 0; font-size: 11.5px; color: var(--gold-ink); }
+.s23 .field input:not(:focus):not(:placeholder-shown) + label { color: var(--muted); }
+.s23 .field .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2.5px; background: var(--gold); transform: scaleX(0); transform-origin: left; transition: transform .35s cubic-bezier(.3,.8,.3,1); border-radius: 2px; }
+.s23 .field input:focus ~ .bar { transform: scaleX(1); box-shadow: 0 2px 8px -2px rgba(215,24,42,.5); }
+.s23 .field .ico { position: absolute; right: 0; bottom: 9px; width: 18px; height: 18px; color: #77807a; background: none; border: 0; padding: 0; cursor: default; }
+.s23 .field button.ico { cursor: pointer; }
+.s23 .field button.ico:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 4px; }
+.s23 .field.has-error input { border-bottom-color: #b5452e; }
+.s23 .err { font-size: 12px; color: #b5452e; margin-top: 6px; min-height: 0; }
+.s23 .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: #4d564f; margin-top: 4px; }
+.s23 .check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.s23 .check input { appearance: none; width: 17px; height: 17px; border-radius: 5px; border: 1.5px solid #8b938c; display: grid; place-items: center; margin: 0; cursor: pointer; }
+.s23 .check input:checked { background: var(--green); border-color: var(--green); }
+.s23 .check input:checked::after { content: ""; width: 8px; height: 4px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px,-1px); }
+.s23 .link { color: var(--gold-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1.5px; background: none; border: 0; padding: 0; font: inherit; font-weight: 600; cursor: pointer; }
+.s23 .link.dark { color: var(--ink); }
+.s23 .btn {
+  position: relative; height: 52px; border: 0; border-radius: 999px; cursor: pointer; margin-top: 6px;
+  background: linear-gradient(180deg, #2a2a2a, #111); color: #fff; font: 600 15px var(--sans);
+  box-shadow: 0 12px 22px -10px rgba(0,0,0,.55); transition: transform .15s ease, background .3s ease;
+}
+.s23 .btn:hover { transform: translateY(-1px); }
+.s23 .btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.s23 .btn .spin { display: none; width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(243,238,227,.35); border-top-color: #f3eee3; animation: s23-spin .7s linear infinite; margin: 0 auto; }
+.s23 .btn .tick { display: none; width: 16px; height: 9px; border-left: 2.5px solid #fff; border-bottom: 2.5px solid #fff; transform: rotate(-45deg) translate(1px,-2px); margin: 0 auto; }
+.s23 .btn.is-loading .label, .s23 .btn.is-done .label { display: none; }
+.s23 .btn.is-loading .spin { display: block; }
+.s23 .btn.is-done { background: linear-gradient(180deg, #e3202f, #b30f1f); }
+.s23 .btn.is-done .tick { display: block; animation: s23-pop .35s cubic-bezier(.3,1.6,.5,1) both; }
+@keyframes s23-spin { to { transform: rotate(360deg); } }
+@keyframes s23-pop { from { transform: rotate(-45deg) translate(1px,-2px) scale(.3); opacity: 0; } }
+.s23 .sub { margin: -4px 0 4px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.s23 .foot { font-size: 13px; color: #6a726b; margin-top: 2px; }
+.s23 .note { font-size: 13px; color: #8f0d1a; background: rgba(215,24,42,.08); border-radius: 12px; padding: 10px 12px; line-height: 1.45; }
+
+
+@media (max-width: 900px), (max-height: 600px) {
+  .s23 { place-items: start center; padding-block: 20px; }
+  .s23 .stage { max-width: 480px; }
+  .s23 .auth { height: auto; display: flex; flex-direction: column; border-radius: 22px; }
+  .s23 .pane { animation: s23-fadeUp .45s ease both; }
+  .s23 .welcome { animation: s23-fadeUp .45s ease both; }
+  .s23 .blade { display: none; }
+  .s23 .welcome { position: relative; inset: auto; transform: none; width: auto; padding: 30px 26px 26px;
+    background: linear-gradient(160deg, #e3202f, #9e0d1c); border-bottom: 3px solid #111; }
+  .s23 .welcome p { max-width: none; }
+  .s23 .welcome h2 { font-size: 38px; }
+  .s23 .auth[data-mode="signin"] .welcome-up, .s23 .auth[data-mode="signup"] .welcome-in { display: none; }
+  .s23 .pane { position: relative; inset: auto; width: auto; padding: 26px 24px 28px; }
+  .s23 .row { flex-wrap: wrap; }
+  .s23 .auth[data-mode="signin"] .pane-up, .s23 .auth[data-mode="signup"] .pane-in { display: none; }
+}
+.s23 .curtain { display: none; }
+@media (max-width: 900px), (max-height: 600px) {
+  
+  .s23 .curtain { display: block; position: absolute; left: 0; right: 0; top: 0; height: 100%; z-index: 10; pointer-events: none;
+    background: linear-gradient(170deg, #e3202f, #9e0d1c 70%, #7a0a15);
+    transform: translate3d(0,-101%,0); will-change: transform; backface-visibility: hidden; }
+  .s23 .curtain::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 3px; background: #111; }
+}
+@keyframes s23-fadeUp { from { opacity: 0; transform: translateY(8px); } }
+@media (max-width: 380px) { .s23 .welcome h2 { font-size: 32px; } .s23 .pane { padding: 22px 18px 24px; } .s23 .welcome { padding: 24px 18px 20px; } }
+@media (prefers-reduced-motion: reduce) {
+  .s23 .pane, .s23 .welcome { animation: none !important; }
+  .s23 .blade, .s23 .welcome, .s23 .pane { transition-duration: .01s !important; transition-delay: 0s !important; }
+  .s23 .auth.is-success .shine::after { animation: none; }
+}
